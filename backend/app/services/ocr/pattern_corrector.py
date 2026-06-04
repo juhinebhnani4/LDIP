@@ -76,7 +76,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"0\g<1>",
         description="O confused with 0 before digit",
     ),
-
     # Letter l vs digit 1 in numeric contexts
     PatternRule(
         name="digit_l_middle",
@@ -90,7 +89,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"\g<1>1",
         description="l confused with 1 after digit",
     ),
-
     # Letter I vs digit 1 in numeric contexts
     PatternRule(
         name="digit_I_middle",
@@ -98,7 +96,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"\g<1>1\g<2>",
         description="I confused with 1 in number",
     ),
-
     # S vs 5 in amounts
     PatternRule(
         name="rs_s_amount",
@@ -106,7 +103,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"Rs. 5\g<1>",
         description="S confused with 5 in currency",
     ),
-
     # B vs 8 in numeric contexts
     PatternRule(
         name="digit_B_number",
@@ -114,7 +110,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"\g<1>8\g<2>",
         description="B confused with 8 in number",
     ),
-
     # Date format corrections (DD/MM/YYYY with O instead of 0)
     PatternRule(
         name="date_o_day",
@@ -134,7 +129,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"\g<1>/0\g<2>",
         description="O confused with 0 in date",
     ),
-
     # Indian currency patterns
     PatternRule(
         name="rs_l_amount",
@@ -148,7 +142,6 @@ COMMON_OCR_PATTERNS: list[PatternRule] = [
         replacement=r"Rs. 1\g<1>",
         description="I confused with 1 in currency",
     ),
-
     # Section reference patterns
     PatternRule(
         name="section_o_paren",

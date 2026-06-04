@@ -63,7 +63,9 @@ def create_test_token(
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
 
-def create_mock_matter_service(role: MatterRole | None = MatterRole.EDITOR) -> MagicMock:
+def create_mock_matter_service(
+    role: MatterRole | None = MatterRole.EDITOR,
+) -> MagicMock:
     """Create a mock matter service for testing."""
     mock_service = MagicMock()
     mock_service.get_user_role.return_value = role
@@ -109,7 +111,9 @@ class TestGetEntityAliases:
         mock_mig_service.get_entity.return_value = mock_entity
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -139,7 +143,9 @@ class TestGetEntityAliases:
         mock_mig_service.get_entity.return_value = None
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.VIEWER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.VIEWER)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -190,7 +196,9 @@ class TestAddEntityAlias:
         mock_mig_service.add_alias_to_entity.return_value = updated_entity
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.EDITOR)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.EDITOR)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -221,7 +229,9 @@ class TestAddEntityAlias:
         mock_mig_service.get_entity.return_value = mock_entity
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.EDITOR)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.EDITOR)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -273,7 +283,9 @@ class TestRemoveEntityAlias:
         mock_mig_service.remove_alias_from_entity.return_value = updated_entity
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.EDITOR)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.EDITOR)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -306,7 +318,9 @@ class TestRemoveEntityAlias:
         mock_mig_service.get_entity.return_value = mock_entity
 
         app.dependency_overrides[get_settings] = get_test_settings
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.EDITOR)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.EDITOR)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -363,7 +377,9 @@ class TestMergeEntities:
 
         app.dependency_overrides[get_settings] = get_test_settings
         # Merge requires OWNER role
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.OWNER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.OWNER)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:
@@ -400,7 +416,9 @@ class TestMergeEntities:
         """Test 400 when trying to merge entity with itself."""
         app.dependency_overrides[get_settings] = get_test_settings
         # Merge requires OWNER role
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.OWNER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.OWNER)
+        )
 
         try:
             token = create_test_token()
@@ -444,7 +462,9 @@ class TestMergeEntities:
 
         app.dependency_overrides[get_settings] = get_test_settings
         # Merge requires OWNER role
-        app.dependency_overrides[get_matter_service] = lambda: create_mock_matter_service(MatterRole.OWNER)
+        app.dependency_overrides[get_matter_service] = (
+            lambda: create_mock_matter_service(MatterRole.OWNER)
+        )
         app.dependency_overrides[_get_mig_service] = lambda: mock_mig_service
 
         try:

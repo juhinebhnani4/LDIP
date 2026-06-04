@@ -66,12 +66,15 @@ class JobRecoveryService:
             # because we need to check heartbeat_at OR updated_at
             # Note: heartbeat_at column may not exist in all deployments,
             # so we exclude it from the query and rely on updated_at fallback
-            response = self.supabase.table("processing_jobs").select(
-                "id, matter_id, document_id, job_type, status, created_at, updated_at, "
-                "current_stage, retry_count, metadata"
-            ).eq(
-                "status", JobStatus.PROCESSING.value
-            ).execute()
+            response = (
+                self.supabase.table("processing_jobs")
+                .select(
+                    "id, matter_id, document_id, job_type, status, created_at, updated_at, "
+                    "current_stage, retry_count, metadata"
+                )
+                .eq("status", JobStatus.PROCESSING.value)
+                .execute()
+            )
 
             all_processing_jobs = response.data or []
             stale_jobs = []
@@ -123,10 +126,16 @@ class JobRecoveryService:
         """
         try:
             # Get current job state
-            job_response = self.supabase.table("processing_jobs").select(
-                "id, matter_id, document_id, job_type, status, updated_at, "
-                "retry_count, metadata, current_stage"
-            ).eq("id", job_id).single().execute()
+            job_response = (
+                self.supabase.table("processing_jobs")
+                .select(
+                    "id, matter_id, document_id, job_type, status, updated_at, "
+                    "retry_count, metadata, current_stage"
+                )
+                .eq("id", job_id)
+                .single()
+                .execute()
+            )
 
             job = job_response.data
             if not job:
@@ -162,17 +171,21 @@ class JobRecoveryService:
                 "recovered_from_stage": job.get("current_stage"),
             }
 
-            self.supabase.table("processing_jobs").update({
-                "status": JobStatus.QUEUED.value,
-                "updated_at": datetime.now(UTC).isoformat(),
-                "metadata": new_metadata,
-                "error_message": None,  # Clear previous error
-            }).eq("id", job_id).execute()
+            self.supabase.table("processing_jobs").update(
+                {
+                    "status": JobStatus.QUEUED.value,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "metadata": new_metadata,
+                    "error_message": None,  # Clear previous error
+                }
+            ).eq("id", job_id).execute()
 
             # Reset document status to PENDING if document exists (skip for late stages)
             effective_stage = self._get_effective_stage(job)
             if job.get("document_id"):
-                await self._reset_document_status(job["document_id"], stage=effective_stage)
+                await self._reset_document_status(
+                    job["document_id"], stage=effective_stage
+                )
 
             # Re-dispatch the Celery task
             await self._redispatch_task(job)
@@ -233,7 +246,9 @@ class JobRecoveryService:
             "jobs": results,
         }
 
-    async def _reset_document_status(self, document_id: str, stage: str | None = None) -> None:
+    async def _reset_document_status(
+        self, document_id: str, stage: str | None = None
+    ) -> None:
         """Reset document status to PENDING for re-processing.
 
         For late-stage recovery (citation_extraction, contradiction_detection,
@@ -244,7 +259,11 @@ class JobRecoveryService:
             document_id: The document ID to reset.
             stage: The current pipeline stage of the stuck job.
         """
-        late_stages = {"citation_extraction", "contradiction_detection", "alias_resolution"}
+        late_stages = {
+            "citation_extraction",
+            "contradiction_detection",
+            "alias_resolution",
+        }
         if stage in late_stages:
             logger.debug(
                 "document_status_reset_skipped_late_stage",
@@ -254,10 +273,12 @@ class JobRecoveryService:
             return
 
         try:
-            self.supabase.table("documents").update({
-                "status": DocumentStatus.PENDING.value,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }).eq("id", document_id).execute()
+            self.supabase.table("documents").update(
+                {
+                    "status": DocumentStatus.PENDING.value,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            ).eq("id", document_id).execute()
 
             logger.debug("document_status_reset", document_id=document_id)
 
@@ -276,18 +297,22 @@ class JobRecoveryService:
             job: The job record.
         """
         try:
-            self.supabase.table("processing_jobs").update({
-                "status": JobStatus.FAILED.value,
-                "updated_at": datetime.now(UTC).isoformat(),
-                "error_message": f"Job failed after {settings.job_max_recovery_retries} recovery attempts",
-            }).eq("id", job_id).execute()
+            self.supabase.table("processing_jobs").update(
+                {
+                    "status": JobStatus.FAILED.value,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "error_message": f"Job failed after {settings.job_max_recovery_retries} recovery attempts",
+                }
+            ).eq("id", job_id).execute()
 
             # Also update document status
             if job.get("document_id"):
-                self.supabase.table("documents").update({
-                    "status": DocumentStatus.FAILED.value,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }).eq("id", job["document_id"]).execute()
+                self.supabase.table("documents").update(
+                    {
+                        "status": DocumentStatus.FAILED.value,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                ).eq("id", job["document_id"]).execute()
 
             logger.warning(
                 "job_marked_permanently_failed",
@@ -317,8 +342,11 @@ class JobRecoveryService:
 
         # Ordered stages that have targeted dispatch tasks
         dispatchable_stages = [
-            "embedding", "entity_extraction", "alias_resolution",
-            "citation_extraction", "contradiction_detection",
+            "embedding",
+            "entity_extraction",
+            "alias_resolution",
+            "citation_extraction",
+            "contradiction_detection",
         ]
 
         # Find the last completed stage (progress_pct == 100)
@@ -420,13 +448,16 @@ class JobRecoveryService:
         """
         try:
             # Count jobs by status (direct query — RPC is per-matter only)
-            stats_response = self.supabase.table("processing_jobs").select(
-                "status"
-            ).execute()
+            stats_response = (
+                self.supabase.table("processing_jobs").select("status").execute()
+            )
 
             # Aggregate counts by status
             from collections import Counter
-            status_counts = Counter(row["status"] for row in (stats_response.data or []))
+
+            status_counts = Counter(
+                row["status"] for row in (stats_response.data or [])
+            )
             queue_stats = {
                 "queued": status_counts.get("QUEUED", 0),
                 "processing": status_counts.get("PROCESSING", 0),
@@ -438,11 +469,12 @@ class JobRecoveryService:
 
             # Count recently recovered jobs
             one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
-            recovered_response = self.supabase.table("processing_jobs").select(
-                "id", count="exact"
-            ).gte(
-                "metadata->>last_recovery_at", one_hour_ago.isoformat()
-            ).execute()
+            recovered_response = (
+                self.supabase.table("processing_jobs")
+                .select("id", count="exact")
+                .gte("metadata->>last_recovery_at", one_hour_ago.isoformat())
+                .execute()
+            )
 
             return {
                 "queue_stats": queue_stats,
@@ -489,9 +521,13 @@ class JobRecoveryService:
 
         try:
             # Get document details
-            doc_response = self.supabase.table("documents").select(
-                "id, storage_path, filename"
-            ).eq("id", document_id).limit(1).execute()
+            doc_response = (
+                self.supabase.table("documents")
+                .select("id, storage_path, filename")
+                .eq("id", document_id)
+                .limit(1)
+                .execute()
+            )
 
             if not doc_response.data:
                 return {
@@ -512,6 +548,7 @@ class JobRecoveryService:
 
             # Get page count from the PDF
             from app.services.storage_service import get_storage_service
+
             storage_service = get_storage_service()
             pdf_bytes = storage_service.download_file(storage_path)
             reader = pypdf.PdfReader(BytesIO(pdf_bytes))
@@ -521,6 +558,7 @@ class JobRecoveryService:
 
             # Create chunk records
             from app.services.pdf_router import CHUNK_SIZE
+
             chunks = await self._create_chunk_records_for_document(
                 document_id=document_id,
                 matter_id=matter_id,
@@ -535,19 +573,23 @@ class JobRecoveryService:
             metadata["chunk_count"] = len(chunks)
             metadata["converted_at"] = datetime.now(UTC).isoformat()
 
-            self.supabase.table("processing_jobs").update({
-                "status": JobStatus.QUEUED.value,
-                "updated_at": datetime.now(UTC).isoformat(),
-                "metadata": metadata,
-                "error_message": None,
-                "error_code": None,
-            }).eq("id", job_id).execute()
+            self.supabase.table("processing_jobs").update(
+                {
+                    "status": JobStatus.QUEUED.value,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "metadata": metadata,
+                    "error_message": None,
+                    "error_code": None,
+                }
+            ).eq("id", job_id).execute()
 
             # Reset document status
-            self.supabase.table("documents").update({
-                "status": DocumentStatus.PROCESSING.value,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }).eq("id", document_id).execute()
+            self.supabase.table("documents").update(
+                {
+                    "status": DocumentStatus.PROCESSING.value,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            ).eq("id", document_id).execute()
 
             # Dispatch chunked processing
             from app.workers.tasks.chunked_document_tasks import (
@@ -624,11 +666,13 @@ class JobRecoveryService:
         while page_start <= page_count:
             page_end = min(page_start + chunk_size - 1, page_count)
 
-            specs.append(ChunkSpec(
-                chunk_index=chunk_index,
-                page_start=page_start,
-                page_end=page_end,
-            ))
+            specs.append(
+                ChunkSpec(
+                    chunk_index=chunk_index,
+                    page_start=page_start,
+                    page_end=page_end,
+                )
+            )
 
             page_start = page_end + 1
             chunk_index += 1

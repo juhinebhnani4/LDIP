@@ -11,7 +11,7 @@ Usage:
 import sys
 
 # Fix Windows console encoding
-sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from app.core.logging import get_logger  # noqa: E402
 from app.engines.citation.validation import (  # noqa: E402

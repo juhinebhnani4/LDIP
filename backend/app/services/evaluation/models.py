@@ -77,7 +77,8 @@ class GoldenDatasetItem(BaseModel):
         default_factory=list, description="UUIDs of relevant chunks"
     )
     tags: list[str] = Field(
-        default_factory=list, description="Tags for filtering (e.g., 'citation', 'timeline')"
+        default_factory=list,
+        description="Tags for filtering (e.g., 'citation', 'timeline')",
     )
     created_by: str | None = Field(None, description="User who created this item")
     created_at: datetime | None = Field(None, description="Creation timestamp")

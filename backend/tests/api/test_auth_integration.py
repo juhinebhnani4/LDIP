@@ -121,9 +121,7 @@ class TestUnauthenticatedRequests:
     """Tests for unauthenticated API requests."""
 
     @pytest.mark.asyncio
-    async def test_protected_endpoint_without_token(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_protected_endpoint_without_token(self, client: AsyncClient) -> None:
         """Test that missing token returns 401 Unauthorized."""
         response = await client.get("/api/health/me")
 

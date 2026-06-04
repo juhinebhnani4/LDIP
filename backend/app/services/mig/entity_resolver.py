@@ -48,10 +48,25 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Indian honorific titles (common in legal documents)
-INDIAN_TITLES = frozenset({
-    "shri", "smt", "kumari", "dr", "adv", "advocate", "hon", "honourable",
-    "justice", "mr", "mrs", "ms", "miss", "prof", "professor",
-})
+INDIAN_TITLES = frozenset(
+    {
+        "shri",
+        "smt",
+        "kumari",
+        "dr",
+        "adv",
+        "advocate",
+        "hon",
+        "honourable",
+        "justice",
+        "mr",
+        "mrs",
+        "ms",
+        "miss",
+        "prof",
+        "professor",
+    }
+)
 
 # Standard title normalization mapping
 TITLE_NORMALIZATIONS = {
@@ -75,18 +90,18 @@ SUFFIXES = frozenset({"jr", "sr", "ii", "iii", "iv", "esq"})
 import re  # noqa: E402
 
 NUMBERED_ROLE_PATTERN = re.compile(
-    r'^(respondent|applicant|petitioner|defendant|plaintiff|appellant|'
-    r'opposite\s*party|o\.?p\.?|op|opp|claimant|complainant|witness|accused)'
-    r'\s*(?:no\.?|number)?\s*\.?\s*(\d+)$',
-    re.IGNORECASE
+    r"^(respondent|applicant|petitioner|defendant|plaintiff|appellant|"
+    r"opposite\s*party|o\.?p\.?|op|opp|claimant|complainant|witness|accused)"
+    r"\s*(?:no\.?|number)?\s*\.?\s*(\d+)$",
+    re.IGNORECASE,
 )
 
 # Also match variations like "Respondents No.5" (plural)
 NUMBERED_ROLE_PATTERN_PLURAL = re.compile(
-    r'^(respondents?|applicants?|petitioners?|defendants?|plaintiffs?|appellants?|'
-    r'opposite\s*parties|o\.?p\.?s?|ops?|claimants?|complainants?|witnesses|accused)'
-    r'\s*(?:nos?\.?|numbers?)?\s*\.?\s*(\d+)$',
-    re.IGNORECASE
+    r"^(respondents?|applicants?|petitioners?|defendants?|plaintiffs?|appellants?|"
+    r"opposite\s*parties|o\.?p\.?s?|ops?|claimants?|complainants?|witnesses|accused)"
+    r"\s*(?:nos?\.?|numbers?)?\s*\.?\s*(\d+)$",
+    re.IGNORECASE,
 )
 
 
@@ -119,7 +134,7 @@ def extract_numbered_role(name: str) -> tuple[str, int] | None:
         role = match.group(1).lower().strip()
         number = int(match.group(2))
         # Normalize role (remove plurals, standardize)
-        role = role.rstrip('s')  # Remove trailing 's' for plurals
+        role = role.rstrip("s")  # Remove trailing 's' for plurals
         return (role, number)
 
     # Try plural pattern
@@ -128,7 +143,7 @@ def extract_numbered_role(name: str) -> tuple[str, int] | None:
         role = match.group(1).lower().strip()
         number = int(match.group(2))
         # Normalize role (remove plurals, standardize)
-        role = role.rstrip('s')
+        role = role.rstrip("s")
         return (role, number)
 
     return None
@@ -421,7 +436,9 @@ class EntityResolver:
 
         # Handle initials (e.g., "N.D.")
         # Check if we have initials pattern
-        is_initials = all(self._is_initial(p) for p in parts[:-1]) if len(parts) > 1 else False
+        is_initials = (
+            all(self._is_initial(p) for p in parts[:-1]) if len(parts) > 1 else False
+        )
 
         if len(parts) == 1:
             # Single name - treat as last name
@@ -576,19 +593,23 @@ class EntityResolver:
                     )
 
                 # Track cost
-                usage = getattr(response, 'usage_metadata', None)
+                usage = getattr(response, "usage_metadata", None)
                 tracker = CostTracker(
                     provider=LLMProvider.GEMINI_FLASH,
                     operation="entity_alias_resolution",
                     matter_id=matter_id,
                 )
                 if usage:
-                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                    input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                    output_tokens = getattr(usage, "candidates_token_count", 0) or 0
                 else:
                     input_tokens = estimate_tokens(prompt)
-                    output_tokens = estimate_tokens(response.text) if response.text else 0
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                    output_tokens = (
+                        estimate_tokens(response.text) if response.text else 0
+                    )
+                tracker.add_tokens(
+                    input_tokens=input_tokens, output_tokens=output_tokens
+                )
                 tracker.log_cost()
                 await persist_cost(tracker)
 
@@ -607,9 +628,7 @@ class EntityResolver:
             except Exception as e:
                 error_str = str(e).lower()
                 is_rate_limit = (
-                    "429" in error_str
-                    or "rate" in error_str
-                    or "quota" in error_str
+                    "429" in error_str or "rate" in error_str or "quota" in error_str
                 )
 
                 if is_rate_limit and attempt < MAX_RETRIES - 1:
@@ -671,19 +690,23 @@ class EntityResolver:
                     )
 
                 # Track cost
-                usage = getattr(response, 'usage_metadata', None)
+                usage = getattr(response, "usage_metadata", None)
                 tracker = CostTracker(
                     provider=LLMProvider.GEMINI_FLASH,
                     operation="entity_alias_resolution_batch",
                     matter_id=matter_id,
                 )
                 if usage:
-                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                    input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                    output_tokens = getattr(usage, "candidates_token_count", 0) or 0
                 else:
                     input_tokens = estimate_tokens(prompt)
-                    output_tokens = estimate_tokens(response.text) if response.text else 0
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                    output_tokens = (
+                        estimate_tokens(response.text) if response.text else 0
+                    )
+                tracker.add_tokens(
+                    input_tokens=input_tokens, output_tokens=output_tokens
+                )
                 tracker.log_cost()
                 await persist_cost(tracker)
 
@@ -706,7 +729,12 @@ class EntityResolver:
 
             except Exception as e:
                 error_str = str(e).lower()
-                is_retryable = "429" in error_str or "rate" in error_str or "503" in error_str or "unavailable" in error_str
+                is_retryable = (
+                    "429" in error_str
+                    or "rate" in error_str
+                    or "503" in error_str
+                    or "unavailable" in error_str
+                )
 
                 if is_retryable and attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(retry_delay)
@@ -777,16 +805,22 @@ class EntityResolver:
             # Incremental: only iterate over document entities as source
             # They are compared against ALL type_entities as candidates
             if document_entity_ids:
-                source_entities = [e for e in type_entities if e.id in document_entity_ids]
+                source_entities = [
+                    e for e in type_entities if e.id in document_entity_ids
+                ]
             else:
-                source_entities = type_entities  # Full resolution (backward compat / admin trigger)
+                source_entities = (
+                    type_entities  # Full resolution (backward compat / admin trigger)
+                )
 
             for entity in source_entities:
                 candidates = self.find_potential_aliases(entity, type_entities)
 
                 for candidate in candidates:
                     # Create normalized pair key (smaller ID first)
-                    pair_key = tuple(sorted([candidate.entity_id, candidate.candidate_entity_id]))
+                    pair_key = tuple(
+                        sorted([candidate.entity_id, candidate.candidate_entity_id])
+                    )
                     if pair_key in seen_pairs:
                         continue
                     seen_pairs.add(pair_key)
@@ -822,18 +856,22 @@ class EntityResolver:
                 # Batch context analysis
                 batch_pairs = []
                 for i, candidate in enumerate(medium_confidence_pairs):
-                    batch_pairs.append({
-                        "pair_id": f"pair_{i}",
-                        "name1": candidate.entity_name,
-                        "context1": entity_contexts.get(candidate.entity_id, ""),
-                        "name2": candidate.candidate_name,
-                        "context2": entity_contexts.get(candidate.candidate_entity_id, ""),
-                    })
+                    batch_pairs.append(
+                        {
+                            "pair_id": f"pair_{i}",
+                            "name1": candidate.entity_name,
+                            "context1": entity_contexts.get(candidate.entity_id, ""),
+                            "name2": candidate.candidate_name,
+                            "context2": entity_contexts.get(
+                                candidate.candidate_entity_id, ""
+                            ),
+                        }
+                    )
 
                 # Process batches concurrently with semaphore
                 semaphore = asyncio.Semaphore(ALIAS_CONCURRENT_LIMIT)
                 batches = [
-                    batch_pairs[i:i + CONTEXT_ANALYSIS_BATCH_SIZE]
+                    batch_pairs[i : i + CONTEXT_ANALYSIS_BATCH_SIZE]
                     for i in range(0, len(batch_pairs), CONTEXT_ANALYSIS_BATCH_SIZE)
                 ]
 
@@ -845,9 +883,13 @@ class EntityResolver:
                     concurrent_limit=ALIAS_CONCURRENT_LIMIT,
                 )
 
-                async def _process_batch(batch: list[dict], semaphore=semaphore) -> dict[str, float]:
+                async def _process_batch(
+                    batch: list[dict], semaphore=semaphore
+                ) -> dict[str, float]:
                     async with semaphore:
-                        return await self.analyze_batch_context(batch, matter_id=matter_id)
+                        return await self.analyze_batch_context(
+                            batch, matter_id=matter_id
+                        )
 
                 batch_results = await asyncio.gather(
                     *[_process_batch(b) for b in batches],
@@ -1123,7 +1165,7 @@ class EntityResolver:
 
             # Create edges between all pairs in the group
             for i, entity_a in enumerate(group_entities):
-                for entity_b in group_entities[i + 1:]:
+                for entity_b in group_entities[i + 1 :]:
                     pair = tuple(sorted([entity_a, entity_b]))
                     if pair not in existing_pairs:
                         transitive_edge = EntityEdgeCreate(
@@ -1194,9 +1236,7 @@ class EntityResolver:
                 else:
                     scores.append(0.0)
             else:
-                first_score = self._jaro.normalized_similarity(
-                    f1.lower(), f2.lower()
-                )
+                first_score = self._jaro.normalized_similarity(f1.lower(), f2.lower())
                 scores.append(first_score)
         elif comp1.first_name or comp2.first_name:
             scores.append(0.2)  # One has first name, other doesn't
@@ -1206,16 +1246,16 @@ class EntityResolver:
             m1 = comp1.middle_name.rstrip(".")
             m2 = comp2.middle_name.rstrip(".")
 
-            if self._is_initial(comp1.middle_name) or self._is_initial(comp2.middle_name):
+            if self._is_initial(comp1.middle_name) or self._is_initial(
+                comp2.middle_name
+            ):
                 # Initial match
                 if m1[0].lower() == m2[0].lower():
                     scores.append(0.7)
                 else:
                     scores.append(0.0)
             else:
-                middle_score = self._jaro.normalized_similarity(
-                    m1.lower(), m2.lower()
-                )
+                middle_score = self._jaro.normalized_similarity(m1.lower(), m2.lower())
                 scores.append(middle_score)
 
         if not scores:

@@ -166,6 +166,7 @@ class TestInviteMember:
         mock_db: MagicMock,
     ) -> None:
         """Test that invite_member fails when user email not found."""
+
         # Setup: inviter is owner
         def table_side_effect(table_name: str) -> MagicMock:
             mock = MagicMock()
@@ -174,8 +175,10 @@ class TestInviteMember:
                     data=[{"role": "owner"}]
                 )
             elif table_name == "users":
-                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(
-                    data=[]  # No user found
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    MagicMock(
+                        data=[]  # No user found
+                    )
                 )
             return mock
 
@@ -209,8 +212,12 @@ class TestInviteMember:
                 )
             elif table_name == "users":
                 # User lookup
-                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(
-                    data=[{"id": "existing-user-id", "email": "existing@example.com"}]
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    MagicMock(
+                        data=[
+                            {"id": "existing-user-id", "email": "existing@example.com"}
+                        ]
+                    )
                 )
             elif table_name == "matter_attorneys":
                 # Check existing membership
@@ -308,8 +315,8 @@ class TestUpdateMatter:
                     data=[{"role": "editor"}]
                 )
             elif table_name == "matters":
-                mock.update.return_value.eq.return_value.execute.return_value = MagicMock(
-                    data=[mock_matter_data]
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    MagicMock(data=[mock_matter_data])
                 )
             return mock
 
@@ -359,8 +366,15 @@ class TestDeleteMatter:
                     data=[{"role": "owner"}]
                 )
             elif table_name == "matters":
-                mock.update.return_value.eq.return_value.execute.return_value = MagicMock(
-                    data=[{**mock_matter_data, "deleted_at": "2026-01-05T12:00:00+00:00"}]
+                mock.update.return_value.eq.return_value.execute.return_value = (
+                    MagicMock(
+                        data=[
+                            {
+                                **mock_matter_data,
+                                "deleted_at": "2026-01-05T12:00:00+00:00",
+                            }
+                        ]
+                    )
                 )
             return mock
 

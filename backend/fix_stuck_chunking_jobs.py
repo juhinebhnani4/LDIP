@@ -3,9 +3,10 @@
 These jobs should be advanced to the embedding stage since chunking
 is already complete.
 """
+
 import sys
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 from datetime import UTC, datetime
 
@@ -13,9 +14,9 @@ from app.services.supabase.client import get_supabase_client
 
 
 def main():
-    requeue = '--requeue' in sys.argv
-    dry_run = '--dry-run' in sys.argv
-    auto_yes = '-y' in sys.argv or '--yes' in sys.argv
+    requeue = "--requeue" in sys.argv
+    dry_run = "--dry-run" in sys.argv
+    auto_yes = "-y" in sys.argv or "--yes" in sys.argv
 
     client = get_supabase_client()
     if not client:
@@ -23,7 +24,13 @@ def main():
         sys.exit(1)
 
     # Find jobs stuck at chunking
-    response = client.table("processing_jobs").select("*").eq("current_stage", "chunking").in_("status", ["PROCESSING", "QUEUED"]).execute()
+    response = (
+        client.table("processing_jobs")
+        .select("*")
+        .eq("current_stage", "chunking")
+        .in_("status", ["PROCESSING", "QUEUED"])
+        .execute()
+    )
     stuck_jobs = response.data
 
     if not stuck_jobs:
@@ -35,31 +42,51 @@ def main():
     jobs_to_fix = []
 
     for job in stuck_jobs:
-        doc_id = job.get('document_id')
+        doc_id = job.get("document_id")
         if not doc_id:
             continue
 
         # Check if BOTH parent and child chunks exist (complete chunking)
-        parent_resp = client.table("chunks").select("id", count="exact").eq("document_id", doc_id).eq("chunk_type", "parent").execute()
-        child_resp = client.table("chunks").select("id", count="exact").eq("document_id", doc_id).eq("chunk_type", "child").execute()
+        parent_resp = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", doc_id)
+            .eq("chunk_type", "parent")
+            .execute()
+        )
+        child_resp = (
+            client.table("chunks")
+            .select("id", count="exact")
+            .eq("document_id", doc_id)
+            .eq("chunk_type", "child")
+            .execute()
+        )
         parent_count = parent_resp.count or 0
         child_count = child_resp.count or 0
         total_count = parent_count + child_count
 
         if parent_count > 0 and child_count > 0:
             # Complete chunking - can skip to embedding
-            jobs_to_fix.append({
-                'job': job,
-                'chunk_count': total_count,
-                'parent_count': parent_count,
-                'child_count': child_count,
-            })
-            print(f"  [OK] {job['id'][:12]}... has {parent_count} parent + {child_count} child chunks - COMPLETE, skip to embedding")
+            jobs_to_fix.append(
+                {
+                    "job": job,
+                    "chunk_count": total_count,
+                    "parent_count": parent_count,
+                    "child_count": child_count,
+                }
+            )
+            print(
+                f"  [OK] {job['id'][:12]}... has {parent_count} parent + {child_count} child chunks - COMPLETE, skip to embedding"
+            )
         elif parent_count > 0 or child_count > 0:
             # Partial chunking - needs re-chunking
-            print(f"  [PARTIAL] {job['id'][:12]}... has PARTIAL chunks (parent={parent_count}, child={child_count}) - needs re-chunking")
+            print(
+                f"  [PARTIAL] {job['id'][:12]}... has PARTIAL chunks (parent={parent_count}, child={child_count}) - needs re-chunking"
+            )
         else:
-            print(f"  [NONE] {job['id'][:12]}... has 0 chunks - needs actual reprocessing")
+            print(
+                f"  [NONE] {job['id'][:12]}... has 0 chunks - needs actual reprocessing"
+            )
 
     if not jobs_to_fix:
         print("\nNo jobs with existing chunks found. Jobs need actual reprocessing.")
@@ -73,30 +100,39 @@ def main():
         return
 
     if not auto_yes:
-        confirm = input("\nFix these jobs by advancing them to embedding? [y/N]: ").strip().lower()
-        if confirm != 'y':
+        confirm = (
+            input("\nFix these jobs by advancing them to embedding? [y/N]: ")
+            .strip()
+            .lower()
+        )
+        if confirm != "y":
             print("Cancelled.")
             return
 
     print("\nFixing jobs...")
 
     for item in jobs_to_fix:
-        job = item['job']
-        job_id = job['id']
-        doc_id = job['document_id']
+        job = item["job"]
+        job_id = job["id"]
+        doc_id = job["document_id"]
 
         # Update job to skip chunking and go to embedding
-        client.table("processing_jobs").update({
-            "status": "QUEUED",
-            "current_stage": "embedding",  # Skip chunking, go to embedding
-            "completed_stages": 4,  # OCR, validation, confidence, chunking = 4 stages done
-            "progress_pct": 60,  # Keep at 60% (embedding is next)
-            "error_message": None,
-            "error_code": None,
-            "retry_count": 0,
-            "updated_at": datetime.now(UTC).isoformat(),
-            "metadata": {"fixed_stuck_chunking": True, "chunks_existed": item['chunk_count']},
-        }).eq("id", job_id).execute()
+        client.table("processing_jobs").update(
+            {
+                "status": "QUEUED",
+                "current_stage": "embedding",  # Skip chunking, go to embedding
+                "completed_stages": 4,  # OCR, validation, confidence, chunking = 4 stages done
+                "progress_pct": 60,  # Keep at 60% (embedding is next)
+                "error_message": None,
+                "error_code": None,
+                "retry_count": 0,
+                "updated_at": datetime.now(UTC).isoformat(),
+                "metadata": {
+                    "fixed_stuck_chunking": True,
+                    "chunks_existed": item["chunk_count"],
+                },
+            }
+        ).eq("id", job_id).execute()
 
         print(f"  Fixed: {job_id[:12]}... -> embedding stage")
 
@@ -107,9 +143,9 @@ def main():
         from app.workers.tasks.document_tasks import embed_document_chunks
 
         for item in jobs_to_fix:
-            job = item['job']
-            doc_id = job['document_id']
-            job_id = job['id']
+            job = item["job"]
+            doc_id = job["document_id"]
+            job_id = job["id"]
 
             embed_document_chunks.apply_async(
                 kwargs={
@@ -124,6 +160,7 @@ def main():
     else:
         print("\nRun with --requeue to also dispatch embedding tasks to Celery")
         print("Or use the Celery Beat scheduler to pick them up automatically")
+
 
 if __name__ == "__main__":
     main()

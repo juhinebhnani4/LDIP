@@ -1,6 +1,6 @@
 import sys
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,10 +18,10 @@ from app.workers.tasks.document_tasks import (  # noqa: E402
     validate_ocr,
 )
 
-doc_id = 'ed3313dc-0ff4-4079-8aee-656b48dad9e7'
+doc_id = "ed3313dc-0ff4-4079-8aee-656b48dad9e7"
 
-print(f'Triggering full document processing pipeline for: {doc_id}')
-print(f'Broker: {celery_app.conf.broker_url}')
+print(f"Triggering full document processing pipeline for: {doc_id}")
+print(f"Broker: {celery_app.conf.broker_url}")
 
 # Create the same task chain as the upload endpoint
 task_chain = chain(
@@ -35,6 +35,6 @@ task_chain = chain(
 )
 
 # Apply to high priority queue (document is small)
-result = task_chain.apply_async(queue='high')
-print(f'Chain Task ID: {result.id}')
-print(f'Task Status: {result.status}')
+result = task_chain.apply_async(queue="high")
+print(f"Chain Task ID: {result.id}")
+print(f"Task Status: {result.status}")

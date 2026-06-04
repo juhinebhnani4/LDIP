@@ -232,9 +232,13 @@ class InjectionDetector:
 
                 if llm_result:
                     # Combine regex and LLM findings
-                    all_patterns = list(set(regex_found + llm_result.get("patterns_found", [])))
+                    all_patterns = list(
+                        set(regex_found + llm_result.get("patterns_found", []))
+                    )
 
-                    risk_level = self._parse_risk_level(llm_result.get("risk_level", "none"))
+                    risk_level = self._parse_risk_level(
+                        llm_result.get("risk_level", "none")
+                    )
                     confidence = float(llm_result.get("confidence", 0.5))
 
                     logger.info(
@@ -264,7 +268,9 @@ class InjectionDetector:
 
         # Return regex-only result
         if regex_found:
-            risk_level = InjectionRisk.MEDIUM if len(regex_found) >= 2 else InjectionRisk.LOW
+            risk_level = (
+                InjectionRisk.MEDIUM if len(regex_found) >= 2 else InjectionRisk.LOW
+            )
             return InjectionScanResult(
                 risk_level=risk_level,
                 confidence=0.6,
@@ -281,7 +287,9 @@ class InjectionDetector:
             scan_method="regex_only",
         )
 
-    async def _llm_scan(self, text: str, document_id: str | None = None) -> dict[str, Any] | None:
+    async def _llm_scan(
+        self, text: str, document_id: str | None = None
+    ) -> dict[str, Any] | None:
         """Run LLM-based injection detection.
 
         Args:

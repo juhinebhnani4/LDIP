@@ -140,10 +140,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Initialize DB-backed pricing (P3)
         from app.core.pricing_loader import initialize_pricing
+
         initialize_pricing(supabase)
 
         # Initialize query history store with DB client for audit persistence
         from app.engines.orchestrator.query_history import get_query_history_store
+
         get_query_history_store(supabase)
         logger.info("query_history_store_initialized")
     except Exception as e:
@@ -264,7 +266,9 @@ def create_app() -> FastAPI:
                 "error": {
                     "code": f"HTTP_{exc.status_code}",
                     "message": str(exc.detail) if exc.detail else "An error occurred",
-                    "details": {"correlationId": correlation_id} if correlation_id else {},
+                    "details": {"correlationId": correlation_id}
+                    if correlation_id
+                    else {},
                 }
             }
 
@@ -281,11 +285,13 @@ def create_app() -> FastAPI:
         field_errors = []
         for error in exc.errors():
             field_path = ".".join(str(loc) for loc in error["loc"])
-            field_errors.append({
-                "field": field_path,
-                "message": error["msg"],
-                "type": error["type"],
-            })
+            field_errors.append(
+                {
+                    "field": field_path,
+                    "message": error["msg"],
+                    "type": error["type"],
+                }
+            )
 
         content = {
             "error": {

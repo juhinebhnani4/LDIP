@@ -19,7 +19,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
-
 def recover_document(document_id: str, matter_id: str, job_id: str | None = None):
     """Trigger recovery for a stuck document.
 
@@ -43,7 +42,9 @@ def recover_document(document_id: str, matter_id: str, job_id: str | None = None
     )
 
     print(f"Recovery task dispatched: {result.id}")
-    print("The task will check if document has 0 chunks and trigger downstream if needed.")
+    print(
+        "The task will check if document has 0 chunks and trigger downstream if needed."
+    )
     print("Monitor Celery logs for progress.")
 
     return result

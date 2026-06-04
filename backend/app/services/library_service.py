@@ -34,7 +34,9 @@ logger = structlog.get_logger(__name__)
 class LibraryServiceError(Exception):
     """Base exception for library service operations."""
 
-    def __init__(self, message: str, code: str = "LIBRARY_ERROR", status_code: int = 500):
+    def __init__(
+        self, message: str, code: str = "LIBRARY_ERROR", status_code: int = 500
+    ):
         self.message = message
         self.code = code
         self.status_code = status_code
@@ -126,22 +128,26 @@ class LibraryService:
         )
 
         try:
-            result = self.client.table("library_documents").insert(
-                {
-                    "filename": create_data.filename,
-                    "storage_path": storage_path,
-                    "file_size": file_size,
-                    "document_type": create_data.document_type.value,
-                    "title": create_data.title,
-                    "short_title": create_data.short_title,
-                    "year": create_data.year,
-                    "jurisdiction": create_data.jurisdiction,
-                    "source": source.value,
-                    "source_url": source_url,
-                    "status": LibraryDocumentStatus.PENDING.value,
-                    "added_by": added_by,
-                }
-            ).execute()
+            result = (
+                self.client.table("library_documents")
+                .insert(
+                    {
+                        "filename": create_data.filename,
+                        "storage_path": storage_path,
+                        "file_size": file_size,
+                        "document_type": create_data.document_type.value,
+                        "title": create_data.title,
+                        "short_title": create_data.short_title,
+                        "year": create_data.year,
+                        "jurisdiction": create_data.jurisdiction,
+                        "source": source.value,
+                        "source_url": source_url,
+                        "status": LibraryDocumentStatus.PENDING.value,
+                        "added_by": added_by,
+                    }
+                )
+                .execute()
+            )
 
             if not result.data:
                 raise LibraryServiceError(
@@ -806,9 +812,14 @@ class LibraryService:
 
         try:
             # 1. Read the source document
-            doc_result = self.client.table("documents").select(
-                "id, filename, storage_path, file_size, page_count, document_type"
-            ).eq("id", document_id).execute()
+            doc_result = (
+                self.client.table("documents")
+                .select(
+                    "id, filename, storage_path, file_size, page_count, document_type"
+                )
+                .eq("id", document_id)
+                .execute()
+            )
 
             if not doc_result.data:
                 raise LibraryServiceError(
@@ -823,12 +834,15 @@ class LibraryService:
 
             # 2. Check if matching library document already exists (GAP-12: use RPC)
             import re
-            year_match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', title)
+
+            year_match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", title)
             year = int(year_match.group(1)) if year_match else None
 
             library_doc_id = None
             try:
-                duplicates = self.find_duplicates(title, year=year, similarity_threshold=0.6)
+                duplicates = self.find_duplicates(
+                    title, year=year, similarity_threshold=0.6
+                )
                 if duplicates:
                     library_doc_id = duplicates[0].id
                     logger.info(
@@ -845,9 +859,13 @@ class LibraryService:
                     error=str(e),
                 )
                 # Fallback: exact ilike match if RPC fails
-                existing_result = self.client.table("library_documents").select(
-                    "id"
-                ).ilike("title", title).limit(1).execute()
+                existing_result = (
+                    self.client.table("library_documents")
+                    .select("id")
+                    .ilike("title", title)
+                    .limit(1)
+                    .execute()
+                )
                 if existing_result.data:
                     library_doc_id = existing_result.data[0]["id"]
 
@@ -887,11 +905,13 @@ class LibraryService:
             )
 
             if not existing_link.data:
-                self.client.table("matter_library_links").insert({
-                    "matter_id": matter_id,
-                    "library_document_id": library_doc_id,
-                    "linked_by": user_id,
-                }).execute()
+                self.client.table("matter_library_links").insert(
+                    {
+                        "matter_id": matter_id,
+                        "library_document_id": library_doc_id,
+                        "linked_by": user_id,
+                    }
+                ).execute()
 
                 logger.info(
                     "promote_linked_to_matter",
@@ -900,11 +920,13 @@ class LibraryService:
                 )
 
             # 5. Mark original document as migrated
-            self.client.table("documents").update({
-                "migrated_to_library": True,
-                "library_document_id": library_doc_id,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }).eq("id", document_id).execute()
+            self.client.table("documents").update(
+                {
+                    "migrated_to_library": True,
+                    "library_document_id": library_doc_id,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            ).eq("id", document_id).execute()
 
             logger.info(
                 "promote_document_complete",

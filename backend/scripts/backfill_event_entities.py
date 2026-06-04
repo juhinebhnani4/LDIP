@@ -54,7 +54,9 @@ def load_entities_sync(matter_id: str, batch_size: int = 500) -> list[EntityNode
                 id=row["id"],
                 matter_id=row["matter_id"],
                 canonical_name=row["canonical_name"],
-                entity_type=EntityType(row["entity_type"]) if row.get("entity_type") else EntityType.PERSON,
+                entity_type=EntityType(row["entity_type"])
+                if row.get("entity_type")
+                else EntityType.PERSON,
                 aliases=row.get("aliases") or [],
                 mention_count=row.get("mention_count", 0),
                 metadata=row.get("metadata") or {},
@@ -84,10 +86,10 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
     Returns:
         Dict with results summary
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Backfilling entities_involved for matter: {matter_id}")
     print(f"Force relink: {force_relink}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     timeline_service = get_timeline_service()
     get_mig_graph_service()
@@ -117,7 +119,9 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
     print("\nLoading entities from MIG...")
     all_entities = load_entities_sync(matter_id)
     entities = [e for e in all_entities if not e.merged_into_id]
-    print(f"  Using {len(entities)} active entities ({len(all_entities) - len(entities)} merged duplicates excluded)")
+    print(
+        f"  Using {len(entities)} active entities ({len(all_entities) - len(entities)} merged duplicates excluded)"
+    )
 
     if not entities:
         print("No entities found in matter - cannot link events")
@@ -129,11 +133,13 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
     total_updated = 0
 
     for i in range(0, len(events_to_process), batch_size):
-        batch = events_to_process[i:i + batch_size]
+        batch = events_to_process[i : i + batch_size]
         batch_num = i // batch_size + 1
         total_batches = (len(events_to_process) + batch_size - 1) // batch_size
 
-        print(f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} events)...")
+        print(
+            f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} events)..."
+        )
 
         # Link entities for this batch using parallel sync processing
         event_entities = entity_linker.link_entities_batch_parallel(
@@ -154,11 +160,11 @@ def backfill_event_entities(matter_id: str, force_relink: bool = False) -> dict:
 
         total_processed += len(batch)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("COMPLETED")
     print(f"  Total events processed: {total_processed}")
     print(f"  Total events updated: {total_updated}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "status": "completed",

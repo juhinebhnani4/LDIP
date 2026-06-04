@@ -46,20 +46,22 @@ class TestDateExtractorParsing:
     def test_parse_valid_response(self) -> None:
         """Should parse valid Gemini JSON response."""
         extractor = DateExtractor()
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "context_before": "The filing was on",
-                    "context_after": "before the court.",
-                    "is_ambiguous": False,
-                    "ambiguity_reason": None,
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "context_before": "The filing was on",
+                        "context_after": "before the court.",
+                        "is_ambiguous": False,
+                        "ambiguity_reason": None,
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -138,28 +140,30 @@ class TestDateExtractorParsing:
     def test_parse_multiple_dates(self) -> None:
         """Should parse multiple dates from response."""
         extractor = DateExtractor()
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "confidence": 0.95,
-                },
-                {
-                    "date_text": "March 2024",
-                    "extracted_date": "2024-03-01",
-                    "date_precision": "month",
-                    "confidence": 0.90,
-                },
-                {
-                    "date_text": "2023",
-                    "extracted_date": "2023-01-01",
-                    "date_precision": "year",
-                    "confidence": 0.85,
-                },
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "confidence": 0.95,
+                    },
+                    {
+                        "date_text": "March 2024",
+                        "extracted_date": "2024-03-01",
+                        "date_precision": "month",
+                        "confidence": 0.90,
+                    },
+                    {
+                        "date_text": "2023",
+                        "extracted_date": "2023-01-01",
+                        "date_precision": "year",
+                        "confidence": 0.85,
+                    },
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -176,18 +180,20 @@ class TestDateExtractorParsing:
     def test_parse_ambiguous_date(self) -> None:
         """Should parse ambiguous date with reason."""
         extractor = DateExtractor()
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "01/02/2024",
-                    "extracted_date": "2024-02-01",
-                    "date_precision": "day",
-                    "is_ambiguous": True,
-                    "ambiguity_reason": "DD/MM vs MM/DD uncertain",
-                    "confidence": 0.70,
-                }
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "01/02/2024",
+                        "extracted_date": "2024-02-01",
+                        "date_precision": "day",
+                        "is_ambiguous": True,
+                        "ambiguity_reason": "DD/MM vs MM/DD uncertain",
+                        "confidence": 0.70,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -297,19 +303,21 @@ class TestDateExtractorExtraction:
         extractor = DateExtractor()
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "context_before": "Filed on",
-                    "context_after": "in Mumbai",
-                    "is_ambiguous": False,
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "context_before": "Filed on",
+                        "context_after": "in Mumbai",
+                        "is_ambiguous": False,
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
@@ -330,16 +338,18 @@ class TestDateExtractorExtraction:
         extractor = DateExtractor()
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "March 2024",
-                    "extracted_date": "2024-03-01",
-                    "date_precision": "month",
-                    "confidence": 0.90,
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "March 2024",
+                        "extracted_date": "2024-03-01",
+                        "date_precision": "month",
+                        "confidence": 0.90,
+                    }
+                ]
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content = MagicMock(return_value=mock_response)
@@ -363,17 +373,19 @@ class TestIndianDateFormats:
         extractor = DateExtractor()
         # The prompt instructs Gemini to prefer DD/MM for Indian docs
         # This test verifies the parsing handles it correctly
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",  # DD/MM interpretation
-                    "date_precision": "day",
-                    "is_ambiguous": False,
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",  # DD/MM interpretation
+                        "date_precision": "day",
+                        "is_ambiguous": False,
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -387,16 +399,18 @@ class TestIndianDateFormats:
     def test_legal_format_this_day_of(self) -> None:
         """Should parse 'this X day of Y' legal format."""
         extractor = DateExtractor()
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "this 5th day of January, 2024",
-                    "extracted_date": "2024-01-05",
-                    "date_precision": "day",
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "this 5th day of January, 2024",
+                        "extracted_date": "2024-01-05",
+                        "date_precision": "day",
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -410,16 +424,18 @@ class TestIndianDateFormats:
     def test_financial_year_format(self) -> None:
         """Should handle Indian financial year format."""
         extractor = DateExtractor()
-        response_text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "F.Y. 2023-24",
-                    "extracted_date": "2023-04-01",
-                    "date_precision": "year",
-                    "confidence": 0.85,
-                }
-            ]
-        })
+        response_text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "F.Y. 2023-24",
+                        "extracted_date": "2023-04-01",
+                        "date_precision": "year",
+                        "confidence": 0.85,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(
             response_text=response_text,
@@ -439,16 +455,18 @@ class TestDatePrecision:
     def test_day_precision(self) -> None:
         """Should handle day precision dates."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert result.dates[0].date_precision == "day"
@@ -456,16 +474,18 @@ class TestDatePrecision:
     def test_month_precision(self) -> None:
         """Should handle month precision dates."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "January 2024",
-                    "extracted_date": "2024-01-01",
-                    "date_precision": "month",
-                    "confidence": 0.90,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "January 2024",
+                        "extracted_date": "2024-01-01",
+                        "date_precision": "month",
+                        "confidence": 0.90,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert result.dates[0].date_precision == "month"
@@ -473,16 +493,18 @@ class TestDatePrecision:
     def test_year_precision(self) -> None:
         """Should handle year precision dates."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "2024",
-                    "extracted_date": "2024-01-01",
-                    "date_precision": "year",
-                    "confidence": 0.80,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "2024",
+                        "extracted_date": "2024-01-01",
+                        "date_precision": "year",
+                        "confidence": 0.80,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert result.dates[0].date_precision == "year"
@@ -490,17 +512,19 @@ class TestDatePrecision:
     def test_approximate_precision(self) -> None:
         """Should handle approximate dates."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "circa 2020",
-                    "extracted_date": "2020-01-01",
-                    "date_precision": "approximate",
-                    "is_ambiguous": True,
-                    "confidence": 0.65,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "circa 2020",
+                        "extracted_date": "2020-01-01",
+                        "date_precision": "approximate",
+                        "is_ambiguous": True,
+                        "confidence": 0.65,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert result.dates[0].date_precision == "approximate"
@@ -521,16 +545,18 @@ class TestErrorHandling:
     def test_invalid_date_string(self) -> None:
         """Should skip invalid date strings."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "invalid",
-                    "extracted_date": "not-a-date",
-                    "date_precision": "day",
-                    "confidence": 0.5,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "invalid",
+                        "extracted_date": "not-a-date",
+                        "date_precision": "day",
+                        "confidence": 0.5,
+                    }
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert len(result.dates) == 0
@@ -538,20 +564,22 @@ class TestErrorHandling:
     def test_missing_required_fields(self) -> None:
         """Should skip dates with missing required fields."""
         extractor = DateExtractor()
-        response = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    # Missing extracted_date
-                    "date_precision": "day",
-                },
-                {
-                    # Missing date_text
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                },
-            ]
-        })
+        response = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        # Missing extracted_date
+                        "date_precision": "day",
+                    },
+                    {
+                        # Missing date_text
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                    },
+                ]
+            }
+        )
 
         result = extractor._parse_response(response, "doc", "matter", None)
         assert len(result.dates) == 0
@@ -709,38 +737,40 @@ class TestIntegrationPipeline:
 
         # Mock Gemini response with multiple date types
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "context_before": "The complaint was filed on",
-                    "context_after": "before the Hon'ble Court.",
-                    "is_ambiguous": False,
-                    "confidence": 0.95,
-                },
-                {
-                    "date_text": "01/02/2024",
-                    "extracted_date": "2024-02-01",
-                    "date_precision": "day",
-                    "context_before": "Notice dated",
-                    "context_after": "was issued.",
-                    "is_ambiguous": True,
-                    "ambiguity_reason": "DD/MM vs MM/DD uncertain",
-                    "confidence": 0.70,
-                },
-                {
-                    "date_text": "March 2024",
-                    "extracted_date": "2024-03-01",
-                    "date_precision": "month",
-                    "context_before": "Hearing scheduled for",
-                    "context_after": "",
-                    "is_ambiguous": False,
-                    "confidence": 0.90,
-                },
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "context_before": "The complaint was filed on",
+                        "context_after": "before the Hon'ble Court.",
+                        "is_ambiguous": False,
+                        "confidence": 0.95,
+                    },
+                    {
+                        "date_text": "01/02/2024",
+                        "extracted_date": "2024-02-01",
+                        "date_precision": "day",
+                        "context_before": "Notice dated",
+                        "context_after": "was issued.",
+                        "is_ambiguous": True,
+                        "ambiguity_reason": "DD/MM vs MM/DD uncertain",
+                        "confidence": 0.70,
+                    },
+                    {
+                        "date_text": "March 2024",
+                        "extracted_date": "2024-03-01",
+                        "date_precision": "month",
+                        "context_before": "Hearing scheduled for",
+                        "context_after": "",
+                        "is_ambiguous": False,
+                        "confidence": 0.90,
+                    },
+                ]
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
@@ -748,7 +778,7 @@ class TestIntegrationPipeline:
 
         result = await extractor.extract_dates_from_text(
             text="The complaint was filed on 15/01/2024 before the Hon'ble Court. "
-                 "Notice dated 01/02/2024 was issued. Hearing scheduled for March 2024.",
+            "Notice dated 01/02/2024 was issued. Hearing scheduled for March 2024.",
             document_id="doc-123",
             matter_id="matter-456",
             page_number=5,
@@ -783,23 +813,27 @@ class TestIntegrationPipeline:
         """Should preserve context windows in extraction."""
         extractor = DateExtractor()
 
-        context_before = "After reviewing all the documents submitted by the petitioner "
+        context_before = (
+            "After reviewing all the documents submitted by the petitioner "
+        )
         context_after = "the court shall proceed to hear the arguments."
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "dates": [
-                {
-                    "date_text": "15/01/2024",
-                    "extracted_date": "2024-01-15",
-                    "date_precision": "day",
-                    "context_before": context_before,
-                    "context_after": context_after,
-                    "is_ambiguous": False,
-                    "confidence": 0.95,
-                }
-            ]
-        })
+        mock_response.text = json.dumps(
+            {
+                "dates": [
+                    {
+                        "date_text": "15/01/2024",
+                        "extracted_date": "2024-01-15",
+                        "date_precision": "day",
+                        "context_before": context_before,
+                        "context_after": context_after,
+                        "is_ambiguous": False,
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)

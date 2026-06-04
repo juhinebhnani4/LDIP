@@ -252,9 +252,7 @@ def _format_chunks(chunks: list[dict]) -> str:
         page = chunk.get("page_number", "?")
         content = chunk.get("content", "")[:1000]  # Limit content length
 
-        formatted.append(
-            f"[Excerpt {i}] Source: {doc_name}, Page {page}\n{content}\n"
-        )
+        formatted.append(f"[Excerpt {i}] Source: {doc_name}, Page {page}\n{content}\n")
 
     return "\n---\n".join(formatted)
 

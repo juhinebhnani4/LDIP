@@ -68,7 +68,9 @@ def create_event(
 class TestLegalSequenceValidator:
     """Tests for legal workflow sequence validation."""
 
-    def test_get_expected_sequence_sarfaesi(self, validator: LegalSequenceValidator) -> None:
+    def test_get_expected_sequence_sarfaesi(
+        self, validator: LegalSequenceValidator
+    ) -> None:
         """Should return SARFAESI sequence for that case type."""
         sequence = validator.get_expected_sequence(CaseType.SARFAESI)
 
@@ -79,7 +81,9 @@ class TestLegalSequenceValidator:
         assert sequence[3] == EventType.HEARING
         assert sequence[4] == EventType.ORDER
 
-    def test_get_expected_sequence_general(self, validator: LegalSequenceValidator) -> None:
+    def test_get_expected_sequence_general(
+        self, validator: LegalSequenceValidator
+    ) -> None:
         """Should return general sequence for unknown case type."""
         sequence = validator.get_expected_sequence("unknown_type")
 
@@ -97,7 +101,9 @@ class TestLegalSequenceValidator:
         assert pos_notice == 1
         assert pos_filing > pos_notice  # Filing comes after notice
 
-    def test_get_event_position_not_in_sequence(self, validator: LegalSequenceValidator) -> None:
+    def test_get_event_position_not_in_sequence(
+        self, validator: LegalSequenceValidator
+    ) -> None:
         """Should return -1 for event types not in sequence."""
         sequence = validator.get_expected_sequence(CaseType.SARFAESI)
 
@@ -160,11 +166,15 @@ class TestSequenceViolationDetection:
     """Tests for detecting sequence violations in timelines."""
 
     @pytest.mark.asyncio
-    async def test_detect_hearing_before_filing(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_hearing_before_filing(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect hearing event occurring before filing."""
         events = [
             create_event("e1", date(2024, 1, 15), EventType.HEARING, "Hearing held"),
-            create_event("e2", date(2024, 3, 20), EventType.FILING, "Filed application"),
+            create_event(
+                "e2", date(2024, 3, 20), EventType.FILING, "Filed application"
+            ),
         ]
 
         anomalies = detector.detect_sequence_violations(
@@ -177,7 +187,9 @@ class TestSequenceViolationDetection:
         assert "filing" in anomalies[0].actual_order
 
     @pytest.mark.asyncio
-    async def test_detect_order_before_hearing(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_order_before_hearing(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect order event occurring before hearing."""
         events = [
             create_event("e1", date(2024, 1, 10), EventType.NOTICE, "Notice sent"),
@@ -194,7 +206,9 @@ class TestSequenceViolationDetection:
         assert AnomalyType.SEQUENCE_VIOLATION in violation_types
 
     @pytest.mark.asyncio
-    async def test_no_violation_correct_sequence(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_no_violation_correct_sequence(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should not flag violations for correct sequence."""
         events = [
             create_event("e1", date(2024, 1, 10), EventType.NOTICE, "Notice sent"),
@@ -210,10 +224,14 @@ class TestSequenceViolationDetection:
         assert len(anomalies) == 0
 
     @pytest.mark.asyncio
-    async def test_skip_non_sequenceable_types(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_skip_non_sequenceable_types(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should skip event types not in legal sequence."""
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.DOCUMENT, "Document created"),
+            create_event(
+                "e1", date(2024, 1, 10), EventType.DOCUMENT, "Document created"
+            ),
             create_event("e2", date(2024, 2, 15), EventType.DEADLINE, "Deadline"),
         ]
 
@@ -234,11 +252,15 @@ class TestGapDetection:
     """Tests for detecting unusual time gaps."""
 
     @pytest.mark.asyncio
-    async def test_detect_large_gap_notice_to_filing(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_large_gap_notice_to_filing(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect large gap between notice and filing."""
         events = [
             create_event("e1", date(2023, 1, 10), EventType.NOTICE, "Notice"),
-            create_event("e2", date(2024, 3, 20), EventType.FILING, "Filing"),  # ~15 months gap
+            create_event(
+                "e2", date(2024, 3, 20), EventType.FILING, "Filing"
+            ),  # ~15 months gap
         ]
 
         anomalies = detector.detect_gaps(events, "matter-123")
@@ -249,18 +271,24 @@ class TestGapDetection:
         assert anomalies[0].gap_days > 400  # More than a year
 
     @pytest.mark.asyncio
-    async def test_gap_severity_warning_vs_critical(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_gap_severity_warning_vs_critical(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should assign correct severity based on gap length."""
         # Warning level gap (200 days)
         events_warning = [
             create_event("e1", date(2024, 1, 10), EventType.NOTICE, "Notice"),
-            create_event("e2", date(2024, 7, 28), EventType.FILING, "Filing"),  # ~200 days
+            create_event(
+                "e2", date(2024, 7, 28), EventType.FILING, "Filing"
+            ),  # ~200 days
         ]
 
         # Critical level gap (400 days)
         events_critical = [
             create_event("e1", date(2023, 1, 10), EventType.NOTICE, "Notice"),
-            create_event("e2", date(2024, 2, 14), EventType.FILING, "Filing"),  # ~400 days
+            create_event(
+                "e2", date(2024, 2, 14), EventType.FILING, "Filing"
+            ),  # ~400 days
         ]
 
         warning_anomalies = detector.detect_gaps(events_warning, "matter-123")
@@ -273,11 +301,15 @@ class TestGapDetection:
             assert critical_anomalies[0].severity == AnomalySeverity.HIGH
 
     @pytest.mark.asyncio
-    async def test_no_gap_normal_timing(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_no_gap_normal_timing(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should not flag gaps within normal range."""
         events = [
             create_event("e1", date(2024, 1, 10), EventType.NOTICE, "Notice"),
-            create_event("e2", date(2024, 3, 15), EventType.FILING, "Filing"),  # ~65 days
+            create_event(
+                "e2", date(2024, 3, 15), EventType.FILING, "Filing"
+            ),  # ~65 days
         ]
 
         anomalies = detector.detect_gaps(events, "matter-123")
@@ -294,11 +326,23 @@ class TestDuplicateDetection:
     """Tests for detecting potential duplicate events."""
 
     @pytest.mark.asyncio
-    async def test_detect_duplicates_same_date_similar_desc(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_duplicates_same_date_similar_desc(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect duplicates with same date and similar descriptions."""
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.FILING, "Application filed in DRT Mumbai"),
-            create_event("e2", date(2024, 1, 10), EventType.FILING, "Application filed in DRT Mumbai court"),
+            create_event(
+                "e1",
+                date(2024, 1, 10),
+                EventType.FILING,
+                "Application filed in DRT Mumbai",
+            ),
+            create_event(
+                "e2",
+                date(2024, 1, 10),
+                EventType.FILING,
+                "Application filed in DRT Mumbai court",
+            ),
         ]
 
         anomalies = detector.detect_duplicates(events, "matter-123")
@@ -308,11 +352,17 @@ class TestDuplicateDetection:
         assert len(anomalies[0].event_ids) == 2
 
     @pytest.mark.asyncio
-    async def test_no_duplicate_different_dates(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_no_duplicate_different_dates(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should not flag as duplicate if dates differ."""
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.FILING, "Application filed"),
-            create_event("e2", date(2024, 1, 15), EventType.FILING, "Application filed"),
+            create_event(
+                "e1", date(2024, 1, 10), EventType.FILING, "Application filed"
+            ),
+            create_event(
+                "e2", date(2024, 1, 15), EventType.FILING, "Application filed"
+            ),
         ]
 
         anomalies = detector.detect_duplicates(events, "matter-123")
@@ -320,11 +370,17 @@ class TestDuplicateDetection:
         assert len(anomalies) == 0  # Different dates, not duplicates
 
     @pytest.mark.asyncio
-    async def test_no_duplicate_different_descriptions(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_no_duplicate_different_descriptions(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should not flag as duplicate if descriptions very different."""
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.FILING, "Application filed in Mumbai"),
-            create_event("e2", date(2024, 1, 10), EventType.HEARING, "Hearing held in Delhi"),
+            create_event(
+                "e1", date(2024, 1, 10), EventType.FILING, "Application filed in Mumbai"
+            ),
+            create_event(
+                "e2", date(2024, 1, 10), EventType.HEARING, "Hearing held in Delhi"
+            ),
         ]
 
         anomalies = detector.detect_duplicates(events, "matter-123")
@@ -357,7 +413,9 @@ class TestOutlierDetection:
         assert "future" in anomalies[0].title.lower()
 
     @pytest.mark.asyncio
-    async def test_detect_very_old_date(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_very_old_date(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect dates far in the past."""
         # Need enough events so that the baseline excludes the outlier
         events = [
@@ -372,13 +430,14 @@ class TestOutlierDetection:
 
         # Should detect the 1950 date as outlier
         outlier_anomalies = [
-            a for a in anomalies
-            if "1950" in a.title or "old" in a.title.lower()
+            a for a in anomalies if "1950" in a.title or "old" in a.title.lower()
         ]
         assert len(outlier_anomalies) >= 1
 
     @pytest.mark.asyncio
-    async def test_no_outlier_normal_dates(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_no_outlier_normal_dates(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should not flag normal date ranges as outliers."""
         events = [
             create_event("e1", date(2023, 6, 10), EventType.TRANSACTION, "Transaction"),
@@ -400,14 +459,18 @@ class TestFullAnomalyDetection:
     """Tests for the complete anomaly detection pipeline."""
 
     @pytest.mark.asyncio
-    async def test_detect_multiple_anomaly_types(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_detect_multiple_anomaly_types(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should detect multiple types of anomalies in one pass."""
         events = [
             # Sequence violation (hearing before filing)
             create_event("e1", date(2024, 1, 15), EventType.HEARING, "Hearing"),
             create_event("e2", date(2024, 3, 20), EventType.FILING, "Filing"),
             # Gap (large gap between filing and order)
-            create_event("e3", date(2026, 1, 1), EventType.ORDER, "Order"),  # 2 year gap
+            create_event(
+                "e3", date(2026, 1, 1), EventType.ORDER, "Order"
+            ),  # 2 year gap
         ]
 
         anomalies = await detector.detect_anomalies(
@@ -421,7 +484,9 @@ class TestFullAnomalyDetection:
         assert AnomalyType.GAP in anomaly_types
 
     @pytest.mark.asyncio
-    async def test_empty_timeline_no_errors(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_empty_timeline_no_errors(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should handle empty event list gracefully."""
         anomalies = await detector.detect_anomalies(
             matter_id="matter-123",
@@ -432,7 +497,9 @@ class TestFullAnomalyDetection:
         assert anomalies == []
 
     @pytest.mark.asyncio
-    async def test_single_event_no_errors(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_single_event_no_errors(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should handle single event gracefully."""
         events = [
             create_event("e1", date(2024, 1, 15), EventType.NOTICE, "Notice"),
@@ -445,14 +512,18 @@ class TestFullAnomalyDetection:
         )
 
         # Single event can't have sequence/gap violations
-        seq_violations = [a for a in anomalies if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION]
+        seq_violations = [
+            a for a in anomalies if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+        ]
         gap_anomalies = [a for a in anomalies if a.anomaly_type == AnomalyType.GAP]
 
         assert len(seq_violations) == 0
         assert len(gap_anomalies) == 0
 
     @pytest.mark.asyncio
-    async def test_all_events_same_date(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_all_events_same_date(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should handle all events on same date."""
         same_date = date(2024, 1, 15)
         events = [
@@ -472,7 +543,9 @@ class TestFullAnomalyDetection:
         assert len(gap_anomalies) == 0
 
     @pytest.mark.asyncio
-    async def test_anomaly_confidence_scores(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_anomaly_confidence_scores(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should include confidence scores in anomalies."""
         events = [
             create_event("e1", date(2024, 1, 15), EventType.HEARING, "Hearing"),
@@ -489,11 +562,17 @@ class TestFullAnomalyDetection:
             assert 0.0 <= anomaly.confidence <= 1.0
 
     @pytest.mark.asyncio
-    async def test_anomaly_event_ids_populated(self, detector: TimelineAnomalyDetector) -> None:
+    async def test_anomaly_event_ids_populated(
+        self, detector: TimelineAnomalyDetector
+    ) -> None:
         """Should include event IDs in anomalies."""
         events = [
-            create_event("event-abc-123", date(2024, 1, 15), EventType.HEARING, "Hearing"),
-            create_event("event-xyz-456", date(2024, 3, 20), EventType.FILING, "Filing"),
+            create_event(
+                "event-abc-123", date(2024, 1, 15), EventType.HEARING, "Hearing"
+            ),
+            create_event(
+                "event-xyz-456", date(2024, 3, 20), EventType.FILING, "Filing"
+            ),
         ]
 
         anomalies = await detector.detect_anomalies(
@@ -540,8 +619,7 @@ class TestEdgeCases:
 
         # No sequence violations should be detected for UNCLASSIFIED events
         seq_violations = [
-            a for a in anomalies
-            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+            a for a in anomalies if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
         ]
         assert len(seq_violations) == 0
 
@@ -551,11 +629,15 @@ class TestEdgeCases:
     ) -> None:
         """Should only validate sequence for classified events."""
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.UNCLASSIFIED, "Unclassified event"),
+            create_event(
+                "e1", date(2024, 1, 10), EventType.UNCLASSIFIED, "Unclassified event"
+            ),
             # Sequence violation: hearing before filing
             create_event("e2", date(2024, 2, 15), EventType.HEARING, "Hearing held"),
             create_event("e3", date(2024, 3, 20), EventType.FILING, "Filed"),
-            create_event("e4", date(2024, 4, 25), EventType.UNCLASSIFIED, "Another unclassified"),
+            create_event(
+                "e4", date(2024, 4, 25), EventType.UNCLASSIFIED, "Another unclassified"
+            ),
         ]
 
         anomalies = await detector.detect_anomalies(
@@ -566,8 +648,7 @@ class TestEdgeCases:
 
         # Should still detect sequence violation between HEARING and FILING
         seq_violations = [
-            a for a in anomalies
-            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+            a for a in anomalies if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
         ]
         assert len(seq_violations) >= 1
 
@@ -580,7 +661,9 @@ class TestEdgeCases:
         DOCUMENT is not part of legal workflow sequence.
         """
         events = [
-            create_event("e1", date(2024, 1, 10), EventType.DOCUMENT, "Document created"),
+            create_event(
+                "e1", date(2024, 1, 10), EventType.DOCUMENT, "Document created"
+            ),
             create_event("e2", date(2024, 2, 15), EventType.DOCUMENT, "Another doc"),
             create_event("e3", date(2024, 3, 20), EventType.DOCUMENT, "Third doc"),
         ]
@@ -593,7 +676,6 @@ class TestEdgeCases:
 
         # No sequence violations for DOCUMENT-only events
         seq_violations = [
-            a for a in anomalies
-            if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
+            a for a in anomalies if a.anomaly_type == AnomalyType.SEQUENCE_VIOLATION
         ]
         assert len(seq_violations) == 0

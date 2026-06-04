@@ -26,7 +26,9 @@ async def send_test_email(recipient: str | None = None):
     to_email = recipient or "kiarabinwani@gmail.com"
 
     print("Email Configuration:")
-    print(f"  - Resend API Key: {'***' + settings.resend_api_key[-4:] if settings.resend_api_key else 'NOT SET'}")
+    print(
+        f"  - Resend API Key: {'***' + settings.resend_api_key[-4:] if settings.resend_api_key else 'NOT SET'}"
+    )
     print(f"  - From Address: {settings.email_from_address}")
     print(f"  - Notifications Enabled: {settings.email_notifications_enabled}")
     print(f"  - Base URL: {settings.email_base_url}")

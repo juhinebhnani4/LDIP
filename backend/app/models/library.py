@@ -48,9 +48,15 @@ class LibraryDocumentCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     filename: str = Field(..., description="Original filename")
-    title: str = Field(..., description="Document title (e.g., 'Indian Contract Act, 1872')")
-    short_title: str | None = Field(None, alias="shortTitle", description="Short title (e.g., 'Contract Act')")
-    document_type: LibraryDocumentType = Field(..., alias="documentType", description="Type of document")
+    title: str = Field(
+        ..., description="Document title (e.g., 'Indian Contract Act, 1872')"
+    )
+    short_title: str | None = Field(
+        None, alias="shortTitle", description="Short title (e.g., 'Contract Act')"
+    )
+    document_type: LibraryDocumentType = Field(
+        ..., alias="documentType", description="Type of document"
+    )
     year: int | None = Field(None, description="Year of enactment/publication")
     jurisdiction: str | None = Field(
         None, description="Jurisdiction: 'central', 'state:MH', etc."
@@ -79,7 +85,9 @@ class LibraryDocument(BaseModel):
 
     status: LibraryDocumentStatus
     processing_started_at: datetime | None = Field(None, alias="processingStartedAt")
-    processing_completed_at: datetime | None = Field(None, alias="processingCompletedAt")
+    processing_completed_at: datetime | None = Field(
+        None, alias="processingCompletedAt"
+    )
 
     quality_flags: list[str] = Field(default_factory=list, alias="qualityFlags")
 
@@ -126,7 +134,9 @@ class LibraryLinkRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
-    library_document_id: str = Field(..., alias="libraryDocumentId", description="Library document UUID to link")
+    library_document_id: str = Field(
+        ..., alias="libraryDocumentId", description="Library document UUID to link"
+    )
 
 
 class LibraryDuplicate(BaseModel):
@@ -155,7 +165,9 @@ class LibrarySearchResult(BaseModel):
     section_title: str | None = Field(None, alias="sectionTitle")
     chunk_type: str = Field(..., alias="chunkType")
     similarity: float
-    is_library: bool = Field(True, alias="isLibrary")  # Flag to distinguish from matter chunks
+    is_library: bool = Field(
+        True, alias="isLibrary"
+    )  # Flag to distinguish from matter chunks
 
 
 class LibraryPaginationMeta(BaseModel):

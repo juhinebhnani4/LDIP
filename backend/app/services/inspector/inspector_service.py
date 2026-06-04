@@ -290,7 +290,7 @@ class InspectorService:
                     "query_text": query,
                     "filter_matter_id": matter_id,
                     "match_count": limit,
-                }
+                },
             ).execute()
 
             if not response.data:
@@ -330,7 +330,7 @@ class InspectorService:
                     "query_embedding": embedding,
                     "filter_matter_id": matter_id,
                     "match_count": limit,
-                }
+                },
             ).execute()
 
             if not response.data:
@@ -414,7 +414,9 @@ class InspectorService:
                 }
 
             scores[chunk_id]["semantic_rank"] = idx + 1
-            scores[chunk_id]["semantic_score"] = r.get("similarity", r.get("semantic_score", 0))
+            scores[chunk_id]["semantic_score"] = r.get(
+                "similarity", r.get("semantic_score", 0)
+            )
             # RRF score contribution
             scores[chunk_id]["rrf_score"] += weights.semantic / (k + idx + 1)
 

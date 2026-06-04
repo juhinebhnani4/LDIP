@@ -357,7 +357,9 @@ class TestActDiscoveryEndpoint:
         user_id = "test-user-id"
 
         mock_report = [
-            create_mock_act_discovery_summary("NI Act", 10, ActResolutionStatus.MISSING),
+            create_mock_act_discovery_summary(
+                "NI Act", 10, ActResolutionStatus.MISSING
+            ),
             create_mock_act_discovery_summary("IPC", 5, ActResolutionStatus.AVAILABLE),
         ]
 
@@ -399,7 +401,9 @@ class TestActDiscoveryEndpoint:
         user_id = "test-user-id"
 
         mock_report = [
-            create_mock_act_discovery_summary("NI Act", 10, ActResolutionStatus.MISSING),
+            create_mock_act_discovery_summary(
+                "NI Act", 10, ActResolutionStatus.MISSING
+            ),
         ]
 
         mock_matter_service = MagicMock()
@@ -656,7 +660,9 @@ class TestVerifyCitationsBatchEndpoint:
         app.dependency_overrides[_get_storage_service] = lambda: mock_storage
 
         try:
-            with patch("app.api.routes.citations.verify_citations_for_act") as mock_task:
+            with patch(
+                "app.api.routes.citations.verify_citations_for_act"
+            ) as mock_task:
                 mock_task.delay.return_value = MagicMock(id="task-123")
 
                 async with AsyncClient(
@@ -669,7 +675,9 @@ class TestVerifyCitationsBatchEndpoint:
                             "act_name": "Negotiable Instruments Act, 1881",
                             "act_document_id": act_document_id,
                         },
-                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                        headers={
+                            "Authorization": f"Bearer {create_test_token(user_id)}"
+                        },
                     )
 
                 assert response.status_code == 200
@@ -755,7 +763,9 @@ class TestVerifySingleCitationEndpoint:
                             "act_document_id": act_document_id,
                             "act_name": "Negotiable Instruments Act, 1881",
                         },
-                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                        headers={
+                            "Authorization": f"Bearer {create_test_token(user_id)}"
+                        },
                     )
 
                 assert response.status_code == 200
@@ -915,7 +925,9 @@ class TestMarkActUploadedAndVerifyEndpoint:
         app.dependency_overrides[_get_discovery_service] = lambda: mock_discovery
 
         try:
-            with patch("app.api.routes.citations.trigger_verification_on_act_upload") as mock_task:
+            with patch(
+                "app.api.routes.citations.trigger_verification_on_act_upload"
+            ) as mock_task:
                 mock_task.delay.return_value = MagicMock(id="task-789")
 
                 async with AsyncClient(
@@ -928,7 +940,9 @@ class TestMarkActUploadedAndVerifyEndpoint:
                             "act_name": "Negotiable Instruments Act, 1881",
                             "act_document_id": act_document_id,
                         },
-                        headers={"Authorization": f"Bearer {create_test_token(user_id)}"},
+                        headers={
+                            "Authorization": f"Bearer {create_test_token(user_id)}"
+                        },
                     )
 
                 assert response.status_code == 200
@@ -983,7 +997,9 @@ class TestCitationStatsEndpoint:
         mock_matter_service.get_user_role.return_value = MatterRole.VIEWER
 
         mock_discovery = MagicMock()
-        mock_discovery.get_discovery_stats = AsyncMock(return_value=mock_discovery_stats)
+        mock_discovery.get_discovery_stats = AsyncMock(
+            return_value=mock_discovery_stats
+        )
 
         mock_storage = MagicMock()
         mock_storage.get_citation_counts_by_act = AsyncMock(return_value=mock_counts)

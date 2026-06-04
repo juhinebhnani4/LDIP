@@ -83,7 +83,9 @@ def find_page_from_bboxes(citation_text: str, bboxes: list[dict]) -> int | None:
     return None
 
 
-def find_matching_chunk(citation_text: str, chunks: list[dict], threshold: float = 70.0) -> dict | None:
+def find_matching_chunk(
+    citation_text: str, chunks: list[dict], threshold: float = 70.0
+) -> dict | None:
     """Find the chunk that best matches the citation text.
 
     Args:
@@ -120,7 +122,9 @@ def find_matching_chunk(citation_text: str, chunks: list[dict], threshold: float
     return best_match
 
 
-def backfill_document_citations(document_id: str, client, dry_run: bool = False) -> dict:
+def backfill_document_citations(
+    document_id: str, client, dry_run: bool = False
+) -> dict:
     """Backfill citation pages for a single document.
 
     Args:
@@ -144,7 +148,8 @@ def backfill_document_citations(document_id: str, client, dry_run: bool = False)
 
     # Filter to only citations with empty bbox_ids (indicating they weren't properly linked)
     citations_to_update = [
-        c for c in citations
+        c
+        for c in citations
         if not c.get("source_bbox_ids") or len(c.get("source_bbox_ids", [])) == 0
     ]
 
@@ -168,7 +173,7 @@ def backfill_document_citations(document_id: str, client, dry_run: bool = False)
             "updated": 0,
             "skipped": False,
             "total": len(citations_to_update),
-            "reason": "no_chunks_with_pages"
+            "reason": "no_chunks_with_pages",
         }
 
     # Match citations to chunks
@@ -205,10 +210,12 @@ def backfill_document_citations(document_id: str, client, dry_run: bool = False)
 
             if not dry_run:
                 # Update the citation
-                client.table("citations").update({
-                    "source_page": page_number,
-                    "source_bbox_ids": bbox_ids,
-                }).eq("id", citation["id"]).execute()
+                client.table("citations").update(
+                    {
+                        "source_page": page_number,
+                        "source_bbox_ids": bbox_ids,
+                    }
+                ).eq("id", citation["id"]).execute()
 
             updated_count += 1
             logger.info(
@@ -216,7 +223,7 @@ def backfill_document_citations(document_id: str, client, dry_run: bool = False)
                 citation_id=citation["id"][:8],
                 page=page_number,
                 bbox_count=len(bbox_ids),
-                dry_run=dry_run
+                dry_run=dry_run,
             )
 
     return {
@@ -227,7 +234,9 @@ def backfill_document_citations(document_id: str, client, dry_run: bool = False)
     }
 
 
-def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run: bool = False):
+def backfill_all(
+    matter_id: str | None = None, limit: int | None = None, dry_run: bool = False
+):
     """Backfill citation pages for all documents.
 
     Args:
@@ -253,7 +262,10 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
     if limit:
         documents = documents[:limit]
 
-    print(f"Found {len(documents)} documents to process" + (" (DRY RUN)" if dry_run else ""))
+    print(
+        f"Found {len(documents)} documents to process"
+        + (" (DRY RUN)" if dry_run else "")
+    )
 
     # Process each document
     total_updated = 0
@@ -282,14 +294,24 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
             logger.exception("backfill_document_failed", document_id=doc_id)
 
     action = "Would update" if dry_run else "Updated"
-    print(f"\nDone! {action} {total_updated} of {total_citations} citations across {len(documents)} documents")
+    print(
+        f"\nDone! {action} {total_updated} of {total_citations} citations across {len(documents)} documents"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill citation page numbers from chunks")
+    parser = argparse.ArgumentParser(
+        description="Backfill citation page numbers from chunks"
+    )
     parser.add_argument("--matter-id", help="Filter to specific matter ID")
-    parser.add_argument("--limit", type=int, help="Limit number of documents to process")
-    parser.add_argument("--dry-run", action="store_true", help="Don't make changes, just show what would be done")
+    parser.add_argument(
+        "--limit", type=int, help="Limit number of documents to process"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't make changes, just show what would be done",
+    )
 
     args = parser.parse_args()
 

@@ -117,7 +117,9 @@ class ConversationSummarizer:
 
         return summary
 
-    async def _summarize(self, messages: list[SessionMessage], matter_id: str | None = None) -> str | None:
+    async def _summarize(
+        self, messages: list[SessionMessage], matter_id: str | None = None
+    ) -> str | None:
         """Generate summary from messages using Gemini Flash."""
         # Take most recent messages
         recent = messages[-MAX_MESSAGES_TO_SUMMARIZE:]
@@ -151,16 +153,20 @@ class ConversationSummarizer:
                 operation="conversation_summarization",
                 matter_id=matter_id,
             )
-            usage = getattr(response, 'usage_metadata', None)
+            usage = getattr(response, "usage_metadata", None)
             if usage:
-                input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-                output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
-                cached_tokens = getattr(usage, 'cached_content_token_count', 0) or 0
+                input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+                cached_tokens = getattr(usage, "cached_content_token_count", 0) or 0
             else:
                 input_tokens = estimate_tokens(prompt)
                 output_tokens = estimate_tokens(summary) if summary else 0
                 cached_tokens = 0
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_tokens,
+            )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)
 
@@ -178,7 +184,10 @@ class ConversationSummarizer:
             return None
 
     async def _get_cached_summary(
-        self, matter_id: str, user_id: str, msg_count: int,
+        self,
+        matter_id: str,
+        user_id: str,
+        msg_count: int,
     ) -> str | None:
         """Retrieve cached summary from Redis."""
         try:
@@ -191,7 +200,11 @@ class ConversationSummarizer:
         return None
 
     async def _cache_summary(
-        self, matter_id: str, user_id: str, msg_count: int, summary: str,
+        self,
+        matter_id: str,
+        user_id: str,
+        msg_count: int,
+        summary: str,
     ) -> None:
         """Cache summary in Redis with session-matching TTL."""
         try:

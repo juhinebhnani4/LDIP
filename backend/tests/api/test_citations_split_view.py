@@ -153,15 +153,11 @@ class TestCitationSplitViewEndpoint:
         from unittest.mock import patch
 
         with (
-            patch(
-                "app.api.routes.citations.get_storage_service"
-            ) as mock_file_storage,
+            patch("app.api.routes.citations.get_storage_service") as mock_file_storage,
             patch(
                 "app.api.routes.citations.get_bounding_box_service"
             ) as mock_bbox_service,
-            patch(
-                "app.api.routes.citations.get_service_client"
-            ) as mock_client,
+            patch("app.api.routes.citations.get_service_client") as mock_client,
         ):
             # Mock file storage
             file_storage = MagicMock()
@@ -260,15 +256,11 @@ class TestCitationSplitViewEndpoint:
         from unittest.mock import patch
 
         with (
-            patch(
-                "app.api.routes.citations.get_storage_service"
-            ) as mock_file_storage,
+            patch("app.api.routes.citations.get_storage_service") as mock_file_storage,
             patch(
                 "app.api.routes.citations.get_bounding_box_service"
             ) as mock_bbox_service,
-            patch(
-                "app.api.routes.citations.get_service_client"
-            ) as mock_client,
+            patch("app.api.routes.citations.get_service_client") as mock_client,
         ):
             # Mock file storage
             file_storage = MagicMock()

@@ -87,7 +87,13 @@ async def get_usage_summary(
         if not supabase:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"error": {"code": "SERVICE_UNAVAILABLE", "message": "Database not configured", "details": {}}},
+                detail={
+                    "error": {
+                        "code": "SERVICE_UNAVAILABLE",
+                        "message": "Database not configured",
+                        "details": {},
+                    }
+                },
             )
 
         # Step 1: Get user's matter IDs and titles
@@ -105,11 +111,17 @@ async def get_usage_summary(
         active_matters: list[dict] = []
         for row in matter_result.data:
             matter = row.get("matters")
-            if matter and matter.get("status") != "archived" and not matter.get("deleted_at"):
-                active_matters.append({
-                    "matter_id": row["matter_id"],
-                    "title": matter.get("title", "Untitled"),
-                })
+            if (
+                matter
+                and matter.get("status") != "archived"
+                and not matter.get("deleted_at")
+            ):
+                active_matters.append(
+                    {
+                        "matter_id": row["matter_id"],
+                        "title": matter.get("title", "Untitled"),
+                    }
+                )
 
         if not active_matters:
             return UsageSummaryResponse(data=UsageSummary())
@@ -141,7 +153,9 @@ async def get_usage_summary(
         )
 
         docs_result, queries_result, query_per_matter_result = await asyncio.gather(
-            docs_task, queries_task, query_per_matter_task,
+            docs_task,
+            queries_task,
+            query_per_matter_task,
             return_exceptions=True,
         )
 
@@ -154,7 +168,9 @@ async def get_usage_summary(
                 mid = doc.get("matter_id")
                 if mid:
                     doc_counts[mid] = doc_counts.get(mid, 0) + 1
-                    page_counts[mid] = page_counts.get(mid, 0) + (doc.get("page_count") or 0)
+                    page_counts[mid] = page_counts.get(mid, 0) + (
+                        doc.get("page_count") or 0
+                    )
 
         # Process query counts
         total_queries = 0
@@ -162,23 +178,30 @@ async def get_usage_summary(
             total_queries = queries_result.count or 0
 
         query_counts: dict[str, int] = {}
-        if not isinstance(query_per_matter_result, Exception) and query_per_matter_result.data:
+        if (
+            not isinstance(query_per_matter_result, Exception)
+            and query_per_matter_result.data
+        ):
             for row in query_per_matter_result.data:
                 query_counts[row["matter_id"]] = row["query_count"]
         else:
             # Fallback: if RPC doesn't exist, divide evenly or set 0
-            logger.debug("count_queries_per_matter_rpc_unavailable", fallback="zero_per_matter")
+            logger.debug(
+                "count_queries_per_matter_rpc_unavailable", fallback="zero_per_matter"
+            )
 
         # Build per-matter stats
         matter_stats = []
         for mid in matter_ids:
-            matter_stats.append(MatterUsageStats(
-                matter_id=mid,
-                matter_title=title_map.get(mid, "Untitled"),
-                documents=doc_counts.get(mid, 0),
-                pages=page_counts.get(mid, 0),
-                queries=query_counts.get(mid, 0),
-            ))
+            matter_stats.append(
+                MatterUsageStats(
+                    matter_id=mid,
+                    matter_title=title_map.get(mid, "Untitled"),
+                    documents=doc_counts.get(mid, 0),
+                    pages=page_counts.get(mid, 0),
+                    queries=query_counts.get(mid, 0),
+                )
+            )
 
         # Sort by pages descending (most active first)
         matter_stats.sort(key=lambda m: m.pages, reverse=True)

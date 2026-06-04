@@ -195,7 +195,9 @@ class TestCitationEngineAdapter:
         """Execute should call the discovery service with correct matter_id."""
         adapter = CitationEngineAdapter()
 
-        with patch.object(adapter, "_get_discovery", return_value=mock_citation_discovery):
+        with patch.object(
+            adapter, "_get_discovery", return_value=mock_citation_discovery
+        ):
             result = await adapter.execute(
                 matter_id="matter-123",
                 query="What citations?",
@@ -396,7 +398,9 @@ class TestRAGEngineAdapter:
         adapter = RAGEngineAdapter()
 
         mock_search = MagicMock()
-        mock_search.search_with_rerank = AsyncMock(side_effect=Exception("Search error"))
+        mock_search.search_with_rerank = AsyncMock(
+            side_effect=Exception("Search error")
+        )
 
         with patch.object(adapter, "_get_search", return_value=mock_search):
             result = await adapter.execute(
@@ -462,7 +466,9 @@ class TestMatterIsolation:
         """Citation adapter should propagate matter_id to underlying service."""
         adapter = CitationEngineAdapter()
 
-        with patch.object(adapter, "_get_discovery", return_value=mock_citation_discovery):
+        with patch.object(
+            adapter, "_get_discovery", return_value=mock_citation_discovery
+        ):
             await adapter.execute(matter_id="secure-matter", query="Test")
 
         call_args = mock_citation_discovery.get_discovery_report.call_args

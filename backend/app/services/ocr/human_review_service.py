@@ -67,8 +67,7 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not words:
@@ -115,8 +114,7 @@ class HumanReviewService:
                 error=str(e),
             )
             raise HumanReviewServiceError(
-                message=f"Failed to add items to review queue: {e!s}",
-                code="ADD_FAILED"
+                message=f"Failed to add items to review queue: {e!s}", code="ADD_FAILED"
             ) from e
 
     def get_pending_reviews(
@@ -140,51 +138,54 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # Get total count
-            count_result = self.client.table("ocr_human_review").select(
-                "id", count="exact"
-            ).eq(
-                "matter_id", matter_id
-            ).eq(
-                "status", HumanReviewStatus.PENDING.value
-            ).execute()
+            count_result = (
+                self.client.table("ocr_human_review")
+                .select("id", count="exact")
+                .eq("matter_id", matter_id)
+                .eq("status", HumanReviewStatus.PENDING.value)
+                .execute()
+            )
 
             total_count = count_result.count or 0
 
             # Get paginated items
             offset = (page - 1) * per_page
-            result = self.client.table("ocr_human_review").select(
-                "*"
-            ).eq(
-                "matter_id", matter_id
-            ).eq(
-                "status", HumanReviewStatus.PENDING.value
-            ).order(
-                "created_at"
-            ).range(
-                offset, offset + per_page - 1
-            ).execute()
+            result = (
+                self.client.table("ocr_human_review")
+                .select("*")
+                .eq("matter_id", matter_id)
+                .eq("status", HumanReviewStatus.PENDING.value)
+                .order("created_at")
+                .range(offset, offset + per_page - 1)
+                .execute()
+            )
 
-            items = [
-                HumanReviewItem(
-                    id=row["id"],
-                    document_id=row["document_id"],
-                    matter_id=row["matter_id"],
-                    bbox_id=row.get("bbox_id"),
-                    original_text=row["original_text"],
-                    context_before=row.get("context_before"),
-                    context_after=row.get("context_after"),
-                    page_number=row["page_number"],
-                    status=HumanReviewStatus(row["status"]),
-                    created_at=datetime.fromisoformat(row["created_at"]) if row.get("created_at") else None,
-                )
-                for row in result.data
-            ] if result.data else []
+            items = (
+                [
+                    HumanReviewItem(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        matter_id=row["matter_id"],
+                        bbox_id=row.get("bbox_id"),
+                        original_text=row["original_text"],
+                        context_before=row.get("context_before"),
+                        context_after=row.get("context_after"),
+                        page_number=row["page_number"],
+                        status=HumanReviewStatus(row["status"]),
+                        created_at=datetime.fromisoformat(row["created_at"])
+                        if row.get("created_at")
+                        else None,
+                    )
+                    for row in result.data
+                ]
+                if result.data
+                else []
+            )
 
             return items, total_count
 
@@ -196,7 +197,7 @@ class HumanReviewService:
             )
             raise HumanReviewServiceError(
                 message=f"Failed to get pending reviews: {e!s}",
-                code="GET_PENDING_FAILED"
+                code="GET_PENDING_FAILED",
             ) from e
 
     def get_reviews_by_document(
@@ -218,44 +219,49 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # Build query with document_id filter
-            query = self.client.table("ocr_human_review").select(
-                "*"
-            ).eq(
-                "document_id", document_id
+            query = (
+                self.client.table("ocr_human_review")
+                .select("*")
+                .eq("document_id", document_id)
             )
 
             # CRITICAL: Add matter_id filter for security isolation
             if authorized_matter_id:
                 query = query.eq("matter_id", authorized_matter_id)
 
-            result = query.order(
-                "page_number"
-            ).execute()
+            result = query.order("page_number").execute()
 
-            items = [
-                HumanReviewItem(
-                    id=row["id"],
-                    document_id=row["document_id"],
-                    matter_id=row["matter_id"],
-                    bbox_id=row.get("bbox_id"),
-                    original_text=row["original_text"],
-                    context_before=row.get("context_before"),
-                    context_after=row.get("context_after"),
-                    page_number=row["page_number"],
-                    status=HumanReviewStatus(row["status"]),
-                    corrected_text=row.get("corrected_text"),
-                    reviewed_by=row.get("reviewed_by"),
-                    reviewed_at=datetime.fromisoformat(row["reviewed_at"]) if row.get("reviewed_at") else None,
-                    created_at=datetime.fromisoformat(row["created_at"]) if row.get("created_at") else None,
-                )
-                for row in result.data
-            ] if result.data else []
+            items = (
+                [
+                    HumanReviewItem(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        matter_id=row["matter_id"],
+                        bbox_id=row.get("bbox_id"),
+                        original_text=row["original_text"],
+                        context_before=row.get("context_before"),
+                        context_after=row.get("context_after"),
+                        page_number=row["page_number"],
+                        status=HumanReviewStatus(row["status"]),
+                        corrected_text=row.get("corrected_text"),
+                        reviewed_by=row.get("reviewed_by"),
+                        reviewed_at=datetime.fromisoformat(row["reviewed_at"])
+                        if row.get("reviewed_at")
+                        else None,
+                        created_at=datetime.fromisoformat(row["created_at"])
+                        if row.get("created_at")
+                        else None,
+                    )
+                    for row in result.data
+                ]
+                if result.data
+                else []
+            )
 
             return items
 
@@ -267,7 +273,7 @@ class HumanReviewService:
             )
             raise HumanReviewServiceError(
                 message=f"Failed to get reviews for document: {e!s}",
-                code="GET_BY_DOCUMENT_FAILED"
+                code="GET_BY_DOCUMENT_FAILED",
             ) from e
 
     def submit_correction(
@@ -293,22 +299,22 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # Get the review item first
-            item_result = self.client.table("ocr_human_review").select(
-                "*"
-            ).eq(
-                "id", review_id
-            ).single().execute()
+            item_result = (
+                self.client.table("ocr_human_review")
+                .select("*")
+                .eq("id", review_id)
+                .single()
+                .execute()
+            )
 
             if not item_result.data:
                 raise HumanReviewServiceError(
-                    message=f"Review item {review_id} not found",
-                    code="ITEM_NOT_FOUND"
+                    message=f"Review item {review_id} not found", code="ITEM_NOT_FOUND"
                 )
 
             item = item_result.data
@@ -324,46 +330,48 @@ class HumanReviewService:
                 )
                 raise HumanReviewServiceError(
                     message=f"Review item {review_id} not found",
-                    code="ITEM_NOT_FOUND"  # Don't reveal the item exists in another matter
+                    code="ITEM_NOT_FOUND",  # Don't reveal the item exists in another matter
                 )
 
             original_text = item["original_text"]
 
             # Update the review item
             now = datetime.now(UTC).isoformat()
-            self.client.table("ocr_human_review").update({
-                "corrected_text": corrected_text,
-                "status": HumanReviewStatus.COMPLETED.value,
-                "reviewed_by": user_id,
-                "reviewed_at": now,
-            }).eq(
-                "id", review_id
-            ).execute()
+            self.client.table("ocr_human_review").update(
+                {
+                    "corrected_text": corrected_text,
+                    "status": HumanReviewStatus.COMPLETED.value,
+                    "reviewed_by": user_id,
+                    "reviewed_at": now,
+                }
+            ).eq("id", review_id).execute()
 
             # Update the bounding box if bbox_id exists
             bbox_id = item.get("bbox_id")
             if bbox_id and corrected_text != original_text:
-                self.client.table("bounding_boxes").update({
-                    "text": corrected_text,
-                    "confidence": 1.0,  # Human-verified = 100% confidence
-                }).eq(
-                    "id", bbox_id
-                ).execute()
+                self.client.table("bounding_boxes").update(
+                    {
+                        "text": corrected_text,
+                        "confidence": 1.0,  # Human-verified = 100% confidence
+                    }
+                ).eq("id", bbox_id).execute()
 
             was_corrected = corrected_text != original_text
 
             # Log the correction to validation log (per AC #4)
             if was_corrected:
-                self.client.table("ocr_validation_log").insert({
-                    "document_id": item["document_id"],
-                    "bbox_id": bbox_id,
-                    "original_text": original_text,
-                    "corrected_text": corrected_text,
-                    "old_confidence": 0.0,  # Was below human threshold
-                    "new_confidence": 1.0,  # Human-verified
-                    "validation_type": "human",
-                    "reasoning": f"Human correction by user {user_id}",
-                }).execute()
+                self.client.table("ocr_validation_log").insert(
+                    {
+                        "document_id": item["document_id"],
+                        "bbox_id": bbox_id,
+                        "original_text": original_text,
+                        "corrected_text": corrected_text,
+                        "old_confidence": 0.0,  # Was below human threshold
+                        "new_confidence": 1.0,  # Human-verified
+                        "validation_type": "human",
+                        "reasoning": f"Human correction by user {user_id}",
+                    }
+                ).execute()
 
             logger.info(
                 "human_review_correction_submitted",
@@ -379,7 +387,9 @@ class HumanReviewService:
                 old_confidence=0.0,  # Was below human threshold
                 new_confidence=1.0,  # Human-verified
                 correction_type=CorrectionType.HUMAN if was_corrected else None,
-                reasoning="Human-verified correction" if was_corrected else "Human-verified as correct",
+                reasoning="Human-verified correction"
+                if was_corrected
+                else "Human-verified as correct",
                 was_corrected=was_corrected,
             )
 
@@ -392,8 +402,7 @@ class HumanReviewService:
                 error=str(e),
             )
             raise HumanReviewServiceError(
-                message=f"Failed to submit correction: {e!s}",
-                code="SUBMIT_FAILED"
+                message=f"Failed to submit correction: {e!s}", code="SUBMIT_FAILED"
             ) from e
 
     def skip_review(
@@ -414,23 +423,24 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
             # CRITICAL: Validate matter_id matches authorized matter (IDOR prevention)
             if authorized_matter_id:
-                item_result = self.client.table("ocr_human_review").select(
-                    "id, matter_id"
-                ).eq(
-                    "id", review_id
-                ).single().execute()
+                item_result = (
+                    self.client.table("ocr_human_review")
+                    .select("id, matter_id")
+                    .eq("id", review_id)
+                    .single()
+                    .execute()
+                )
 
                 if not item_result.data:
                     raise HumanReviewServiceError(
                         message=f"Review item {review_id} not found",
-                        code="ITEM_NOT_FOUND"
+                        code="ITEM_NOT_FOUND",
                     )
 
                 if item_result.data["matter_id"] != authorized_matter_id:
@@ -443,17 +453,17 @@ class HumanReviewService:
                     )
                     raise HumanReviewServiceError(
                         message=f"Review item {review_id} not found",
-                        code="ITEM_NOT_FOUND"  # Don't reveal the item exists in another matter
+                        code="ITEM_NOT_FOUND",  # Don't reveal the item exists in another matter
                     )
 
             now = datetime.now(UTC).isoformat()
-            self.client.table("ocr_human_review").update({
-                "status": HumanReviewStatus.SKIPPED.value,
-                "reviewed_by": user_id,
-                "reviewed_at": now,
-            }).eq(
-                "id", review_id
-            ).execute()
+            self.client.table("ocr_human_review").update(
+                {
+                    "status": HumanReviewStatus.SKIPPED.value,
+                    "reviewed_by": user_id,
+                    "reviewed_at": now,
+                }
+            ).eq("id", review_id).execute()
 
             logger.info(
                 "human_review_skipped",
@@ -468,8 +478,7 @@ class HumanReviewService:
                 error=str(e),
             )
             raise HumanReviewServiceError(
-                message=f"Failed to skip review: {e!s}",
-                code="SKIP_FAILED"
+                message=f"Failed to skip review: {e!s}", code="SKIP_FAILED"
             ) from e
 
     def add_pages_to_queue(
@@ -495,8 +504,7 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         if not pages:
@@ -530,9 +538,11 @@ class HumanReviewService:
             added_count = len(result.data) if result.data else 0
 
             # Update document validation status to indicate manual review requested
-            self.client.table("documents").update({
-                "validation_status": "requires_human_review",
-            }).eq("id", document_id).execute()
+            self.client.table("documents").update(
+                {
+                    "validation_status": "requires_human_review",
+                }
+            ).eq("id", document_id).execute()
 
             logger.info(
                 "human_review_pages_added",
@@ -550,7 +560,7 @@ class HumanReviewService:
             )
             raise HumanReviewServiceError(
                 message=f"Failed to add pages to review queue: {e!s}",
-                code="ADD_PAGES_FAILED"
+                code="ADD_PAGES_FAILED",
             ) from e
 
     def get_review_stats(
@@ -570,16 +580,16 @@ class HumanReviewService:
         """
         if self.client is None:
             raise HumanReviewServiceError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         try:
-            result = self.client.table("ocr_human_review").select(
-                "status"
-            ).eq(
-                "matter_id", matter_id
-            ).execute()
+            result = (
+                self.client.table("ocr_human_review")
+                .select("status")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             stats = {
                 "pending": 0,
@@ -604,8 +614,7 @@ class HumanReviewService:
                 error=str(e),
             )
             raise HumanReviewServiceError(
-                message=f"Failed to get review stats: {e!s}",
-                code="STATS_FAILED"
+                message=f"Failed to get review stats: {e!s}", code="STATS_FAILED"
             ) from e
 
 

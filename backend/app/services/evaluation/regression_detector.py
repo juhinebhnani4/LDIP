@@ -68,7 +68,9 @@ class RegressionReport:
     improved_items: list[ItemRegression] = field(default_factory=list)
     unchanged_items: list[ItemRegression] = field(default_factory=list)
     new_items: list[str] = field(default_factory=list)  # golden items not in baseline
-    missing_items: list[str] = field(default_factory=list)  # baseline items not in current
+    missing_items: list[str] = field(
+        default_factory=list
+    )  # baseline items not in current
     # Summary
     total_items: int = 0
     regression_count: int = 0
@@ -236,7 +238,10 @@ def detect_regression(
         regressed_metrics: list[str] = []
         if curr_score < critical_score:
             severity = "critical"
-        elif base_score > 0 and (base_score - curr_score) / base_score > warning_threshold:
+        elif (
+            base_score > 0
+            and (base_score - curr_score) / base_score > warning_threshold
+        ):
             severity = "warning"
         else:
             severity = "ok"
@@ -271,9 +276,7 @@ def detect_regression(
         else:
             report.unchanged_items.append(item_reg)
 
-    report.has_regression = (
-        report.regression_count > 0 or aggregate_severity != "ok"
-    )
+    report.has_regression = report.regression_count > 0 or aggregate_severity != "ok"
 
     # Log result
     if report.has_regression:

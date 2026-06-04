@@ -224,7 +224,9 @@ class CitationEngineAdapter(EngineAdapter):
                     reverse=True,
                 )
                 for act in all_missing[:5]:  # Top 5
-                    answer_parts.append(f"- **{act['name']}** ({act['citations']} citations)")
+                    answer_parts.append(
+                        f"- **{act['name']}** ({act['citations']} citations)"
+                    )
                 if len(all_missing) > 5:
                     answer_parts.append(f"- ...and {len(all_missing) - 5} more")
                 answer_parts.append("")
@@ -249,7 +251,9 @@ class CitationEngineAdapter(EngineAdapter):
             elif not report:
                 answer_parts.append("No Act citations found in this matter.")
             else:
-                answer_parts.append("\n**All referenced Acts are available for verification.**")
+                answer_parts.append(
+                    "\n**All referenced Acts are available for verification.**"
+                )
 
             answer = "\n".join(answer_parts)
 
@@ -405,9 +409,11 @@ class TimelineEngineAdapter(EngineAdapter):
                 ],
                 "date_range": {
                     "start": str(timeline.statistics.date_range_start)
-                    if timeline.statistics.date_range_start else None,
+                    if timeline.statistics.date_range_start
+                    else None,
                     "end": str(timeline.statistics.date_range_end)
-                    if timeline.statistics.date_range_end else None,
+                    if timeline.statistics.date_range_end
+                    else None,
                 },
                 "events_by_type": timeline.statistics.events_by_type,
             }
@@ -558,19 +564,37 @@ class ContradictionEngineAdapter(EngineAdapter):
                         entity_name = entity.entity_name
                         answer_parts.append(f"\n**{entity_name}:**")
                         for c in entity.contradictions[:3]:  # 3 per entity
-                            severity_labels = {"high": "Critical", "medium": "Noteworthy", "low": "Minor"}
-                            severity = severity_labels.get(c.severity.value, c.severity.value.title())
+                            severity_labels = {
+                                "high": "Critical",
+                                "medium": "Noteworthy",
+                                "low": "Minor",
+                            }
+                            severity = severity_labels.get(
+                                c.severity.value, c.severity.value.title()
+                            )
                             answer_parts.append(f"\n- **{severity}**: {c.explanation}")
 
                             # Add document references for both statements
                             if c.statement_a:
                                 doc_a = c.statement_a.document_name or "Unknown"
-                                page_a = f", p. {c.statement_a.page}" if c.statement_a.page else ""
-                                answer_parts.append(f"  - *Statement A* ({doc_a}{page_a})")
+                                page_a = (
+                                    f", p. {c.statement_a.page}"
+                                    if c.statement_a.page
+                                    else ""
+                                )
+                                answer_parts.append(
+                                    f"  - *Statement A* ({doc_a}{page_a})"
+                                )
                             if c.statement_b:
                                 doc_b = c.statement_b.document_name or "Unknown"
-                                page_b = f", p. {c.statement_b.page}" if c.statement_b.page else ""
-                                answer_parts.append(f"  - *Statement B* ({doc_b}{page_b})")
+                                page_b = (
+                                    f", p. {c.statement_b.page}"
+                                    if c.statement_b.page
+                                    else ""
+                                )
+                                answer_parts.append(
+                                    f"  - *Statement B* ({doc_b}{page_b})"
+                                )
 
                     contradiction_data = {
                         "analysis_ready": True,
@@ -821,8 +845,7 @@ class RAGEngineAdapter(EngineAdapter):
                 .execute()
             )
             parent_content_map = {
-                str(row["id"]): row["content"]
-                for row in (parent_result.data or [])
+                str(row["id"]): row["content"] for row in (parent_result.data or [])
             }
         except Exception as e:
             logger.warning(
@@ -976,6 +999,7 @@ class RAGEngineAdapter(EngineAdapter):
             raw_filters = context.get("search_filters") if context else None
             if raw_filters and isinstance(raw_filters, dict):
                 from app.models.search import SearchFilters
+
                 try:
                     search_filters = SearchFilters(**raw_filters)
                     if search_filters.is_empty:
@@ -992,7 +1016,9 @@ class RAGEngineAdapter(EngineAdapter):
             # ab_test_override bypasses the kill switch for explicit A/B comparison
             # experiments (the kill switch controls live traffic, not experiments)
             settings = get_settings()
-            ab_test_override = context.get("ab_test_override", False) if context else False
+            ab_test_override = (
+                context.get("ab_test_override", False) if context else False
+            )
             if not settings.voyage_ab_testing_enabled and not ab_test_override:
                 rerank_provider = None
                 embedding_provider = None
@@ -1001,11 +1027,14 @@ class RAGEngineAdapter(EngineAdapter):
                 # Uses deterministic hash of user_id+matter_id for sticky cohorts
                 if settings.voyage_traffic_percentage > 0:
                     from app.services.evaluation.ab_testing import ABTestRouter
+
                     user_id = context.get("user_id") if context else None
-                    embedding_provider, rerank_provider = ABTestRouter.determine_provider(
-                        user_id=user_id,
-                        matter_id=matter_id,
-                        percentage=settings.voyage_traffic_percentage,
+                    embedding_provider, rerank_provider = (
+                        ABTestRouter.determine_provider(
+                            user_id=user_id,
+                            matter_id=matter_id,
+                            percentage=settings.voyage_traffic_percentage,
+                        )
                     )
 
             # Step 1: Hybrid search with library integration
@@ -1019,8 +1048,14 @@ class RAGEngineAdapter(EngineAdapter):
             # instead of 100, starving the reranker of relevant results.
             from app.services.rag.hybrid_search import DEFAULT_HYBRID_LIMIT
 
-            rerank_top_n = query_profile.rerank_top_n if query_profile else settings.rag_rerank_top_n
-            hybrid_limit = query_profile.hybrid_limit if query_profile else DEFAULT_HYBRID_LIMIT
+            rerank_top_n = (
+                query_profile.rerank_top_n
+                if query_profile
+                else settings.rag_rerank_top_n
+            )
+            hybrid_limit = (
+                query_profile.hybrid_limit if query_profile else DEFAULT_HYBRID_LIMIT
+            )
 
             # Entity-Aware RAG: detect entities in query for all types
             # except SUMMARY/COMPARISON which genuinely need broad context
@@ -1028,8 +1063,10 @@ class RAGEngineAdapter(EngineAdapter):
             query_type = query_profile.query_type if query_profile else None
 
             from app.engines.rag.query_profile import QueryType
+
             entity_boost_eligible = query_type not in (
-                QueryType.SUMMARY, QueryType.COMPARISON,
+                QueryType.SUMMARY,
+                QueryType.COMPARISON,
             )
 
             if entity_boost_eligible:
@@ -1040,11 +1077,23 @@ class RAGEngineAdapter(EngineAdapter):
 
             # Relationship query boost: expand reranker output when multiple
             # entities are detected and query uses relationship language
-            _RELATIONSHIP_WORDS = frozenset({
-                "connection", "relationship", "between", "link", "linked",
-                "related", "together", "associate", "associated",
-                "involvement", "involved", "dealings", "role",
-            })
+            _RELATIONSHIP_WORDS = frozenset(
+                {
+                    "connection",
+                    "relationship",
+                    "between",
+                    "link",
+                    "linked",
+                    "related",
+                    "together",
+                    "associate",
+                    "associated",
+                    "involvement",
+                    "involved",
+                    "dealings",
+                    "role",
+                }
+            )
 
             if len(detected_entity_ids) >= 2:
                 query_words = set(query.lower().split())
@@ -1103,10 +1152,9 @@ class RAGEngineAdapter(EngineAdapter):
 
             # Step 2: Get document names for matter documents
             # Library documents already have titles in the result
-            matter_doc_ids = list({
-                item.document_id for item in results.results
-                if not item.is_library
-            })
+            matter_doc_ids = list(
+                {item.document_id for item in results.results if not item.is_library}
+            )
             doc_names = await self._get_document_names(matter_doc_ids)
 
             # Step 3: Prepare chunks for generation with document names
@@ -1159,7 +1207,9 @@ class RAGEngineAdapter(EngineAdapter):
                         matter_id=matter_id,
                         original_chunks=len(chunks_for_generation),
                         reduced_chunks=len(reduced_chunks),
-                        top_score=reduced_chunks[0].get("relevance_score") if reduced_chunks else None,
+                        top_score=reduced_chunks[0].get("relevance_score")
+                        if reduced_chunks
+                        else None,
                     )
 
                     try:
@@ -1306,6 +1356,7 @@ class DocumentDiscoveryEngineAdapter(EngineAdapter):
         """Lazy-load Supabase client."""
         if self._supabase is None:
             from app.services.supabase.client import get_supabase_client
+
             self._supabase = get_supabase_client()
         return self._supabase
 
@@ -1439,6 +1490,7 @@ class EntityLookupEngineAdapter(EngineAdapter):
         """Lazy-load hybrid search service for entity context retrieval."""
         if self._search is None:
             from app.services.rag import get_hybrid_search_service
+
             self._search = get_hybrid_search_service()
         return self._search
 
@@ -1446,6 +1498,7 @@ class EntityLookupEngineAdapter(EngineAdapter):
         """Lazy-load RAG answer generator for comprehensive entity answers."""
         if self._generator is None:
             from app.engines.rag.generator import get_rag_generator
+
             self._generator = get_rag_generator()
         return self._generator
 
@@ -1453,6 +1506,7 @@ class EntityLookupEngineAdapter(EngineAdapter):
         """Lazy-load Supabase client."""
         if self._supabase is None:
             from app.services.supabase.client import get_supabase_client
+
             self._supabase = get_supabase_client()
         return self._supabase
 
@@ -1460,6 +1514,7 @@ class EntityLookupEngineAdapter(EngineAdapter):
         """Get compiled regex patterns."""
         if self._compiled_patterns is None:
             import re
+
             self._compiled_patterns = [
                 re.compile(p, re.IGNORECASE) for p in self.ENTITY_PATTERNS
             ]
@@ -1494,12 +1549,13 @@ class EntityLookupEngineAdapter(EngineAdapter):
             Normalized text (lowercase, punctuation and extra spaces removed).
         """
         import re
+
         # Lowercase and normalize whitespace
         normalized = text.lower().strip()
         # Remove common punctuation
-        normalized = re.sub(r'[.,;:!?\-\'\"()]', '', normalized)
+        normalized = re.sub(r"[.,;:!?\-\'\"()]", "", normalized)
         # Normalize spaces around numbers (e.g., "no 2" -> "no2", "no.2" -> "no2")
-        normalized = re.sub(r'\s+', '', normalized)  # Remove all spaces for matching
+        normalized = re.sub(r"\s+", "", normalized)  # Remove all spaces for matching
         return normalized
 
     def _find_matching_entity(
@@ -1605,9 +1661,9 @@ class EntityLookupEngineAdapter(EngineAdapter):
 
         # Check for related entities (same type, high mentions)
         related = [
-            e for e in all_entities
-            if e.get("id") != entity.get("id")
-            and e.get("entity_type") == entity_type
+            e
+            for e in all_entities
+            if e.get("id") != entity.get("id") and e.get("entity_type") == entity_type
         ][:3]
         if related:
             related_names = [e.get("canonical_name", "Unknown") for e in related]
@@ -1686,7 +1742,9 @@ class EntityLookupEngineAdapter(EngineAdapter):
                 {
                     "chunk_id": item.id,
                     "document_id": item.document_id,
-                    "document_name": doc_names.get(item.document_id, "Unknown Document"),
+                    "document_name": doc_names.get(
+                        item.document_id, "Unknown Document"
+                    ),
                     "content": item.content,
                     "page_number": item.page_number,
                     "relevance_score": item.rrf_score,
@@ -1770,7 +1828,9 @@ class EntityLookupEngineAdapter(EngineAdapter):
             # Query entities for this matter (identity_nodes table)
             result = (
                 supabase.table("identity_nodes")
-                .select("id, canonical_name, entity_type, aliases, metadata, mention_count")
+                .select(
+                    "id, canonical_name, entity_type, aliases, metadata, mention_count"
+                )
                 .eq("matter_id", matter_id)
                 .order("mention_count", desc=True)
                 .limit(50)
@@ -1812,7 +1872,11 @@ class EntityLookupEngineAdapter(EngineAdapter):
                         # Use RAG-synthesized comprehensive answer
                         # Add entity metadata header for context
                         entity_name = matched_entity.get("canonical_name", "Unknown")
-                        entity_type = matched_entity.get("entity_type", "UNKNOWN").replace("_", " ").title()
+                        entity_type = (
+                            matched_entity.get("entity_type", "UNKNOWN")
+                            .replace("_", " ")
+                            .title()
+                        )
                         aliases = matched_entity.get("aliases") or []
                         alias_str = ", ".join(aliases[:3]) if aliases else None
 
@@ -1830,9 +1894,11 @@ class EntityLookupEngineAdapter(EngineAdapter):
                         confidence = 0.85
                 else:
                     # No match found - provide suggestions
-                    top_entities = [e.get("canonical_name", "Unknown") for e in entities[:5]]
+                    top_entities = [
+                        e.get("canonical_name", "Unknown") for e in entities[:5]
+                    ]
                     answer = (
-                        f"Could not find an entity matching **\"{entity_ref}\"** in this matter.\n\n"
+                        f'Could not find an entity matching **"{entity_ref}"** in this matter.\n\n'
                         f"**Available entities include:**\n"
                         + "\n".join(f"- {name}" for name in top_entities)
                     )
@@ -1856,16 +1922,26 @@ class EntityLookupEngineAdapter(EngineAdapter):
                     for p in persons[:10]:
                         name = p.get("canonical_name", "Unknown")
                         metadata = p.get("metadata") or {}
-                        role = metadata.get("role", "") if isinstance(metadata, dict) else ""
+                        role = (
+                            metadata.get("role", "")
+                            if isinstance(metadata, dict)
+                            else ""
+                        )
                         mentions = p.get("mention_count", 0)
                         role_str = f" ({role})" if role else ""
-                        person_lines.append(f"- **{name}**{role_str} - mentioned {mentions} times")
+                        person_lines.append(
+                            f"- **{name}**{role_str} - mentioned {mentions} times"
+                        )
                     sections.append("**Key Persons:**\n" + "\n".join(person_lines))
 
                 # Organizations
-                orgs = entities_by_type.get("ORG", []) + entities_by_type.get("ORGANIZATION", [])
+                orgs = entities_by_type.get("ORG", []) + entities_by_type.get(
+                    "ORGANIZATION", []
+                )
                 if orgs:
-                    org_lines = [f"- {o.get('canonical_name', 'Unknown')}" for o in orgs[:5]]
+                    org_lines = [
+                        f"- {o.get('canonical_name', 'Unknown')}" for o in orgs[:5]
+                    ]
                     sections.append("**Organizations:**\n" + "\n".join(org_lines))
 
                 answer = (

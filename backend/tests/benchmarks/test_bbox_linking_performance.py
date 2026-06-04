@@ -33,16 +33,18 @@ def create_bboxes():
         bboxes = []
         for page in range(1, page_count + 1):
             for roi in range(bboxes_per_page):
-                bboxes.append({
-                    "id": str(uuid4()),
-                    "page_number": page,
-                    "reading_order_index": roi,
-                    "text": f"Page {page} block {roi} text content sample",
-                    "x": 72 + (roi % 5) * 100,
-                    "y": 72 + (roi // 5) * 50,
-                    "width": 90,
-                    "height": 20,
-                })
+                bboxes.append(
+                    {
+                        "id": str(uuid4()),
+                        "page_number": page,
+                        "reading_order_index": roi,
+                        "text": f"Page {page} block {roi} text content sample",
+                        "x": 72 + (roi % 5) * 100,
+                        "y": 72 + (roi // 5) * 50,
+                        "width": 90,
+                        "height": 20,
+                    }
+                )
         return bboxes
 
     return _create
@@ -56,14 +58,16 @@ def create_chunks():
         chunks = []
         for page_start in range(1, page_count + 1, chunk_size):
             page_end = min(page_start + chunk_size - 1, page_count)
-            chunks.append({
-                "id": str(uuid4()),
-                "content": f"Content from pages {page_start} to {page_end}",
-                "page_number": page_start,
-                "page_start": page_start,
-                "page_end": page_end,
-                "bbox_ids": [],  # To be populated by linker
-            })
+            chunks.append(
+                {
+                    "id": str(uuid4()),
+                    "content": f"Content from pages {page_start} to {page_end}",
+                    "page_number": page_start,
+                    "page_start": page_start,
+                    "page_end": page_end,
+                    "bbox_ids": [],  # To be populated by linker
+                }
+            )
         return chunks
 
     return _create
@@ -292,7 +296,9 @@ class TestProgressLogging:
     """Tests for progress logging during bbox linking."""
 
     @pytest.mark.benchmark
-    def test_progress_logged_every_1000_bboxes(self, create_bboxes, create_chunks, capsys):
+    def test_progress_logged_every_1000_bboxes(
+        self, create_bboxes, create_chunks, capsys
+    ):
         """Progress is logged every 1000 bboxes."""
         bboxes = create_bboxes(200, bboxes_per_page=20)  # 4000 bboxes
         chunks = create_chunks(200, chunk_size=10)
@@ -314,6 +320,7 @@ class TestTimeout:
 
     def test_timeout_at_60_seconds(self, create_bboxes, create_chunks):
         """Timeout at 60 seconds fails gracefully."""
+
         # Create a very slow linker (simulated)
         class SlowLinker(MockBboxLinker):
             def link_bboxes_to_chunks(self, bboxes, chunks):

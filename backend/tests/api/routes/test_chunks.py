@@ -84,9 +84,7 @@ class TestGetDocumentChunksEndpoint:
             ),
         ]
         mock_chunk_service = MagicMock()
-        mock_chunk_service.get_chunks_for_document.return_value = (
-            mock_chunks, 1, 0
-        )
+        mock_chunk_service.get_chunks_for_document.return_value = (mock_chunks, 1, 0)
 
         app.dependency_overrides[get_settings] = get_test_settings
         app.dependency_overrides[get_matter_service] = lambda: mock_matter_service

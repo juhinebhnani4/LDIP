@@ -101,7 +101,9 @@ class Statement(BaseModel):
 
     entity_id: str = Field(..., alias="entityId", description="Canonical entity UUID")
     chunk_id: str = Field(..., alias="chunkId", description="Source chunk UUID")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
     content: str = Field(..., description="Statement text content")
     dates: list[StatementValue] = Field(
         default_factory=list, description="Extracted dates from statement"
@@ -151,7 +153,9 @@ class EntityStatements(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_id: str = Field(..., alias="entityId", description="Canonical entity UUID")
-    entity_name: str = Field(..., alias="entityName", description="Entity canonical name")
+    entity_name: str = Field(
+        ..., alias="entityName", description="Entity canonical name"
+    )
     total_statements: int = Field(
         default=0, alias="totalStatements", description="Total statement count"
     )
@@ -245,10 +249,14 @@ class ContradictionEvidence(BaseModel):
         ..., description="Type of evidence (date_mismatch, amount_mismatch, etc.)"
     )
     value_a: str | None = Field(
-        None, alias="valueA", description="Extracted value from statement A (if applicable)"
+        None,
+        alias="valueA",
+        description="Extracted value from statement A (if applicable)",
     )
     value_b: str | None = Field(
-        None, alias="valueB", description="Extracted value from statement B (if applicable)"
+        None,
+        alias="valueB",
+        description="Extracted value from statement B (if applicable)",
     )
     page_refs: dict[str, int | None] = Field(
         default_factory=dict,
@@ -292,9 +300,7 @@ class StatementPairComparison(BaseModel):
     reasoning: str = Field(
         ..., description="Chain-of-thought reasoning from GPT-4 (AC #4)"
     )
-    confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Confidence score (0-1)"
-    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
     evidence: ContradictionEvidence = Field(
         ..., description="Evidence supporting the finding"
     )
@@ -342,7 +348,9 @@ class EntityComparisons(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    entity_name: str = Field(..., alias="entityName", description="Entity canonical name")
+    entity_name: str = Field(
+        ..., alias="entityName", description="Entity canonical name"
+    )
     comparisons: list[StatementPairComparison] = Field(
         default_factory=list, description="All pairwise comparisons"
     )
@@ -363,13 +371,18 @@ class ComparisonMeta(BaseModel):
         ..., alias="pairsCompared", description="Number of pairs compared"
     )
     contradictions_found: int = Field(
-        ..., alias="contradictionsFound", description="Number of contradictions detected"
+        ...,
+        alias="contradictionsFound",
+        description="Number of contradictions detected",
     )
     total_cost_usd: float = Field(
         ..., alias="totalCostUsd", ge=0.0, description="Total GPT-4 API cost in USD"
     )
     processing_time_ms: int = Field(
-        ..., alias="processingTimeMs", ge=0, description="Total processing time in milliseconds"
+        ...,
+        alias="processingTimeMs",
+        ge=0,
+        description="Total processing time in milliseconds",
     )
 
 
@@ -517,7 +530,10 @@ class ClassificationResult(BaseModel):
         description="LLM API cost if fallback was used (0 for rule-based)",
     )
     processing_time_ms: int = Field(
-        ..., alias="processingTimeMs", ge=0, description="Processing time in milliseconds"
+        ...,
+        alias="processingTimeMs",
+        ge=0,
+        description="Processing time in milliseconds",
     )
 
 
@@ -647,7 +663,10 @@ class ScoringResult(BaseModel):
         ..., alias="scoredContradiction", description="The scored contradiction"
     )
     processing_time_ms: int = Field(
-        ..., alias="processingTimeMs", ge=0, description="Processing time in milliseconds"
+        ...,
+        alias="processingTimeMs",
+        ge=0,
+        description="Processing time in milliseconds",
     )
 
 
@@ -675,5 +694,8 @@ class ScoringBatchResult(BaseModel):
         ..., alias="lowCount", description="Number of LOW severity contradictions"
     )
     processing_time_ms: int = Field(
-        ..., alias="processingTimeMs", ge=0, description="Total processing time in milliseconds"
+        ...,
+        alias="processingTimeMs",
+        ge=0,
+        description="Total processing time in milliseconds",
     )

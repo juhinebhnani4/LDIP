@@ -184,9 +184,7 @@ class TestResultAggregation:
         assert EngineType.RAG in result.successful_engines
         assert result.failed_engines == []
 
-    def test_aggregate_with_failure(
-        self, aggregator, citation_result, failed_result
-    ):
+    def test_aggregate_with_failure(self, aggregator, citation_result, failed_result):
         """Mix of success and failure should handle both."""
         result = aggregator.aggregate_results(
             matter_id="matter-123",
@@ -198,7 +196,10 @@ class TestResultAggregation:
         assert result.successful_engines == [EngineType.CITATION]
         assert result.failed_engines == [EngineType.CONTRADICTION]
         # Unified response should mention failures
-        assert "error" in result.unified_response.lower() or "Note:" in result.unified_response
+        assert (
+            "error" in result.unified_response.lower()
+            or "Note:" in result.unified_response
+        )
 
     def test_aggregate_all_failures(self, aggregator, failed_result):
         """All failures should produce error response."""
@@ -299,9 +300,7 @@ class TestConfidenceCalculation:
         # Should be close to citation confidence (0.95)
         assert 0.9 <= result.confidence <= 1.0
 
-    def test_confidence_weighted_average(
-        self, aggregator, citation_result, rag_result
-    ):
+    def test_confidence_weighted_average(self, aggregator, citation_result, rag_result):
         """Multiple engines should use weighted average."""
         result = aggregator.aggregate_results(
             matter_id="matter-123",

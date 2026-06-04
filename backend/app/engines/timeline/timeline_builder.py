@@ -227,11 +227,13 @@ class TimelineBuilder:
             entities_map = await self._load_entities_paginated(matter_id)
 
         # Fetch document names for all events (fix: Unknown Document bug)
-        document_ids = list({
-            event_item.document_id
-            for event_item in events_response.data
-            if event_item.document_id
-        })
+        document_ids = list(
+            {
+                event_item.document_id
+                for event_item in events_response.data
+                if event_item.document_id
+            }
+        )
         document_names = await self._get_document_names(document_ids)
 
         # Convert to TimelineEvent objects with entity enrichment
@@ -242,12 +244,12 @@ class TimelineBuilder:
 
         for event_item in events_response.data:
             # Track event type statistics
-            event_type_str = getattr(event_item, 'event_type', 'raw_date')
+            event_type_str = getattr(event_item, "event_type", "raw_date")
             events_by_type[event_type_str] = events_by_type.get(event_type_str, 0) + 1
 
             # Build entity references from list item data (avoids N+1 query)
             entity_refs: list[EntityReference] = []
-            event_entity_ids = getattr(event_item, 'entities_involved', []) or []
+            event_entity_ids = getattr(event_item, "entities_involved", []) or []
             if include_entities and event_entity_ids:
                 events_with_entities += 1
                 for eid in event_entity_ids:
@@ -287,11 +289,11 @@ class TimelineBuilder:
                     document_id=event_item.document_id,
                     document_name=doc_name,
                     source_page=event_item.source_page,
-                    confidence=getattr(event_item, 'confidence', 0.8),
+                    confidence=getattr(event_item, "confidence", 0.8),
                     entities=entity_refs,
-                    is_ambiguous=getattr(event_item, 'is_ambiguous', False),
-                    is_verified=getattr(event_item, 'is_manual', False),
-                    source_bbox_ids=getattr(event_item, 'source_bbox_ids', []),
+                    is_ambiguous=getattr(event_item, "is_ambiguous", False),
+                    is_verified=getattr(event_item, "is_manual", False),
+                    source_bbox_ids=getattr(event_item, "source_bbox_ids", []),
                 )
             )
 
@@ -302,9 +304,11 @@ class TimelineBuilder:
         segments = self._build_segments(timeline_events, group_by) if group_by else []
 
         # Build entity views
-        entity_views = self._build_entity_views(
-            timeline_events, entities_map, all_entity_ids
-        ) if include_entities else []
+        entity_views = (
+            self._build_entity_views(timeline_events, entities_map, all_entity_ids)
+            if include_entities
+            else []
+        )
 
         # Calculate statistics
         date_range_start = None
@@ -395,18 +399,22 @@ class TimelineBuilder:
         )
 
         # Fetch document names for all events
-        document_ids = list({
-            event_item.document_id
-            for event_item in events_response.data
-            if event_item.document_id
-        })
+        document_ids = list(
+            {
+                event_item.document_id
+                for event_item in events_response.data
+                if event_item.document_id
+            }
+        )
         document_names = await self._get_document_names(document_ids)
 
         # Convert to timeline events
         timeline_events: list[TimelineEvent] = []
         for event_item in events_response.data:
             try:
-                parsed_type = EventType(getattr(event_item, 'event_type', 'unclassified'))
+                parsed_type = EventType(
+                    getattr(event_item, "event_type", "unclassified")
+                )
             except ValueError:
                 parsed_type = EventType.UNCLASSIFIED
 
@@ -427,11 +435,11 @@ class TimelineBuilder:
                     document_id=event_item.document_id,
                     document_name=doc_name,
                     source_page=event_item.source_page,
-                    confidence=getattr(event_item, 'confidence', 0.8),
+                    confidence=getattr(event_item, "confidence", 0.8),
                     entities=[],  # Don't need entity info for entity-focused view
-                    is_ambiguous=getattr(event_item, 'is_ambiguous', False),
+                    is_ambiguous=getattr(event_item, "is_ambiguous", False),
                     is_verified=False,
-                    source_bbox_ids=getattr(event_item, 'source_bbox_ids', []),
+                    source_bbox_ids=getattr(event_item, "source_bbox_ids", []),
                 )
             )
 
@@ -493,15 +501,15 @@ class TimelineBuilder:
 
         for event_item in all_events_data:
             # Count by type
-            event_type = getattr(event_item, 'event_type', 'raw_date')
+            event_type = getattr(event_item, "event_type", "raw_date")
             events_by_type[event_type] = events_by_type.get(event_type, 0) + 1
 
             # Use entities_involved and is_manual from list item (avoids N+1 query)
-            event_entity_ids = getattr(event_item, 'entities_involved', []) or []
+            event_entity_ids = getattr(event_item, "entities_involved", []) or []
             if event_entity_ids:
                 events_with_entities += 1
                 all_entity_ids.update(event_entity_ids)
-            if getattr(event_item, 'is_manual', False):
+            if getattr(event_item, "is_manual", False):
                 verified_events += 1
 
         # Filter out invalid dates (beyond 5 years in future)
@@ -509,7 +517,8 @@ class TimelineBuilder:
         max_valid_year = current_year + 5
         if all_events_data:
             valid_dates = [
-                e.event_date for e in all_events_data
+                e.event_date
+                for e in all_events_data
                 if e.event_date.year <= max_valid_year
             ]
             if valid_dates:
@@ -655,11 +664,12 @@ class TimelineBuilder:
             if text.startswith("[AMBIGUOUS"):
                 bracket_end = text.find("]")
                 if bracket_end > 0:
-                    text = text[bracket_end + 1:].strip()
+                    text = text[bracket_end + 1 :].strip()
             # Remove date text in brackets like [15/01/2024]
             import re
-            text = re.sub(r'\[\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\]', '', text)
-            text = re.sub(r'\[\d{4}[/.-]\d{1,2}[/.-]\d{1,2}\]', '', text)
+
+            text = re.sub(r"\[\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\]", "", text)
+            text = re.sub(r"\[\d{4}[/.-]\d{1,2}[/.-]\d{1,2}\]", "", text)
             return text.strip()
 
         deduplicated: list[TimelineEvent] = []
@@ -817,8 +827,19 @@ class TimelineBuilder:
         else:  # month
             year, month = key.split("-")
             month_names = [
-                "", "January", "February", "March", "April", "May", "June",
-                "July", "August", "September", "October", "November", "December"
+                "",
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December",
             ]
             return f"{month_names[int(month)]} {year}"
 

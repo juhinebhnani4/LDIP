@@ -88,9 +88,7 @@ class TestPDFChunkerLogging:
             chunker.split_pdf(pdf_bytes, chunk_size=25)
 
         # Find the completion log
-        split_complete = [
-            e for e in captured if e.get("event") == "pdf_split_complete"
-        ]
+        split_complete = [e for e in captured if e.get("event") == "pdf_split_complete"]
         assert len(split_complete) == 1
 
         log = split_complete[0]
@@ -153,9 +151,7 @@ class TestPDFChunkerLogging:
             with contextlib.suppress(Exception):
                 chunker.split_pdf(b"Invalid PDF content")
 
-        error_logs = [
-            e for e in captured if e.get("event") == "pdf_parse_failed"
-        ]
+        error_logs = [e for e in captured if e.get("event") == "pdf_parse_failed"]
         assert len(error_logs) == 1
         assert "error" in error_logs[0]
 
@@ -190,9 +186,7 @@ class TestOCRResultMergerLogging:
             merger = OCRResultMerger()
             merger.merge_results(chunks, "doc-123")
 
-        merge_complete = [
-            e for e in captured if e.get("event") == "ocr_results_merged"
-        ]
+        merge_complete = [e for e in captured if e.get("event") == "ocr_results_merged"]
         assert len(merge_complete) == 1
 
         log = merge_complete[0]
@@ -438,7 +432,9 @@ class TestFailurePointIdentification:
             with contextlib.suppress(MergeValidationError):
                 merger.merge_results(chunks, "doc-test")
 
-        error_log = [e for e in captured if e.get("event") == "page_range_validation_failed"][0]
+        error_log = [
+            e for e in captured if e.get("event") == "page_range_validation_failed"
+        ][0]
 
         # Error should identify the problematic chunk boundary
         assert "errors" in error_log

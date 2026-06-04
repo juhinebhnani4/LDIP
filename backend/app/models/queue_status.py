@@ -64,16 +64,22 @@ class QueueStatusData(BaseModel):
         default_factory=list, description="Metrics for each queue"
     )
     total_pending: int = Field(
-        default=0, description="Total pending jobs across all queues", alias="totalPending"
+        default=0,
+        description="Total pending jobs across all queues",
+        alias="totalPending",
     )
     total_active: int = Field(
-        default=0, description="Total active jobs across all queues", alias="totalActive"
+        default=0,
+        description="Total active jobs across all queues",
+        alias="totalActive",
     )
     active_workers: int = Field(
         default=0, description="Number of active Celery workers", alias="activeWorkers"
     )
     last_checked_at: str = Field(
-        ..., description="ISO timestamp when metrics were collected", alias="lastCheckedAt"
+        ...,
+        description="ISO timestamp when metrics were collected",
+        alias="lastCheckedAt",
     )
     alert_threshold: int = Field(
         default=100,

@@ -32,7 +32,9 @@ from app.services.supabase.client import get_service_client
 logger = structlog.get_logger(__name__)
 
 
-def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run: bool = False):
+def backfill_all(
+    matter_id: str | None = None, limit: int | None = None, dry_run: bool = False
+):
     """Backfill section index for Act documents.
 
     Args:
@@ -57,7 +59,9 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
     documents = doc_result.data or []
 
     if not documents:
-        print("No Act documents found" + (f" for matter {matter_id}" if matter_id else ""))
+        print(
+            "No Act documents found" + (f" for matter {matter_id}" if matter_id else "")
+        )
         return
 
     # Filter to documents with bounding boxes
@@ -79,7 +83,10 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
     if limit:
         docs_with_bboxes = docs_with_bboxes[:limit]
 
-    print(f"Found {len(docs_with_bboxes)} Act documents to index" + (" (DRY RUN)" if dry_run else ""))
+    print(
+        f"Found {len(docs_with_bboxes)} Act documents to index"
+        + (" (DRY RUN)" if dry_run else "")
+    )
 
     # Process each document
     total_sections = 0
@@ -121,14 +128,24 @@ def backfill_all(matter_id: str | None = None, limit: int | None = None, dry_run
             logger.exception("backfill_document_failed", document_id=doc_id)
 
     action = "Would index" if dry_run else "Indexed"
-    print(f"\nDone! {action} {total_sections} sections across {len(docs_with_bboxes)} documents")
+    print(
+        f"\nDone! {action} {total_sections} sections across {len(docs_with_bboxes)} documents"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill section index for Act documents")
+    parser = argparse.ArgumentParser(
+        description="Backfill section index for Act documents"
+    )
     parser.add_argument("--matter-id", help="Filter to specific matter ID")
-    parser.add_argument("--limit", type=int, help="Limit number of documents to process")
-    parser.add_argument("--dry-run", action="store_true", help="Don't make changes, just show what would be done")
+    parser.add_argument(
+        "--limit", type=int, help="Limit number of documents to process"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't make changes, just show what would be done",
+    )
 
     args = parser.parse_args()
 

@@ -528,19 +528,21 @@ class ContradictionListService:
                 statement_a = chunks_map.get(row.get("statement_a_id", ""))
                 statement_b = chunks_map.get(row.get("statement_b_id", ""))
 
-                contradictions.append({
-                    "id": row.get("id"),
-                    "entity_id": entity_id,
-                    "entity_name": entity_names_map.get(entity_id, "Unknown"),
-                    "contradiction_type": row.get("contradiction_type"),
-                    "severity": row.get("severity"),
-                    "explanation": row.get("explanation", ""),
-                    "confidence": row.get("confidence", 0.0),
-                    "evidence": row.get("evidence"),
-                    "created_at": row.get("created_at"),
-                    "statement_a": statement_a,
-                    "statement_b": statement_b,
-                })
+                contradictions.append(
+                    {
+                        "id": row.get("id"),
+                        "entity_id": entity_id,
+                        "entity_name": entity_names_map.get(entity_id, "Unknown"),
+                        "contradiction_type": row.get("contradiction_type"),
+                        "severity": row.get("severity"),
+                        "explanation": row.get("explanation", ""),
+                        "confidence": row.get("confidence", 0.0),
+                        "evidence": row.get("evidence"),
+                        "created_at": row.get("created_at"),
+                        "statement_a": statement_a,
+                        "statement_b": statement_b,
+                    }
+                )
 
             return contradictions
 
@@ -746,9 +748,7 @@ class ContradictionListService:
         # Build response models
         result: list[EntityContradictions] = []
         for eid, items in entity_map.items():
-            contradiction_items = [
-                self._build_contradiction_item(c) for c in items
-            ]
+            contradiction_items = [self._build_contradiction_item(c) for c in items]
 
             result.append(
                 EntityContradictions(

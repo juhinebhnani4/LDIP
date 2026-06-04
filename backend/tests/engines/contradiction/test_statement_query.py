@@ -57,7 +57,9 @@ class TestValueExtractorDates:
     def test_extract_legal_dated_format(self) -> None:
         """Should extract 'dated 15th of January, 2024' format."""
         extractor = ValueExtractor()
-        dates = extractor.extract_dates("The contract dated 15th of January, 2024 is hereby void.")
+        dates = extractor.extract_dates(
+            "The contract dated 15th of January, 2024 is hereby void."
+        )
 
         assert len(dates) == 1
         assert dates[0].normalized == "2024-01-15"
@@ -511,7 +513,9 @@ class TestStatementQueryEngine:
         mock_query.range.return_value = mock_query
         mock_query.execute.return_value = mock_response
 
-        mock_supabase_client.table.return_value = MagicMock(select=MagicMock(return_value=mock_query))
+        mock_supabase_client.table.return_value = MagicMock(
+            select=MagicMock(return_value=mock_query)
+        )
 
         # Mock entity name lookup
         mock_name_response = MagicMock()
@@ -620,6 +624,7 @@ class TestStatementQueryEngine:
 
         # Track calls to verify matter_id filter
         eq_calls = []
+
         def track_eq(field, value):
             eq_calls.append((field, value))
             return mock_query

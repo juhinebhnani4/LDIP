@@ -27,11 +27,16 @@ logger = structlog.get_logger(__name__)
 # Regex patterns for section identification in Indian Acts
 SECTION_HEADER_PATTERNS: Final[list[re.Pattern]] = [
     # "Section 138" or "Section 138." at line start
-    re.compile(r"^Section\s+(\d+(?:\([a-zA-Z0-9]+\))?)\s*[.:\-—]?", re.IGNORECASE | re.MULTILINE),
+    re.compile(
+        r"^Section\s+(\d+(?:\([a-zA-Z0-9]+\))?)\s*[.:\-—]?",
+        re.IGNORECASE | re.MULTILINE,
+    ),
     # "138. " at paragraph start (numbered section)
     re.compile(r"^(\d+)\.\s+[A-Z]", re.MULTILINE),
     # "[Section 138]" in brackets
-    re.compile(r"^\[Section\s+(\d+(?:\([a-zA-Z0-9]+\))?)\]", re.IGNORECASE | re.MULTILINE),
+    re.compile(
+        r"^\[Section\s+(\d+(?:\([a-zA-Z0-9]+\))?)\]", re.IGNORECASE | re.MULTILINE
+    ),
     # "Sec. 138" abbreviated
     re.compile(r"^Sec\.\s*(\d+(?:\([a-zA-Z0-9]+\))?)", re.IGNORECASE | re.MULTILINE),
     # "§ 138" symbol notation
@@ -54,14 +59,16 @@ SECTION_REFERENCE_PATTERN: Final[re.Pattern] = re.compile(
 # retrieval, not whether the section text is present to be found.
 # (2026-06-04: legacy doc a65f4b17 — chunking_failed, 3 chunks of a 9-page Act —
 #  drove 867 false section_not_found before this gate existed.)
-ACT_BODY_INCOMPLETE_FLAGS: Final[frozenset[str]] = frozenset({
-    "chunking_failed",
-    "zero_chunks",
-    "ocr_empty_text",
-    "ocr_failed",
-    "storage_missing",
-    "chain_error",
-})
+ACT_BODY_INCOMPLETE_FLAGS: Final[frozenset[str]] = frozenset(
+    {
+        "chunking_failed",
+        "zero_chunks",
+        "ocr_empty_text",
+        "ocr_failed",
+        "storage_missing",
+        "chain_error",
+    }
+)
 
 
 # =============================================================================
@@ -87,7 +94,9 @@ class SectionBoundary:
         self.bbox_ids = bbox_ids or []
 
     def __repr__(self) -> str:
-        return f"SectionBoundary(section={self.section_number}, chunk={self.chunk_id[:8]})"
+        return (
+            f"SectionBoundary(section={self.section_number}, chunk={self.chunk_id[:8]})"
+        )
 
 
 class ActIndex:
@@ -124,7 +133,12 @@ class ActIndex:
     @property
     def section_numbers(self) -> list[str]:
         """Get all indexed section numbers."""
-        return sorted(self.sections.keys(), key=lambda x: int(re.match(r"\d+", x).group()) if re.match(r"\d+", x) else 0)
+        return sorted(
+            self.sections.keys(),
+            key=lambda x: int(re.match(r"\d+", x).group())
+            if re.match(r"\d+", x)
+            else 0,
+        )
 
 
 # =============================================================================
@@ -267,7 +281,11 @@ class ActIndexer:
                         document_id,
                     )
                 if chunks:
-                    logger.info("act_index_using_library_chunks", document_id=document_id, chunk_count=len(chunks))
+                    logger.info(
+                        "act_index_using_library_chunks",
+                        document_id=document_id,
+                        chunk_count=len(chunks),
+                    )
 
             if not chunks:
                 raise ActIndexerError(
@@ -405,7 +423,9 @@ class ActIndexer:
         else:
             # Try partial matches (e.g., "138" matches "138(1)", "138(2)")
             for sec, cids in index.sections.items():
-                if sec.startswith(normalized_section) or normalized_section.startswith(sec.split("(")[0]):
+                if sec.startswith(normalized_section) or normalized_section.startswith(
+                    sec.split("(")[0]
+                ):
                     chunk_ids.extend(cids)
 
         if not chunk_ids:
@@ -473,7 +493,7 @@ class ActIndexer:
                         start_position=match.start(),
                         chunk_id=chunk.id,
                         page_number=chunk.page_number,
-                        bbox_ids=chunk.bbox_ids if hasattr(chunk, 'bbox_ids') else [],
+                        bbox_ids=chunk.bbox_ids if hasattr(chunk, "bbox_ids") else [],
                     )
                     boundaries.append(boundary)
 

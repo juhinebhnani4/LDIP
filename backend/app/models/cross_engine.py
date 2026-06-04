@@ -18,8 +18,12 @@ class CrossLinkedTimelineEventModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     event_id: str = Field(..., alias="eventId", description="Timeline event UUID")
-    event_date: str = Field(..., alias="eventDate", description="Event date (ISO format)")
-    event_type: str = Field(..., alias="eventType", description="Event type classification")
+    event_date: str = Field(
+        ..., alias="eventDate", description="Event date (ISO format)"
+    )
+    event_type: str = Field(
+        ..., alias="eventType", description="Event type classification"
+    )
     description: str = Field(..., description="Event description")
     document_id: str | None = Field(
         None, alias="documentId", description="Source document UUID"
@@ -30,7 +34,9 @@ class CrossLinkedTimelineEventModel(BaseModel):
     source_page: int | None = Field(
         None, alias="sourcePage", description="Source page number"
     )
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score")
+    confidence: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Confidence score"
+    )
 
 
 class CrossLinkedContradictionModel(BaseModel):
@@ -64,7 +70,9 @@ class CrossLinkedContradictionModel(BaseModel):
     document_b_name: str = Field(
         ..., alias="documentBName", description="Second document filename"
     )
-    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence score")
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Confidence score"
+    )
 
 
 class CrossLinkedEntityModel(BaseModel):
@@ -91,7 +99,9 @@ class EntityJourneyResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    entity_name: str = Field(..., alias="entityName", description="Entity canonical name")
+    entity_name: str = Field(
+        ..., alias="entityName", description="Entity canonical name"
+    )
     entity_type: str = Field(..., alias="entityType", description="Entity type")
     events: list[CrossLinkedTimelineEventModel] = Field(
         default_factory=list, description="Timeline events involving this entity"
@@ -113,7 +123,9 @@ class EntityContradictionSummaryResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    entity_name: str = Field(..., alias="entityName", description="Entity canonical name")
+    entity_name: str = Field(
+        ..., alias="entityName", description="Entity canonical name"
+    )
     contradictions: list[CrossLinkedContradictionModel] = Field(
         default_factory=list, description="Contradictions involving this entity"
     )
@@ -165,7 +177,9 @@ class ContradictionContextResponse(BaseModel):
         ..., alias="contradictionId", description="Contradiction UUID"
     )
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    entity_name: str = Field(..., alias="entityName", description="Entity canonical name")
+    entity_name: str = Field(
+        ..., alias="entityName", description="Entity canonical name"
+    )
     contradiction_type: str = Field(
         ..., alias="contradictionType", description="Type of contradiction"
     )

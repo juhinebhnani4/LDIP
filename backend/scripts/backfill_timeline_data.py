@@ -37,9 +37,13 @@ def backfill_source_pages(client, matter_id: str, dry_run: bool = False) -> dict
     print(f"\n=== Backfilling source_page for matter {matter_id[:8]}... ===")
 
     # Get events with NULL source_page
-    events = client.table('events').select(
-        'id, document_id, event_date_text, description'
-    ).eq('matter_id', matter_id).is_('source_page', 'null').execute()
+    events = (
+        client.table("events")
+        .select("id, document_id, event_date_text, description")
+        .eq("matter_id", matter_id)
+        .is_("source_page", "null")
+        .execute()
+    )
 
     print(f"Found {len(events.data)} events with NULL source_page")
 
@@ -47,38 +51,44 @@ def backfill_source_pages(client, matter_id: str, dry_run: bool = False) -> dict
         return {"events_checked": 0, "events_updated": 0}
 
     # Get all chunks for this matter with page_number
-    chunks = client.table('chunks').select(
-        'id, document_id, content, page_number, bbox_ids'
-    ).eq('matter_id', matter_id).not_.is_('page_number', 'null').execute()
+    chunks = (
+        client.table("chunks")
+        .select("id, document_id, content, page_number, bbox_ids")
+        .eq("matter_id", matter_id)
+        .not_.is_("page_number", "null")
+        .execute()
+    )
 
     print(f"Found {len(chunks.data)} chunks with page_number")
 
     # Build document -> chunks mapping
     doc_chunks = {}
     for chunk in chunks.data:
-        doc_id = chunk['document_id']
+        doc_id = chunk["document_id"]
         if doc_id not in doc_chunks:
             doc_chunks[doc_id] = []
         doc_chunks[doc_id].append(chunk)
 
     updates = []
     for event in events.data:
-        doc_id = event['document_id']
+        doc_id = event["document_id"]
         if not doc_id or doc_id not in doc_chunks:
             continue
 
         # Find chunk containing the date_text
-        date_text = event.get('event_date_text', '')
+        date_text = event.get("event_date_text", "")
         if not date_text:
             continue
 
         for chunk in doc_chunks[doc_id]:
-            if date_text in chunk['content']:
-                updates.append({
-                    'event_id': event['id'],
-                    'source_page': chunk['page_number'],
-                    'source_bbox_ids': chunk.get('bbox_ids') or [],
-                })
+            if date_text in chunk["content"]:
+                updates.append(
+                    {
+                        "event_id": event["id"],
+                        "source_page": chunk["page_number"],
+                        "source_bbox_ids": chunk.get("bbox_ids") or [],
+                    }
+                )
                 break
 
     print(f"Found {len(updates)} events that can be updated")
@@ -89,16 +99,22 @@ def backfill_source_pages(client, matter_id: str, dry_run: bool = False) -> dict
             print(f"  Event {u['event_id'][:8]}... -> page {u['source_page']}")
         if len(updates) > 5:
             print(f"  ... and {len(updates) - 5} more")
-        return {"events_checked": len(events.data), "events_updated": 0, "would_update": len(updates)}
+        return {
+            "events_checked": len(events.data),
+            "events_updated": 0,
+            "would_update": len(updates),
+        }
 
     # Apply updates
     updated = 0
     for u in updates:
         try:
-            client.table('events').update({
-                'source_page': u['source_page'],
-                'source_bbox_ids': u['source_bbox_ids'],
-            }).eq('id', u['event_id']).execute()
+            client.table("events").update(
+                {
+                    "source_page": u["source_page"],
+                    "source_bbox_ids": u["source_bbox_ids"],
+                }
+            ).eq("id", u["event_id"]).execute()
             updated += 1
         except Exception as e:
             print(f"  Error updating event {u['event_id'][:8]}...: {e}")
@@ -146,18 +162,26 @@ def trigger_entity_linking(matter_id: str, dry_run: bool = False) -> dict:
 
 def get_all_matters(client) -> list[str]:
     """Get all matter IDs that have events."""
-    result = client.table('events').select('matter_id').execute()
-    return list(set(e['matter_id'] for e in result.data))
+    result = client.table("events").select("matter_id").execute()
+    return list(set(e["matter_id"] for e in result.data))
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Backfill timeline event data')
-    parser.add_argument('--matter-id', help='Process specific matter')
-    parser.add_argument('--all', action='store_true', help='Process all matters')
-    parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
-    parser.add_argument('--skip-page-backfill', action='store_true', help='Skip source_page backfill')
-    parser.add_argument('--skip-classification', action='store_true', help='Skip classification')
-    parser.add_argument('--skip-entity-linking', action='store_true', help='Skip entity linking')
+    parser = argparse.ArgumentParser(description="Backfill timeline event data")
+    parser.add_argument("--matter-id", help="Process specific matter")
+    parser.add_argument("--all", action="store_true", help="Process all matters")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be done"
+    )
+    parser.add_argument(
+        "--skip-page-backfill", action="store_true", help="Skip source_page backfill"
+    )
+    parser.add_argument(
+        "--skip-classification", action="store_true", help="Skip classification"
+    )
+    parser.add_argument(
+        "--skip-entity-linking", action="store_true", help="Skip entity linking"
+    )
 
     args = parser.parse_args()
 
@@ -180,15 +204,19 @@ def main():
     }
 
     for matter_id in matter_ids:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Processing matter: {matter_id}")
-        print('='*60)
+        print("=" * 60)
 
         # Step 1: Backfill source_page
         if not args.skip_page_backfill:
             result = backfill_source_pages(client, matter_id, args.dry_run)
-            total_results["page_backfill"]["events_checked"] += result.get("events_checked", 0)
-            total_results["page_backfill"]["events_updated"] += result.get("events_updated", 0)
+            total_results["page_backfill"]["events_checked"] += result.get(
+                "events_checked", 0
+            )
+            total_results["page_backfill"]["events_updated"] += result.get(
+                "events_updated", 0
+            )
 
         # Step 2: Classification (only if not dry run for tasks)
         if not args.skip_classification:
@@ -202,13 +230,19 @@ def main():
 
         total_results["matters_processed"] += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SUMMARY")
-    print('='*60)
+    print("=" * 60)
     print(f"Matters processed: {total_results['matters_processed']}")
-    print(f"Page backfill: {total_results['page_backfill']['events_updated']}/{total_results['page_backfill']['events_checked']} events updated")
-    print(f"Classification tasks: {len([r for r in total_results['classification'] if r.get('status') == 'queued'])} queued")
-    print(f"Entity linking tasks: {len([r for r in total_results['entity_linking'] if r.get('status') == 'queued'])} queued")
+    print(
+        f"Page backfill: {total_results['page_backfill']['events_updated']}/{total_results['page_backfill']['events_checked']} events updated"
+    )
+    print(
+        f"Classification tasks: {len([r for r in total_results['classification'] if r.get('status') == 'queued'])} queued"
+    )
+    print(
+        f"Entity linking tasks: {len([r for r in total_results['entity_linking'] if r.get('status') == 'queued'])} queued"
+    )
 
 
 if __name__ == "__main__":

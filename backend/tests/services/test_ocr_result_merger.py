@@ -46,7 +46,11 @@ def sample_chunk_results():
             page_start=26,
             page_end=50,
             bounding_boxes=[
-                {"page": 1, "reading_order_index": 0, "text": "Chunk1 page 1"},  # Relative
+                {
+                    "page": 1,
+                    "reading_order_index": 0,
+                    "text": "Chunk1 page 1",
+                },  # Relative
                 {"page": 5, "reading_order_index": 0, "text": "Chunk1 page 5"},
             ],
             full_text="Chunk 1 text",
@@ -109,7 +113,11 @@ class TestMergeResults:
     def test_sorts_chunks_by_index(self, sample_chunk_results):
         """Chunks are sorted by chunk_index before merging."""
         # Shuffle the chunks
-        shuffled = [sample_chunk_results[2], sample_chunk_results[0], sample_chunk_results[1]]
+        shuffled = [
+            sample_chunk_results[2],
+            sample_chunk_results[0],
+            sample_chunk_results[1],
+        ]
 
         merger = OCRResultMerger()
         result = merger.merge_results(shuffled, "doc-123")
@@ -510,7 +518,11 @@ class TestOffByOneBoundaries:
                 page_start=26,
                 page_end=50,
                 bounding_boxes=[
-                    {"page": 1, "reading_order_index": 0, "text": "Chunk1 relative page 1"},
+                    {
+                        "page": 1,
+                        "reading_order_index": 0,
+                        "text": "Chunk1 relative page 1",
+                    },
                 ],
                 full_text="",
                 overall_confidence=0.9,
@@ -534,7 +546,9 @@ class TestOffByOneBoundaries:
             elif bbox.get("text") == "Page 25":
                 assert bbox["page"] == 25, f"Page 25 has wrong value: {bbox['page']}"
             elif bbox.get("text") == "Chunk1 relative page 1":
-                assert bbox["page"] == 26, f"Chunk1 page 1 should be 26, got: {bbox['page']}"
+                assert bbox["page"] == 26, (
+                    f"Chunk1 page 1 should be 26, got: {bbox['page']}"
+                )
 
     def test_page_49_50_51_boundary(self):
         """Test pages 49, 50, 51 at second chunk boundary.
@@ -557,8 +571,16 @@ class TestOffByOneBoundaries:
                 page_start=26,
                 page_end=50,
                 bounding_boxes=[
-                    {"page": 24, "reading_order_index": 0, "text": "Page 49"},  # 24+25=49
-                    {"page": 25, "reading_order_index": 0, "text": "Page 50"},  # 25+25=50
+                    {
+                        "page": 24,
+                        "reading_order_index": 0,
+                        "text": "Page 49",
+                    },  # 24+25=49
+                    {
+                        "page": 25,
+                        "reading_order_index": 0,
+                        "text": "Page 50",
+                    },  # 25+25=50
                 ],
                 full_text="",
                 overall_confidence=0.9,
@@ -608,7 +630,7 @@ class TestOffByOneBoundaries:
                 page_start=26,
                 page_end=50,
                 bounding_boxes=[
-                    {"page": 1, "text": "boundary_26"},   # +25 = 26
+                    {"page": 1, "text": "boundary_26"},  # +25 = 26
                     {"page": 25, "text": "boundary_50"},  # +25 = 50
                 ],
                 full_text="",
@@ -620,7 +642,7 @@ class TestOffByOneBoundaries:
                 page_start=51,
                 page_end=75,
                 bounding_boxes=[
-                    {"page": 1, "text": "boundary_51"},   # +50 = 51
+                    {"page": 1, "text": "boundary_51"},  # +50 = 51
                     {"page": 25, "text": "boundary_75"},  # +50 = 75
                 ],
                 full_text="",
@@ -632,7 +654,7 @@ class TestOffByOneBoundaries:
                 page_start=76,
                 page_end=100,
                 bounding_boxes=[
-                    {"page": 1, "text": "boundary_76"},    # +75 = 76
+                    {"page": 1, "text": "boundary_76"},  # +75 = 76
                     {"page": 25, "text": "boundary_100"},  # +75 = 100
                 ],
                 full_text="",

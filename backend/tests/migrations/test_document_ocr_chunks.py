@@ -81,7 +81,9 @@ class TestMigrationSQLValidation:
             col_name = col.split()[0]
             col_type = col.split()[1]
             pattern = rf"{col_name}\s+{col_type}"
-            assert re.search(pattern, migration_sql, re.IGNORECASE), f"Column {col} not found"
+            assert re.search(pattern, migration_sql, re.IGNORECASE), (
+                f"Column {col} not found"
+            )
 
     def test_foreign_key_constraints_defined(self, migration_sql: str) -> None:
         """Verify FK constraints with CASCADE delete.
@@ -151,20 +153,20 @@ class TestMigrationSQLValidation:
         AC: #6 - 4-layer matter isolation
         """
         # SELECT policy
-        assert 'FOR SELECT' in migration_sql
-        assert 'Users can view chunks from their matters' in migration_sql
+        assert "FOR SELECT" in migration_sql
+        assert "Users can view chunks from their matters" in migration_sql
 
         # INSERT policy
-        assert 'FOR INSERT' in migration_sql
-        assert 'Editors and Owners can insert chunks' in migration_sql
+        assert "FOR INSERT" in migration_sql
+        assert "Editors and Owners can insert chunks" in migration_sql
 
         # UPDATE policy
-        assert 'FOR UPDATE' in migration_sql
-        assert 'Editors and Owners can update chunks' in migration_sql
+        assert "FOR UPDATE" in migration_sql
+        assert "Editors and Owners can update chunks" in migration_sql
 
         # DELETE policy
-        assert 'FOR DELETE' in migration_sql
-        assert 'Only Owners can delete chunks' in migration_sql
+        assert "FOR DELETE" in migration_sql
+        assert "Only Owners can delete chunks" in migration_sql
 
     def test_update_policy_has_with_check(self, fix_migration_sql: str) -> None:
         """Verify UPDATE policy includes WITH CHECK clause (security fix).
@@ -203,7 +205,9 @@ class TestMigrationSQLValidation:
     def test_storage_policies_are_idempotent(self, migration_sql: str) -> None:
         """Verify storage policies use DROP IF EXISTS for idempotency."""
         drop_statements = re.findall(r"DROP POLICY IF EXISTS.*ocr chunk", migration_sql)
-        assert len(drop_statements) >= 4, "Should drop existing policies before creating"
+        assert len(drop_statements) >= 4, (
+            "Should drop existing policies before creating"
+        )
 
 
 class TestDocumentOCRChunksSchema:
@@ -298,7 +302,7 @@ class TestConstraintEnforcement:
         # First insert succeeds
         mock_db.table.return_value.insert.return_value.execute.side_effect = [
             MagicMock(data=[chunk_1]),
-            Exception('duplicate key value violates unique constraint'),
+            Exception("duplicate key value violates unique constraint"),
         ]
 
         # Second insert with same (document_id, chunk_index) should fail
@@ -371,10 +375,14 @@ class TestConstraintEnforcement:
         valid_statuses = ["pending", "processing", "completed", "failed"]
 
         for status in valid_statuses:
-            mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
-                data=[{"status": status}]
+            mock_db.table.return_value.insert.return_value.execute.return_value = (
+                MagicMock(data=[{"status": status}])
             )
-            result = mock_db.table("document_ocr_chunks").insert({"status": status}).execute()
+            result = (
+                mock_db.table("document_ocr_chunks")
+                .insert({"status": status})
+                .execute()
+            )
             assert result.data[0]["status"] == status
 
     def test_status_check_constraint_rejects_invalid(self) -> None:
@@ -430,7 +438,12 @@ class TestRLSPolicies:
             data=[chunk_data]
         )
 
-        result = mock_db.table("document_ocr_chunks").select("*").eq("matter_id", matter_id).execute()
+        result = (
+            mock_db.table("document_ocr_chunks")
+            .select("*")
+            .eq("matter_id", matter_id)
+            .execute()
+        )
 
         assert len(result.data) == 1
         assert result.data[0]["matter_id"] == matter_id
@@ -526,7 +539,9 @@ class TestRLSPolicies:
             data=[{"id": chunk_id}]
         )
 
-        result = mock_db.table("document_ocr_chunks").delete().eq("id", chunk_id).execute()
+        result = (
+            mock_db.table("document_ocr_chunks").delete().eq("id", chunk_id).execute()
+        )
         assert result.data[0]["id"] == chunk_id
 
     def test_cross_matter_access_blocked(self) -> None:

@@ -46,7 +46,9 @@ class TestLegalAdvicePatterns:
         assert check.pattern_matched is not None
         assert len(check.explanation) > 0
 
-    def test_should_we_settle_blocked(self, guardrail_service: GuardrailService) -> None:
+    def test_should_we_settle_blocked(
+        self, guardrail_service: GuardrailService
+    ) -> None:
         """Should block 'Should we settle the case?'
 
         Story 8-1: Task 4.2
@@ -55,7 +57,9 @@ class TestLegalAdvicePatterns:
         assert check.is_safe is False
         assert check.violation_type == "legal_advice_request"
 
-    def test_should_client_sue_blocked(self, guardrail_service: GuardrailService) -> None:
+    def test_should_client_sue_blocked(
+        self, guardrail_service: GuardrailService
+    ) -> None:
         """Should block 'Should the client sue?'
 
         Story 8-1: Task 4.2 - Tests client variant
@@ -71,7 +75,9 @@ class TestLegalAdvicePatterns:
 
         Story 8-1: Task 4.2 - Tests my client variant
         """
-        check = guardrail_service.check_query("Should my client proceed with the claim?")
+        check = guardrail_service.check_query(
+            "Should my client proceed with the claim?"
+        )
         assert check.is_safe is False
         assert check.violation_type == "legal_advice_request"
 
@@ -189,7 +195,9 @@ class TestChancesPatterns:
         """
         check = guardrail_service.check_query("What are my chances of winning?")
         assert check.is_safe is False
-        assert check.violation_type == "outcome_prediction"  # Chances = outcome prediction
+        assert (
+            check.violation_type == "outcome_prediction"
+        )  # Chances = outcome prediction
 
     def test_what_are_our_chances_blocked(
         self, guardrail_service: GuardrailService
@@ -326,9 +334,7 @@ class TestAllowedQueries:
         assert check.is_safe is True
         assert check.violation_type is None
 
-    def test_entity_question_allowed(
-        self, guardrail_service: GuardrailService
-    ) -> None:
+    def test_entity_question_allowed(self, guardrail_service: GuardrailService) -> None:
         """Should allow 'Who is mentioned in the complaint?'
 
         Story 8-1: Task 4.6 - Entity queries allowed

@@ -86,9 +86,7 @@ class IntentClassification(BaseModel):
         ... )
     """
 
-    intent: QueryIntent = Field(
-        description="Primary intent detected in the query"
-    )
+    intent: QueryIntent = Field(description="Primary intent detected in the query")
     confidence: float = Field(
         ge=0.0,
         le=1.0,
@@ -336,11 +334,17 @@ class SourceReference(BaseModel):
     document_id: str = Field(description="Source document UUID")
     document_name: str | None = Field(default=None, description="Document filename")
     chunk_id: str | None = Field(default=None, description="Specific chunk UUID")
-    page_number: int | None = Field(default=None, description="Page number if applicable")
+    page_number: int | None = Field(
+        default=None, description="Page number if applicable"
+    )
     text_preview: str | None = Field(default=None, description="Preview of source text")
     confidence: float | None = Field(default=None, description="Source relevance score")
-    engine: EngineType | None = Field(default=None, description="Engine that found this source")
-    bbox_ids: list[str] | None = Field(default=None, description="Bounding box UUIDs for highlighting")
+    engine: EngineType | None = Field(
+        default=None, description="Engine that found this source"
+    )
+    bbox_ids: list[str] | None = Field(
+        default=None, description="Bounding box UUIDs for highlighting"
+    )
 
 
 class OrchestratorResult(BaseModel):
@@ -522,12 +526,8 @@ class QueryAuditEntry(BaseModel):
     asked_at: str = Field(description="ISO8601 timestamp of query")
 
     # Execution details
-    engines_invoked: list[EngineType] = Field(
-        description="Engines that were executed"
-    )
-    successful_engines: list[EngineType] = Field(
-        description="Engines that succeeded"
-    )
+    engines_invoked: list[EngineType] = Field(description="Engines that were executed")
+    successful_engines: list[EngineType] = Field(description="Engines that succeeded")
     failed_engines: list[EngineType] = Field(
         default_factory=list, description="Engines that failed"
     )
@@ -550,9 +550,7 @@ class QueryAuditEntry(BaseModel):
         default_factory=list,
         description="LLM costs for this query",
     )
-    total_cost_usd: float = Field(
-        default=0.0, ge=0.0, description="Total cost in USD"
-    )
+    total_cost_usd: float = Field(default=0.0, ge=0.0, description="Total cost in USD")
 
     # Findings detail (AC: #2)
     findings: list[FindingAuditEntry] = Field(

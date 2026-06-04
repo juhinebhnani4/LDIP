@@ -389,7 +389,10 @@ async def get_timeline_event_context(
     response_model_by_alias=True,
     responses={
         200: {"description": "Contradiction context"},
-        404: {"model": CrossEngineErrorResponse, "description": "Contradiction not found"},
+        404: {
+            "model": CrossEngineErrorResponse,
+            "description": "Contradiction not found",
+        },
     },
 )
 async def get_contradiction_context(
@@ -500,7 +503,9 @@ async def get_contradiction_context(
 )
 async def get_consistency_issues(
     matter_id: str = Path(..., description="Matter UUID"),
-    status_filter: str | None = Query(None, alias="status", description="Filter by status"),
+    status_filter: str | None = Query(
+        None, alias="status", description="Filter by status"
+    ),
     severity: str | None = Query(None, description="Filter by severity"),
     limit: int = Query(50, ge=1, le=100, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),

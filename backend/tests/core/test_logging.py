@@ -94,16 +94,12 @@ class TestCorrelationMiddleware:
         # Verify endpoint received the correlation_id
         assert response.json()["correlation_id"] == corr_id
 
-    def test_uses_existing_correlation_id_from_header(
-        self, test_app: FastAPI
-    ) -> None:
+    def test_uses_existing_correlation_id_from_header(self, test_app: FastAPI) -> None:
         """Test that middleware uses X-Correlation-ID from request header."""
         client = TestClient(test_app)
         expected_id = "provided-correlation-id-12345"
 
-        response = client.get(
-            "/test", headers={CORRELATION_HEADER: expected_id}
-        )
+        response = client.get("/test", headers={CORRELATION_HEADER: expected_id})
 
         assert response.status_code == 200
         assert response.headers[CORRELATION_HEADER] == expected_id
@@ -116,17 +112,13 @@ class TestCorrelationMiddleware:
         client = TestClient(test_app)
         expected_id = "async-correlation-id-67890"
 
-        response = client.get(
-            "/test-async", headers={CORRELATION_HEADER: expected_id}
-        )
+        response = client.get("/test-async", headers={CORRELATION_HEADER: expected_id})
 
         assert response.status_code == 200
         # Correlation ID should still be available after async await
         assert response.json()["correlation_id"] == expected_id
 
-    def test_correlation_id_cleared_after_request(
-        self, test_app: FastAPI
-    ) -> None:
+    def test_correlation_id_cleared_after_request(self, test_app: FastAPI) -> None:
         """Test that correlation_id is cleared after request completes."""
         client = TestClient(test_app)
 
@@ -249,6 +241,7 @@ class TestAxiomProcessor:
 
             # Clear the global client
             from app.core import logging as logging_module
+
             logging_module._axiom_client = None
 
             # Mock axiom_py to raise on Client creation

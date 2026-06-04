@@ -62,7 +62,9 @@ class TableFormatter:
         if not table_data or len(table_data) < 2:
             return []
 
-        headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(table_data[0])]
+        headers = [
+            str(h) if h is not None else f"col_{i}" for i, h in enumerate(table_data[0])
+        ]
 
         result = []
         for row in table_data[1:]:

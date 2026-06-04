@@ -24,6 +24,7 @@ logger = structlog.get_logger(__name__)
 # Safety-net error callback (DPP-002 — P7/P8 wall)
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(
     name="app.workers.tasks.pipeline_chains.on_chain_error",
     bind=True,
@@ -108,8 +109,10 @@ def create_post_ocr_chain(
         extract_entities,
         validate_ocr,
     )
+
     try:
         from app.workers.tasks.table_extraction_tasks import extract_tables
+
         _has_extract_tables = True
     except ImportError:
         _has_extract_tables = False
@@ -135,10 +138,12 @@ def create_post_ocr_chain(
     ]
     if _has_extract_tables:
         steps.append(extract_tables.s())  # Gap 5: extract tables + create table chunks
-    steps.extend([
-        embed_chunks.s(),
-        extract_entities.s(),
-    ])
+    steps.extend(
+        [
+            embed_chunks.s(),
+            extract_entities.s(),
+        ]
+    )
 
     # DPP-002: Attach error callback so chain failures trigger centralized cleanup.
     # on_chain_error receives the failed task's ID plus the pipeline context.

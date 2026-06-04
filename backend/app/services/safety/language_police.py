@@ -180,7 +180,9 @@ class LanguagePolice:
 
         return self._client
 
-    async def police_output(self, text: str, matter_id: str | None = None) -> LanguagePolicingResult:
+    async def police_output(
+        self, text: str, matter_id: str | None = None
+    ) -> LanguagePolicingResult:
         """Apply full language policing pipeline.
 
         Story 8-3: AC #1-6, Task 6.3 - Complete sanitization.
@@ -226,7 +228,9 @@ class LanguagePolice:
 
         # Phase 2: LLM polish for subtle conclusions
         try:
-            llm_result = await self._apply_llm_polish(regex_result.sanitized_text, matter_id=matter_id)
+            llm_result = await self._apply_llm_polish(
+                regex_result.sanitized_text, matter_id=matter_id
+            )
 
             total_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -316,7 +320,8 @@ class LanguagePolice:
 
         # Call LLM with retry
         result, input_tokens, output_tokens = await self._call_llm_with_retry(
-            sanitized_input, matter_id=matter_id,
+            sanitized_input,
+            matter_id=matter_id,
         )
 
         # Calculate cost
@@ -359,7 +364,9 @@ class LanguagePolice:
         return sanitized, was_truncated
 
     async def _call_llm_with_retry(
-        self, text: str, matter_id: str | None = None,
+        self,
+        text: str,
+        matter_id: str | None = None,
     ) -> tuple[dict, int, int]:
         """Call GPT-4o-mini with retry logic.
 
@@ -384,7 +391,10 @@ class LanguagePolice:
                     self.client.chat.completions.create(
                         model=self._model_name,
                         messages=[
-                            {"role": "system", "content": SUBTLE_POLICING_SYSTEM_PROMPT},
+                            {
+                                "role": "system",
+                                "content": SUBTLE_POLICING_SYSTEM_PROMPT,
+                            },
                             {"role": "user", "content": user_prompt},
                         ],
                         response_format={"type": "json_object"},
@@ -395,10 +405,14 @@ class LanguagePolice:
 
                 # Extract token counts
                 input_tokens = response.usage.prompt_tokens if response.usage else 0
-                output_tokens = response.usage.completion_tokens if response.usage else 0
+                output_tokens = (
+                    response.usage.completion_tokens if response.usage else 0
+                )
                 cached_tokens = 0
                 if response.usage and response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
 
                 # Parse response
                 response_text = response.choices[0].message.content
@@ -410,7 +424,11 @@ class LanguagePolice:
                     operation="safety_language_policing",
                     matter_id=matter_id,
                 )
-                tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+                tracker.add_tokens(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_input_tokens=cached_tokens,
+                )
                 tracker.log_cost()
                 await persist_cost(tracker)
 
@@ -447,8 +465,16 @@ class LanguagePolice:
                 is_retryable = any(
                     indicator in error_str
                     for indicator in [
-                        "429", "rate", "quota", "500", "502", "503", "504",
-                        "timeout", "connection", "temporary"
+                        "429",
+                        "rate",
+                        "quota",
+                        "500",
+                        "502",
+                        "503",
+                        "504",
+                        "timeout",
+                        "connection",
+                        "temporary",
                     ]
                 )
 

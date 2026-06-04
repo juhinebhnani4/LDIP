@@ -146,7 +146,9 @@ accordance with the rules of the American Arbitration Association.
             # Most child words should appear in parent
             overlap = child_words & parent_words
             overlap_ratio = len(overlap) / len(child_words) if child_words else 0
-            assert overlap_ratio > 0.5, f"Child has low overlap with parent: {overlap_ratio}"
+            assert overlap_ratio > 0.5, (
+                f"Child has low overlap with parent: {overlap_ratio}"
+            )
 
 
 class TestTextSplitterIntegration:
@@ -166,13 +168,16 @@ class TestTextSplitterIntegration:
             chunk_overlap=10,
         )
 
-        text = """
+        text = (
+            """
         This is the first section of the document with important content.
 
         This is the second section that contains different information.
 
         The third section wraps up the document with conclusions.
-        """ * 10
+        """
+            * 10
+        )
 
         # First pass
         large_chunks = large_splitter.split_text(text)
@@ -259,7 +264,8 @@ class TestChunkingWithMockedDatabase:
     async def test_end_to_end_with_mock_db(self, mock_chunk_service: MagicMock) -> None:
         """Test chunking with mocked database save."""
         # Create document text
-        text = """
+        text = (
+            """
         LEGAL DOCUMENT
 
         This document establishes terms between parties.
@@ -273,7 +279,9 @@ class TestChunkingWithMockedDatabase:
         SECTION 2: OBLIGATIONS
 
         Each party agrees to fulfill their obligations.
-        """ * 5
+        """
+            * 5
+        )
 
         # Chunk the document
         chunker = ParentChildChunker(
@@ -343,7 +351,8 @@ class TestChunkingEdgeCases:
 
     def test_document_with_unicode(self) -> None:
         """Document with unicode should chunk correctly."""
-        text = """
+        text = (
+            """
         LEGAL DOCUMENT - 法律文件
 
         This Agreement (本协议) between parties.
@@ -353,7 +362,9 @@ class TestChunkingEdgeCases:
 
         Section 2: 义务 (Obligations)
         All parties agree 所有方同意.
-        """ * 10
+        """
+            * 10
+        )
 
         chunker = ParentChildChunker(
             parent_size=500,
@@ -572,7 +583,9 @@ class TestLayoutAwareChunkingIntegration:
         )
 
         text = "This text is ignored when blocks have text_content"
-        result = chunker.chunk_document("legal-doc-integration-test", text, layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", text, layout=legal_layout
+        )
 
         # Should produce chunks
         assert len(result.parent_chunks) >= 1
@@ -598,7 +611,9 @@ class TestLayoutAwareChunkingIntegration:
             min_size=50,
         )
 
-        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", "", layout=legal_layout
+        )
 
         # Combine all parent text
         combined_text = " ".join(p.content for p in result.parent_chunks)
@@ -618,7 +633,9 @@ class TestLayoutAwareChunkingIntegration:
             min_size=30,
         )
 
-        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", "", layout=legal_layout
+        )
 
         # Pages found in chunks
         pages_in_chunks = {p.page_number for p in result.parent_chunks if p.page_number}
@@ -638,7 +655,9 @@ class TestLayoutAwareChunkingIntegration:
             min_size=50,
         )
 
-        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", "", layout=legal_layout
+        )
 
         # Collect all block types from chunks
         all_block_types = set()
@@ -659,7 +678,9 @@ class TestLayoutAwareChunkingIntegration:
             min_size=50,
         )
 
-        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", "", layout=legal_layout
+        )
 
         combined_text = " ".join(p.content for p in result.parent_chunks)
 
@@ -707,7 +728,9 @@ class TestLayoutAwareChunkingIntegration:
         )
 
         # Should not raise any errors
-        result = chunker.chunk_document("legal-doc-integration-test", "", layout=legal_layout)
+        result = chunker.chunk_document(
+            "legal-doc-integration-test", "", layout=legal_layout
+        )
 
         # Should still produce chunks
         assert len(result.parent_chunks) >= 1

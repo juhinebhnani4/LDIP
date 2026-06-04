@@ -88,10 +88,16 @@ class ETAEstimate(BaseModel):
     """
 
     min_seconds: int = Field(..., description="Optimistic estimate", alias="minSeconds")
-    max_seconds: int = Field(..., description="Pessimistic estimate", alias="maxSeconds")
-    best_guess_seconds: int = Field(..., description="Most likely estimate", alias="bestGuessSeconds")
+    max_seconds: int = Field(
+        ..., description="Pessimistic estimate", alias="maxSeconds"
+    )
+    best_guess_seconds: int = Field(
+        ..., description="Most likely estimate", alias="bestGuessSeconds"
+    )
     confidence: str = Field(..., description="Confidence level: high, medium, low")
-    pending_pages: int = Field(default=0, description="Total pages pending", alias="pendingPages")
+    pending_pages: int = Field(
+        default=0, description="Total pages pending", alias="pendingPages"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -109,7 +115,9 @@ class JobQueueStats(BaseModel):
     stuck: int = 0  # Jobs stuck in PROCESSING for too long
     avg_processing_time_ms: int | None = None
     # Story 5.7: Processing ETA fields
-    eta: ETAEstimate | None = Field(default=None, description="Estimated completion time")
+    eta: ETAEstimate | None = Field(
+        default=None, description="Estimated completion time"
+    )
 
 
 class StuckJobInfo(BaseModel):
@@ -346,7 +354,11 @@ async def get_matter_job_stats(
             now = datetime.now(UTC)
             for job in jobs:
                 if job.updated_at:
-                    updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=UTC)
+                    updated = (
+                        job.updated_at
+                        if job.updated_at.tzinfo
+                        else job.updated_at.replace(tzinfo=UTC)
+                    )
                     age_minutes = (now - updated).total_seconds() / 60
                     if age_minutes > threshold_minutes:
                         stuck_count += 1
@@ -360,13 +372,17 @@ async def get_matter_job_stats(
             try:
                 # Get pending documents with page counts
                 doc_service = get_document_service()
-                pending_docs = doc_service.get_pending_documents_for_matter(access.matter_id)
+                pending_docs = doc_service.get_pending_documents_for_matter(
+                    access.matter_id
+                )
 
                 if pending_docs:
                     eta_calculator = get_eta_calculator()
                     eta_result = await eta_calculator.get_processing_eta(
                         matter_id=access.matter_id,
-                        pending_docs=[{"page_count": d.get("page_count", 1)} for d in pending_docs],
+                        pending_docs=[
+                            {"page_count": d.get("page_count", 1)} for d in pending_docs
+                        ],
                     )
                     eta_estimate = ETAEstimate(
                         minSeconds=eta_result.min_seconds,
@@ -435,6 +451,7 @@ async def get_stuck_jobs(
     from datetime import datetime
 
     from app.core.config import get_settings
+
     settings = get_settings()
 
     threshold = threshold_minutes or settings.job_stale_timeout_minutes
@@ -451,23 +468,29 @@ async def get_stuck_jobs(
 
         for job in jobs:
             if job.updated_at:
-                updated = job.updated_at if job.updated_at.tzinfo else job.updated_at.replace(tzinfo=UTC)
+                updated = (
+                    job.updated_at
+                    if job.updated_at.tzinfo
+                    else job.updated_at.replace(tzinfo=UTC)
+                )
                 age_minutes = (now - updated).total_seconds() / 60
                 if age_minutes > threshold:
                     recovery_attempts = 0
                     if job.metadata and isinstance(job.metadata, dict):
                         recovery_attempts = job.metadata.get("recovery_attempts", 0)
 
-                    stuck_jobs.append(StuckJobInfo(
-                        job_id=job.id,
-                        document_id=job.document_id,
-                        document_name=None,  # Frontend can look this up
-                        current_stage=job.current_stage,
-                        progress_pct=job.progress_pct,
-                        stuck_minutes=int(age_minutes),
-                        recovery_attempts=recovery_attempts,
-                        last_update=job.updated_at.isoformat(),
-                    ))
+                    stuck_jobs.append(
+                        StuckJobInfo(
+                            job_id=job.id,
+                            document_id=job.document_id,
+                            document_name=None,  # Frontend can look this up
+                            current_stage=job.current_stage,
+                            progress_pct=job.progress_pct,
+                            stuck_minutes=int(age_minutes),
+                            recovery_attempts=recovery_attempts,
+                            last_update=job.updated_at.isoformat(),
+                        )
+                    )
 
         return StuckJobsResponse(
             stuck_jobs=stuck_jobs,
@@ -702,7 +725,11 @@ async def reset_job(
         reset_count = metadata.get("user_reset_count", 0) + 1
         metadata["user_reset_count"] = reset_count
         metadata["last_reset_by"] = user.id
-        metadata["last_reset_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        metadata["last_reset_at"] = (
+            __import__("datetime")
+            .datetime.now(__import__("datetime").timezone.utc)
+            .isoformat()
+        )
         metadata["reset_from_stage"] = job.current_stage
 
         # Reset job to QUEUED
@@ -902,6 +929,7 @@ async def get_active_job_for_document(
 def _get_recovery_service() -> JobRecoveryService:
     """Get job recovery service instance."""
     from app.api.deps import get_supabase_service_client
+
     supabase = get_supabase_service_client()
     return get_job_recovery_service(supabase)
 
@@ -919,6 +947,7 @@ async def get_recovery_stats(
 ) -> RecoveryStatsResponse:
     """Get job recovery statistics and stale job information."""
     from app.core.config import get_settings
+
     settings = get_settings()
 
     # Find stale jobs

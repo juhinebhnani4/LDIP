@@ -299,14 +299,15 @@ class TestChunkServiceDeleteChunks:
         """Should delete child chunks before parents."""
         mock_client = MagicMock()
 
-
         def track_delete() -> MagicMock:
             mock_result = MagicMock()
             mock_result.data = [{"id": "deleted"}]
             return mock_result
 
         mock_client.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute = track_delete
-        mock_client.table.return_value.delete.return_value.eq.return_value.execute = track_delete
+        mock_client.table.return_value.delete.return_value.eq.return_value.execute = (
+            track_delete
+        )
 
         service = ChunkService(client=mock_client)
         await service.delete_chunks_for_document("doc-1")

@@ -182,10 +182,7 @@ def _generate_minimal_pdf(text_content: str) -> bytes:
     """
     # Encode text for PDF (escape special chars)
     safe_text = (
-        text_content
-        .replace("\\", "\\\\")
-        .replace("(", "\\(")
-        .replace(")", "\\)")
+        text_content.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
     )
 
     # Split into lines and create PDF text commands
@@ -210,15 +207,11 @@ def _generate_minimal_pdf(text_content: str) -> bytes:
 
     # Object 1: Catalog
     offsets.append(len(b"".join(pdf_parts)))
-    pdf_parts.append(
-        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-    )
+    pdf_parts.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
 
     # Object 2: Pages
     offsets.append(len(b"".join(pdf_parts)))
-    pdf_parts.append(
-        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
-    )
+    pdf_parts.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
 
     # Object 3: Page
     offsets.append(len(b"".join(pdf_parts)))
@@ -231,17 +224,14 @@ def _generate_minimal_pdf(text_content: str) -> bytes:
     # Object 4: Content stream
     offsets.append(len(b"".join(pdf_parts)))
     stream_length = len(stream_bytes)
-    pdf_parts.append(
-        f"4 0 obj\n<< /Length {stream_length} >>\nstream\n".encode()
-    )
+    pdf_parts.append(f"4 0 obj\n<< /Length {stream_length} >>\nstream\n".encode())
     pdf_parts.append(stream_bytes)
     pdf_parts.append(b"\nendstream\nendobj\n")
 
     # Object 5: Font
     offsets.append(len(b"".join(pdf_parts)))
     pdf_parts.append(
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 "
-        b"/BaseFont /Helvetica >>\nendobj\n"
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"
     )
 
     # Cross-reference table
@@ -297,7 +287,8 @@ async def import_sample_case(
         .execute()
     )
     existing_sample = [
-        row for row in (ma_result.data or [])
+        row
+        for row in (ma_result.data or [])
         if row.get("matters")
         and (row["matters"].get("title") or "").find("Sample Case") >= 0
         and not row["matters"].get("deleted_at")
@@ -420,7 +411,9 @@ async def import_sample_case(
     except Exception as e:
         # Cleanup on failure (matter_attorneys CASCADE when matter deleted; delete matter last)
         try:
-            supabase.table("matter_attorneys").delete().eq("matter_id", matter_id).execute()
+            supabase.table("matter_attorneys").delete().eq(
+                "matter_id", matter_id
+            ).execute()
             supabase.table("matters").delete().eq("id", matter_id).execute()
         except Exception:
             pass
@@ -457,7 +450,8 @@ async def check_sample_exists(
         .execute()
     )
     sample_rows = [
-        row for row in (ma_result.data or [])
+        row
+        for row in (ma_result.data or [])
         if row.get("matters")
         and (row["matters"].get("title") or "").find("Sample Case") >= 0
         and not row["matters"].get("deleted_at")

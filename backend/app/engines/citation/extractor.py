@@ -60,8 +60,12 @@ logger = structlog.get_logger(__name__)
 MAX_RETRIES: Final[int] = 3
 INITIAL_RETRY_DELAY: Final[float] = 1.0
 MAX_RETRY_DELAY: Final[float] = 30.0
-MAX_TEXT_LENGTH: Final[int] = 5000  # Max characters per extraction chunk (reduced from 30000 to avoid Gemini output truncation)
-CHUNK_OVERLAP: Final[int] = 500  # Overlap between chunks to avoid missing citations at boundaries
+MAX_TEXT_LENGTH: Final[int] = (
+    5000  # Max characters per extraction chunk (reduced from 30000 to avoid Gemini output truncation)
+)
+CHUNK_OVERLAP: Final[int] = (
+    500  # Overlap between chunks to avoid missing citations at boundaries
+)
 
 # Regex patterns for common citation formats
 CITATION_PATTERNS: Final[list[re.Pattern]] = [
@@ -300,7 +304,9 @@ class CitationExtractor(ReasoningCaptureMixin):
             all_regex_citations.extend(regex_citations)
 
             # Step 2: Extract with Gemini (comprehensive)
-            gemini_citations = await self._extract_with_gemini(chunk_text, document_id, matter_id=matter_id)
+            gemini_citations = await self._extract_with_gemini(
+                chunk_text, document_id, matter_id=matter_id
+            )
             all_gemini_citations.extend(gemini_citations)
 
             if total_chunks > 1:
@@ -450,10 +456,14 @@ class CitationExtractor(ReasoningCaptureMixin):
         for chunk in chunks:
             chunk_id = chunk["id"]
             content = chunk.get("content", "")
-            regex_by_chunk[chunk_id] = self._extract_with_regex(content) if content else []
+            regex_by_chunk[chunk_id] = (
+                self._extract_with_regex(content) if content else []
+            )
 
         # Step 2: Gemini batch extraction (single LLM call for all chunks)
-        gemini_by_chunk: dict[str, list[ExtractedCitation]] = {c["id"]: [] for c in chunks}
+        gemini_by_chunk: dict[str, list[ExtractedCitation]] = {
+            c["id"]: [] for c in chunks
+        }
 
         prompt = CITATION_EXTRACTION_PROMPT.format(text=combined_text)
 
@@ -480,7 +490,9 @@ class CitationExtractor(ReasoningCaptureMixin):
 
             input_tokens = estimate_tokens(prompt)
             output_tokens = estimate_tokens(response.text) if response.text else 0
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             cost_tracker.log_cost()
             persist_cost_sync(cost_tracker)
 
@@ -519,14 +531,16 @@ class CitationExtractor(ReasoningCaptureMixin):
             merged = self._merge_citations(regex_cites, gemini_cites)
             unique_acts = self._get_unique_acts(merged)
 
-            results.append(CitationExtractionResult(
-                citations=merged,
-                unique_acts=unique_acts,
-                source_document_id=document_id,
-                source_chunk_id=chunk_id,
-                page_number=chunk.get("page_number"),
-                extraction_timestamp=datetime.now(UTC),
-            ))
+            results.append(
+                CitationExtractionResult(
+                    citations=merged,
+                    unique_acts=unique_acts,
+                    source_document_id=document_id,
+                    source_chunk_id=chunk_id,
+                    page_number=chunk.get("page_number"),
+                    extraction_timestamp=datetime.now(UTC),
+                )
+            )
 
         processing_time = int((time.time() - start_time) * 1000)
         total_citations = sum(len(r.citations) for r in results)
@@ -634,15 +648,17 @@ class CitationExtractor(ReasoningCaptureMixin):
                 else:
                     act_name = normalize_act_name(act_name)
 
-                citations.append(ExtractedCitation(
-                    act_name=act_name,
-                    section=section,
-                    subsection=item.get("subsection"),
-                    clause=item.get("clause"),
-                    raw_text=item.get("raw_text", ""),
-                    quoted_text=item.get("quoted_text"),
-                    confidence=float(item.get("confidence", 80)),
-                ))
+                citations.append(
+                    ExtractedCitation(
+                        act_name=act_name,
+                        section=section,
+                        subsection=item.get("subsection"),
+                        clause=item.get("clause"),
+                        raw_text=item.get("raw_text", ""),
+                        quoted_text=item.get("quoted_text"),
+                        confidence=float(item.get("confidence", 80)),
+                    )
+                )
             except Exception as e:
                 logger.debug("citation_batch_item_parse_error", error=str(e))
                 continue
@@ -757,7 +773,9 @@ class CitationExtractor(ReasoningCaptureMixin):
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)
                 output_tokens = estimate_tokens(response.text) if response.text else 0
-                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                cost_tracker.add_tokens(
+                    input_tokens=input_tokens, output_tokens=output_tokens
+                )
                 cost_tracker.log_cost()
                 await persist_cost(cost_tracker)
 
@@ -861,7 +879,9 @@ class CitationExtractor(ReasoningCaptureMixin):
                 # Estimate tokens for Gemini (doesn't expose usage directly)
                 input_tokens = estimate_tokens(prompt)
                 output_tokens = estimate_tokens(response.text) if response.text else 0
-                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+                cost_tracker.add_tokens(
+                    input_tokens=input_tokens, output_tokens=output_tokens
+                )
                 cost_tracker.log_cost()
                 persist_cost_sync(cost_tracker)
 

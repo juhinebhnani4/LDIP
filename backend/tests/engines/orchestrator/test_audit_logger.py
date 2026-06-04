@@ -538,9 +538,7 @@ class TestLLMCostCollection:
         )
 
         assert len(costs) >= 1
-        intent_cost = next(
-            (c for c in costs if c.purpose == "intent_analysis"), None
-        )
+        intent_cost = next((c for c in costs if c.purpose == "intent_analysis"), None)
         assert intent_cost is not None
         assert intent_cost.model_name == "gpt-3.5-turbo"
         assert intent_cost.input_tokens == 50
@@ -556,9 +554,7 @@ class TestLLMCostCollection:
         )
 
         # No intent cost because fast_path_used=True and llm_call_made=False
-        intent_cost = next(
-            (c for c in costs if c.purpose == "intent_analysis"), None
-        )
+        intent_cost = next((c for c in costs if c.purpose == "intent_analysis"), None)
         assert intent_cost is None
 
     def test_collect_engine_llm_cost(
@@ -673,11 +669,7 @@ class TestSourceReferenceExtraction:
 
     def test_extract_source_refs_limits_to_three(self, audit_logger):
         """Should limit sources list to 3 entries."""
-        data = {
-            "sources": [
-                {"document_id": f"doc-{i}"} for i in range(10)
-            ]
-        }
+        data = {"sources": [{"document_id": f"doc-{i}"} for i in range(10)]}
 
         refs = audit_logger._extract_source_refs(data, EngineType.TIMELINE)
 

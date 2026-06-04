@@ -272,7 +272,9 @@ class LayoutExtractor:
                 processing_time_ms=processing_time,
             )
 
-    def _process_text_item(self, item: object, reading_order: int) -> LayoutBlock | None:
+    def _process_text_item(
+        self, item: object, reading_order: int
+    ) -> LayoutBlock | None:
         """Process a text item (paragraph, heading) into LayoutBlock.
 
         Issue #1 fix: Try multiple attributes to extract text content.
@@ -311,7 +313,9 @@ class LayoutExtractor:
             logger.debug("text_item_processing_failed", error=str(e))
             return None
 
-    def _process_table_item(self, item: object, reading_order: int) -> LayoutBlock | None:
+    def _process_table_item(
+        self, item: object, reading_order: int
+    ) -> LayoutBlock | None:
         """Process a table item into LayoutBlock.
 
         Issue #1 fix: Extract table markdown content when available.
@@ -336,7 +340,9 @@ class LayoutExtractor:
             logger.debug("table_item_processing_failed", error=str(e))
             return None
 
-    def _process_picture_item(self, item: object, reading_order: int) -> LayoutBlock | None:
+    def _process_picture_item(
+        self, item: object, reading_order: int
+    ) -> LayoutBlock | None:
         """Process a picture/figure item into LayoutBlock."""
         try:
             page_number, bbox = self._extract_provenance(item)
@@ -354,7 +360,9 @@ class LayoutExtractor:
             logger.debug("picture_item_processing_failed", error=str(e))
             return None
 
-    def _process_furniture_item(self, item: object, reading_order: int) -> LayoutBlock | None:
+    def _process_furniture_item(
+        self, item: object, reading_order: int
+    ) -> LayoutBlock | None:
         """Process a furniture item (header, footer) into LayoutBlock."""
         try:
             item_type = self._get_item_type(item)

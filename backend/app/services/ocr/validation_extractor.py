@@ -66,8 +66,7 @@ class ValidationExtractor:
         """
         if self.client is None:
             raise ValidationExtractorError(
-                message="Database client not configured",
-                code="DATABASE_NOT_CONFIGURED"
+                message="Database client not configured", code="DATABASE_NOT_CONFIGURED"
             )
 
         logger.info(
@@ -79,17 +78,15 @@ class ValidationExtractor:
 
         try:
             # Fetch all bounding boxes for the document, ordered by page and position
-            result = self.client.table("bounding_boxes").select(
-                "id, page_number, x, y, width, height, text, confidence"
-            ).eq(
-                "document_id", document_id
-            ).order(
-                "page_number"
-            ).order(
-                "y"
-            ).order(
-                "x"
-            ).execute()
+            result = (
+                self.client.table("bounding_boxes")
+                .select("id, page_number, x, y, width, height, text, confidence")
+                .eq("document_id", document_id)
+                .order("page_number")
+                .order("y")
+                .order("x")
+                .execute()
+            )
 
             if not result.data:
                 logger.info(
@@ -167,7 +164,7 @@ class ValidationExtractor:
             )
             raise ValidationExtractorError(
                 message=f"Failed to extract low-confidence words: {e!s}",
-                code="EXTRACTION_FAILED"
+                code="EXTRACTION_FAILED",
             ) from e
 
     def _extract_context(

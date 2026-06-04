@@ -21,7 +21,9 @@ logger = structlog.get_logger(__name__)
 
 MIN_BATCH_SIZE = 1
 MAX_BATCH_SIZE = 200
-DEFAULT_BATCH_SIZE = 5  # Small default to respect free-tier rate limits (3 RPM, 10K TPM)
+DEFAULT_BATCH_SIZE = (
+    5  # Small default to respect free-tier rate limits (3 RPM, 10K TPM)
+)
 RATE_LIMIT_DELAY = 25  # 25 seconds between batches (free tier = 3 RPM)
 RATE_LIMIT_RETRY_DELAY = 60  # Wait 60s on rate limit error before retrying
 MAX_RATE_LIMIT_RETRIES = 3  # Max retries per batch on rate limit
@@ -59,7 +61,11 @@ def batch_embed_voyage(
     Returns:
         Dict with migration results.
     """
-    if not isinstance(batch_size, int) or batch_size < MIN_BATCH_SIZE or batch_size > MAX_BATCH_SIZE:
+    if (
+        not isinstance(batch_size, int)
+        or batch_size < MIN_BATCH_SIZE
+        or batch_size > MAX_BATCH_SIZE
+    ):
         return {
             "status": "validation_error",
             "error": f"batch_size must be between {MIN_BATCH_SIZE} and {MAX_BATCH_SIZE}",
@@ -111,9 +117,12 @@ async def _run_migration(
 
     while True:
         # Fetch batch of chunks needing Voyage embeddings
-        query = supabase.table("chunks").select(
-            "id, content"
-        ).is_("embedding_voyage", "null").not_.is_("embedding", "null")
+        query = (
+            supabase.table("chunks")
+            .select("id, content")
+            .is_("embedding_voyage", "null")
+            .not_.is_("embedding", "null")
+        )
 
         if matter_id:
             query = query.eq("matter_id", matter_id)
@@ -170,9 +179,9 @@ async def _run_migration(
         # Update each chunk with its Voyage embedding
         for chunk, embedding in zip(chunks, embeddings, strict=False):
             try:
-                supabase.table("chunks").update(
-                    {"embedding_voyage": embedding}
-                ).eq("id", chunk["id"]).execute()
+                supabase.table("chunks").update({"embedding_voyage": embedding}).eq(
+                    "id", chunk["id"]
+                ).execute()
                 processed += 1
             except Exception as e:
                 logger.warning(

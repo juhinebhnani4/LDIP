@@ -47,8 +47,8 @@ class ExecutiveSummaryPDFGenerator:
     # Content truncation thresholds (in order of truncation priority)
     TRUNCATION_PRIORITIES = [
         ("recommended_actions", 3),  # Reduce to 3 first
-        ("critical_dates", 5),       # Then reduce dates to 5
-        ("verified_issues", 5),      # Then reduce issues to 5
+        ("critical_dates", 5),  # Then reduce dates to 5
+        ("verified_issues", 5),  # Then reduce issues to 5
     ]
 
     def __init__(self, frontend_url: str | None = None) -> None:
@@ -204,7 +204,9 @@ class ExecutiveSummaryPDFGenerator:
         for date_item in dates:
             date_str = str(date_item.get("date", "Unknown"))
             event_type = str(date_item.get("type", "event")).upper()
-            description = truncate_text(str(date_item.get("description", "")), 50, "...")
+            description = truncate_text(
+                str(date_item.get("description", "")), 50, "..."
+            )
 
             lines.append(f"- [{date_str}] {event_type}: {description}")
 
@@ -317,11 +319,17 @@ class ExecutiveSummaryPDFGenerator:
                 break
 
             if section == "recommended_actions":
-                truncated_content.recommended_actions = truncated_content.recommended_actions[:limit]
+                truncated_content.recommended_actions = (
+                    truncated_content.recommended_actions[:limit]
+                )
             elif section == "critical_dates":
-                truncated_content.critical_dates = truncated_content.critical_dates[:limit]
+                truncated_content.critical_dates = truncated_content.critical_dates[
+                    :limit
+                ]
             elif section == "verified_issues":
-                truncated_content.verified_issues = truncated_content.verified_issues[:limit]
+                truncated_content.verified_issues = truncated_content.verified_issues[
+                    :limit
+                ]
 
             # Rebuild lines (Issue #6 fix: use timezone-aware datetime)
             lines = self._build_content_lines(
@@ -388,7 +396,9 @@ class ExecutiveSummaryPDFGenerator:
 
         # Object 2: Pages
         page_refs = " ".join([f"{i + 3} 0 R" for i in range(pages_needed)])
-        objects.append(f"2 0 obj\n<< /Type /Pages /Kids [{page_refs}] /Count {pages_needed} >>\nendobj\n")
+        objects.append(
+            f"2 0 obj\n<< /Type /Pages /Kids [{page_refs}] /Count {pages_needed} >>\nendobj\n"
+        )
 
         # Create pages
         content_obj_start = 3 + pages_needed
@@ -438,7 +448,9 @@ class ExecutiveSummaryPDFGenerator:
         pdf_parts.extend(objects)
 
         # XRef table
-        xref_start = sum(len(o.encode("latin-1")) for o in objects) + len(header.encode("latin-1"))
+        xref_start = sum(len(o.encode("latin-1")) for o in objects) + len(
+            header.encode("latin-1")
+        )
 
         xref_lines = [f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n"]
         offset = len(header.encode("latin-1"))

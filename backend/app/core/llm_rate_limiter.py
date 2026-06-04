@@ -240,7 +240,9 @@ def get_openai_rate_limiter() -> RateLimiter:
 
 def with_rate_limit(
     provider: LLMProvider,
-) -> Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T]]]:
+) -> Callable[
+    [Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T]]
+]:
     """Decorator to apply rate limiting to an async function.
 
     Args:
@@ -381,7 +383,9 @@ class SyncRateLimiterRegistry:
         with self._lock:
             if provider not in self._limiters:
                 config = self._get_config(provider)
-                self._limiters[provider] = SyncRateLimiter(provider=provider, config=config)
+                self._limiters[provider] = SyncRateLimiter(
+                    provider=provider, config=config
+                )
                 logger.info(
                     "sync_llm_rate_limiter_created",
                     provider=provider.value,
@@ -455,6 +459,7 @@ class DistributedRateLimiter:
     def _get_redis_client(self):
         """Get Redis client for distributed coordination."""
         from app.services.distributed_lock import get_sync_redis_client
+
         return get_sync_redis_client()
 
     def acquire(self, timeout: float = 30.0) -> bool:
@@ -505,8 +510,12 @@ class DistributedRateLimiter:
                     oldest = redis_client.zrange(self._redis_key, 0, 0, withscores=True)
                     if oldest:
                         oldest_time = oldest[0][1]
-                        wait_time = max(0.1, oldest_time + window_seconds - current_time)
-                        wait_time = min(wait_time, 2.0)  # Cap wait to 2 seconds per iteration
+                        wait_time = max(
+                            0.1, oldest_time + window_seconds - current_time
+                        )
+                        wait_time = min(
+                            wait_time, 2.0
+                        )  # Cap wait to 2 seconds per iteration
 
                         logger.debug(
                             "distributed_rate_limit_waiting",
@@ -623,11 +632,15 @@ class DistributedRateLimiterRegistry:
             import threading
 
             cls._instance = super().__new__(cls)
-            cls._instance._limiters: dict[LLMProvider, DistributedRateLimiter | InProcessRateLimiter] = {}
+            cls._instance._limiters: dict[
+                LLMProvider, DistributedRateLimiter | InProcessRateLimiter
+            ] = {}
             cls._lock = threading.Lock()
         return cls._instance
 
-    def get(self, provider: LLMProvider) -> DistributedRateLimiter | InProcessRateLimiter:
+    def get(
+        self, provider: LLMProvider
+    ) -> DistributedRateLimiter | InProcessRateLimiter:
         """Get or create rate limiter for a provider.
 
         Uses in-process limiter when worker_count <= 1 (saves ~3,000 Redis ops/doc).
@@ -661,7 +674,9 @@ class DistributedRateLimiterRegistry:
 _distributed_registry = DistributedRateLimiterRegistry()
 
 
-def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimiter | InProcessRateLimiter:
+def get_distributed_rate_limiter(
+    provider: LLMProvider,
+) -> DistributedRateLimiter | InProcessRateLimiter:
     """Get rate limiter for a provider (distributed or in-process).
 
     Automatically selects in-process mode when WORKER_COUNT<=1
@@ -678,7 +693,9 @@ def get_distributed_rate_limiter(provider: LLMProvider) -> DistributedRateLimite
     return _distributed_registry.get(provider)
 
 
-def get_gemini_distributed_rate_limiter() -> DistributedRateLimiter | InProcessRateLimiter:
+def get_gemini_distributed_rate_limiter() -> (
+    DistributedRateLimiter | InProcessRateLimiter
+):
     """Get rate limiter for Gemini API calls.
 
     Use this in Celery tasks to coordinate rate limiting across workers.

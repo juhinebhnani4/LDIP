@@ -78,7 +78,11 @@ def _validate_migration_params(
             }
 
     # Validate batch_size is within acceptable range
-    if not isinstance(batch_size, int) or batch_size < MIN_BATCH_SIZE or batch_size > MAX_BATCH_SIZE:
+    if (
+        not isinstance(batch_size, int)
+        or batch_size < MIN_BATCH_SIZE
+        or batch_size > MAX_BATCH_SIZE
+    ):
         return {
             "status": "validation_error",
             "error": f"batch_size must be an integer between {MIN_BATCH_SIZE} and {MAX_BATCH_SIZE}",
@@ -172,7 +176,8 @@ def migrate_embeddings(
 
         config = MigrationConfig(
             source_model_version=source_model_version,
-            target_model_version=target_model_version or get_current_embedding_model_version(),
+            target_model_version=target_model_version
+            or get_current_embedding_model_version(),
             matter_id=matter_id,
             batch_size=batch_size,
             resume_from_chunk_id=resume_from_chunk_id,

@@ -76,10 +76,16 @@ class TestAnomalyDetectionPipelineIntegration:
         # Create test events with known anomalies
         events = [
             # Sequence violation: hearing before filing
-            create_timeline_event("e1", date(2024, 1, 15), EventType.HEARING, "Hearing held"),
-            create_timeline_event("e2", date(2024, 3, 20), EventType.FILING, "Application filed"),
+            create_timeline_event(
+                "e1", date(2024, 1, 15), EventType.HEARING, "Hearing held"
+            ),
+            create_timeline_event(
+                "e2", date(2024, 3, 20), EventType.FILING, "Application filed"
+            ),
             # Large gap
-            create_timeline_event("e3", date(2025, 6, 1), EventType.ORDER, "Order passed"),
+            create_timeline_event(
+                "e3", date(2025, 6, 1), EventType.ORDER, "Order passed"
+            ),
         ]
 
         # Step 1: Detect anomalies
@@ -102,7 +108,9 @@ class TestAnomalyDetectionPipelineIntegration:
         mock_insert_response.data = [
             {"id": f"anomaly-{i}"} for i in range(len(anomalies))
         ]
-        mock_client.table.return_value.insert.return_value.execute.return_value = mock_insert_response
+        mock_client.table.return_value.insert.return_value.execute.return_value = (
+            mock_insert_response
+        )
         anomaly_service._client = mock_client
 
         # Save anomalies
@@ -118,9 +126,13 @@ class TestAnomalyDetectionPipelineIntegration:
 
         # Create events in correct order with normal timing
         events = [
-            create_timeline_event("e1", date(2024, 1, 10), EventType.NOTICE, "Notice sent"),
+            create_timeline_event(
+                "e1", date(2024, 1, 10), EventType.NOTICE, "Notice sent"
+            ),
             create_timeline_event("e2", date(2024, 2, 15), EventType.FILING, "Filed"),
-            create_timeline_event("e3", date(2024, 3, 20), EventType.HEARING, "Hearing"),
+            create_timeline_event(
+                "e3", date(2024, 3, 20), EventType.HEARING, "Hearing"
+            ),
             create_timeline_event("e4", date(2024, 4, 5), EventType.ORDER, "Order"),
         ]
 
@@ -140,8 +152,18 @@ class TestAnomalyDetectionPipelineIntegration:
 
         # Create events with potential duplicates
         events = [
-            create_timeline_event("e1", date(2024, 1, 15), EventType.FILING, "Application filed in DRT Mumbai"),
-            create_timeline_event("e2", date(2024, 1, 15), EventType.FILING, "Application filed in DRT Mumbai court"),
+            create_timeline_event(
+                "e1",
+                date(2024, 1, 15),
+                EventType.FILING,
+                "Application filed in DRT Mumbai",
+            ),
+            create_timeline_event(
+                "e2",
+                date(2024, 1, 15),
+                EventType.FILING,
+                "Application filed in DRT Mumbai court",
+            ),
         ]
 
         anomalies = await detector.detect_anomalies(
@@ -151,7 +173,9 @@ class TestAnomalyDetectionPipelineIntegration:
         )
 
         # Should detect duplicate
-        duplicate_anomalies = [a for a in anomalies if a.anomaly_type == AnomalyType.DUPLICATE]
+        duplicate_anomalies = [
+            a for a in anomalies if a.anomaly_type == AnomalyType.DUPLICATE
+        ]
         assert len(duplicate_anomalies) >= 1
 
 
@@ -226,9 +250,24 @@ class TestAnomalyRetrievalIntegration:
         # Mock database response for summary
         mock_response = MagicMock()
         mock_response.data = [
-            {"severity": "high", "anomaly_type": "gap", "verified": False, "dismissed": False},
-            {"severity": "medium", "anomaly_type": "sequence_violation", "verified": False, "dismissed": False},
-            {"severity": "low", "anomaly_type": "duplicate", "verified": True, "dismissed": False},
+            {
+                "severity": "high",
+                "anomaly_type": "gap",
+                "verified": False,
+                "dismissed": False,
+            },
+            {
+                "severity": "medium",
+                "anomaly_type": "sequence_violation",
+                "verified": False,
+                "dismissed": False,
+            },
+            {
+                "severity": "low",
+                "anomaly_type": "duplicate",
+                "verified": True,
+                "dismissed": False,
+            },
         ]
 
         mock_query = MagicMock()
@@ -380,7 +419,9 @@ class TestCacheInvalidationIntegration:
         detector = TimelineAnomalyDetector()
 
         events = [
-            create_timeline_event("e1", date(2024, 1, 15), EventType.HEARING, "Hearing"),
+            create_timeline_event(
+                "e1", date(2024, 1, 15), EventType.HEARING, "Hearing"
+            ),
             create_timeline_event("e2", date(2024, 3, 20), EventType.FILING, "Filing"),
         ]
 

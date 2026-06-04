@@ -194,7 +194,9 @@ class TestSerialization:
         # EventType is a str enum, so it serializes to its string value directly
         event_data = data["events"][0]
         # Verify the event type is serialized (either as marker or string value)
-        assert event_data["event_type"] == "filing" or "__event_type__" in str(event_data["event_type"])
+        assert event_data["event_type"] == "filing" or "__event_type__" in str(
+            event_data["event_type"]
+        )
 
 
 # =============================================================================

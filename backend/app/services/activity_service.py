@@ -27,9 +27,7 @@ logger = structlog.get_logger(__name__)
 
 # Map activity types to notification types and titles
 # matter_opened is NOT mapped - too noisy for notifications (AC #6)
-ACTIVITY_TO_NOTIFICATION: dict[
-    ActivityTypeEnum, tuple[NotificationTypeEnum, str]
-] = {
+ACTIVITY_TO_NOTIFICATION: dict[ActivityTypeEnum, tuple[NotificationTypeEnum, str]] = {
     ActivityTypeEnum.PROCESSING_COMPLETE: (
         NotificationTypeEnum.SUCCESS,
         "Processing Complete",

@@ -88,18 +88,28 @@ class MatterMember(BaseModel):
 
     id: str = Field(..., description="Membership record ID")
     user_id: str = Field(..., alias="userId", description="User ID of the member")
-    email: str | None = Field(None, description="User email (populated from users table)")
-    full_name: str | None = Field(None, alias="fullName", description="User's full name")
+    email: str | None = Field(
+        None, description="User email (populated from users table)"
+    )
+    full_name: str | None = Field(
+        None, alias="fullName", description="User's full name"
+    )
     role: MatterRole = Field(..., description="Role on this matter")
-    invited_by: str | None = Field(None, alias="invitedBy", description="User ID who invited this member")
-    invited_at: datetime | None = Field(None, alias="invitedAt", description="When the member was invited")
+    invited_by: str | None = Field(
+        None, alias="invitedBy", description="User ID who invited this member"
+    )
+    invited_at: datetime | None = Field(
+        None, alias="invitedAt", description="When the member was invited"
+    )
 
 
 class MatterBase(BaseModel):
     """Base matter properties shared across models."""
 
     title: str = Field(..., min_length=1, max_length=255, description="Matter title")
-    description: str | None = Field(None, max_length=2000, description="Matter description")
+    description: str | None = Field(
+        None, max_length=2000, description="Matter description"
+    )
 
 
 class MatterCreate(MatterBase):
@@ -130,8 +140,12 @@ class MatterUpdate(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    title: str | None = Field(None, min_length=1, max_length=255, description="Matter title")
-    description: str | None = Field(None, max_length=2000, description="Matter description")
+    title: str | None = Field(
+        None, min_length=1, max_length=255, description="Matter title"
+    )
+    description: str | None = Field(
+        None, max_length=2000, description="Matter description"
+    )
     status: MatterStatus | None = Field(None, description="Matter status")
     verification_mode: VerificationMode | None = Field(
         None,
@@ -158,7 +172,9 @@ class Matter(MatterBase):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., description="Matter UUID")
-    status: MatterStatus = Field(default=MatterStatus.ACTIVE, description="Matter status")
+    status: MatterStatus = Field(
+        default=MatterStatus.ACTIVE, description="Matter status"
+    )
     verification_mode: VerificationMode = Field(
         default=VerificationMode.ADVISORY,
         alias="verificationMode",
@@ -184,18 +200,36 @@ class Matter(MatterBase):
         alias="causeTitle",
         description="Extracted party listing (cause title) from the application document",
     )
-    created_at: datetime = Field(..., alias="createdAt", description="When the matter was created")
-    updated_at: datetime = Field(..., alias="updatedAt", description="When the matter was last updated")
-    deleted_at: datetime | None = Field(None, alias="deletedAt", description="Soft delete timestamp (NULL = not deleted)")
-    last_opened_at: datetime | None = Field(None, alias="lastOpenedAt", description="When the matter was last opened by any user")
-    role: MatterRole | None = Field(None, description="Current user's role on this matter")
-    member_count: int = Field(default=0, alias="memberCount", description="Number of members on this matter")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="When the matter was created"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="When the matter was last updated"
+    )
+    deleted_at: datetime | None = Field(
+        None,
+        alias="deletedAt",
+        description="Soft delete timestamp (NULL = not deleted)",
+    )
+    last_opened_at: datetime | None = Field(
+        None,
+        alias="lastOpenedAt",
+        description="When the matter was last opened by any user",
+    )
+    role: MatterRole | None = Field(
+        None, description="Current user's role on this matter"
+    )
+    member_count: int = Field(
+        default=0, alias="memberCount", description="Number of members on this matter"
+    )
 
 
 class MatterWithMembers(Matter):
     """Matter model including list of members."""
 
-    members: list[MatterMember] = Field(default_factory=list, description="List of matter members")
+    members: list[MatterMember] = Field(
+        default_factory=list, description="List of matter members"
+    )
 
 
 class MatterInvite(BaseModel):
@@ -232,7 +266,9 @@ class MatterListMeta(BaseModel):
     total: int = Field(..., description="Total number of matters")
     page: int = Field(default=1, description="Current page number")
     per_page: int = Field(default=20, alias="perPage", description="Items per page")
-    total_pages: int = Field(..., alias="totalPages", description="Total number of pages")
+    total_pages: int = Field(
+        ..., alias="totalPages", description="Total number of pages"
+    )
 
 
 class MatterListResponse(BaseModel):

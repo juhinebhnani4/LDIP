@@ -81,7 +81,9 @@ class CitationBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     act_name: str = Field(..., alias="actName", description="Normalized Act name")
-    section_number: str = Field(..., alias="sectionNumber", description="Section number (e.g., '138', '13(2)')")
+    section_number: str = Field(
+        ..., alias="sectionNumber", description="Section number (e.g., '138', '13(2)')"
+    )
     subsection: str | None = Field(
         None, description="Subsection if present (e.g., '(1)')"
     )
@@ -91,20 +93,34 @@ class CitationBase(BaseModel):
 class CitationCreate(CitationBase):
     """Model for creating a citation record."""
 
-    matter_id: str = Field(..., alias="matterId", description="Matter UUID for isolation")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
-    source_page: int = Field(..., ge=1, alias="sourcePage", description="Page number where citation appears")
+    matter_id: str = Field(
+        ..., alias="matterId", description="Matter UUID for isolation"
+    )
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
+    source_page: int = Field(
+        ..., ge=1, alias="sourcePage", description="Page number where citation appears"
+    )
     source_bbox_ids: list[str] = Field(
-        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+        default_factory=list,
+        alias="sourceBboxIds",
+        description="Bounding box UUIDs for highlighting",
     )
     act_name_original: str | None = Field(
-        None, alias="actNameOriginal", description="Original Act name before normalization"
+        None,
+        alias="actNameOriginal",
+        description="Original Act name before normalization",
     )
     raw_citation_text: str = Field(
-        ..., alias="rawCitationText", description="Exact citation text extracted from document"
+        ...,
+        alias="rawCitationText",
+        description="Exact citation text extracted from document",
     )
     quoted_text: str | None = Field(
-        None, alias="quotedText", description="Any text quoted from the Act in the document"
+        None,
+        alias="quotedText",
+        description="Any text quoted from the Act in the document",
     )
     confidence: float = Field(
         default=0.0, ge=0.0, le=100.0, description="Extraction confidence (0-100)"
@@ -121,7 +137,9 @@ class CitationUpdate(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    verification_status: VerificationStatus | None = Field(None, alias="verificationStatus")
+    verification_status: VerificationStatus | None = Field(
+        None, alias="verificationStatus"
+    )
     target_act_document_id: str | None = Field(None, alias="targetActDocumentId")
     target_page: int | None = Field(None, alias="targetPage")
     target_bbox_ids: list[str] | None = Field(None, alias="targetBboxIds")
@@ -133,35 +151,61 @@ class Citation(CitationBase):
 
     id: str = Field(..., description="Citation UUID")
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
-    source_page: int = Field(..., alias="sourcePage", description="Page number in source document")
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
+    source_page: int = Field(
+        ..., alias="sourcePage", description="Page number in source document"
+    )
     source_bbox_ids: list[str] = Field(
         default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs"
     )
     act_name_original: str | None = Field(
-        None, alias="actNameOriginal", description="Original Act name before normalization"
+        None,
+        alias="actNameOriginal",
+        description="Original Act name before normalization",
     )
-    raw_citation_text: str | None = Field(None, alias="rawCitationText", description="Exact citation text")
-    quoted_text: str | None = Field(None, alias="quotedText", description="Quoted Act text")
+    raw_citation_text: str | None = Field(
+        None, alias="rawCitationText", description="Exact citation text"
+    )
+    quoted_text: str | None = Field(
+        None, alias="quotedText", description="Quoted Act text"
+    )
     verification_status: VerificationStatus = Field(
-        default=VerificationStatus.PENDING, alias="verificationStatus", description="Verification status"
+        default=VerificationStatus.PENDING,
+        alias="verificationStatus",
+        description="Verification status",
     )
     target_act_document_id: str | None = Field(
         None, alias="targetActDocumentId", description="Matched Act document UUID"
     )
-    target_page: int | None = Field(None, alias="targetPage", description="Page in Act document")
+    target_page: int | None = Field(
+        None, alias="targetPage", description="Page in Act document"
+    )
     target_bbox_ids: list[str] = Field(
-        default_factory=list, alias="targetBboxIds", description="Bounding boxes in Act document"
+        default_factory=list,
+        alias="targetBboxIds",
+        description="Bounding boxes in Act document",
     )
-    confidence: float = Field(default=0.0, description="Extraction/verification confidence")
+    confidence: float = Field(
+        default=0.0, description="Extraction/verification confidence"
+    )
     extraction_metadata: dict = Field(
-        default_factory=dict, alias="extractionMetadata", description="Extraction metadata"
+        default_factory=dict,
+        alias="extractionMetadata",
+        description="Extraction metadata",
     )
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Last update timestamp"
+    )
 
     # Populated in list views for convenience
-    document_name: str | None = Field(None, alias="documentName", description="Source document name")
+    document_name: str | None = Field(
+        None, alias="documentName", description="Source document name"
+    )
 
 
 # =============================================================================
@@ -175,17 +219,23 @@ class ActResolutionBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     act_name_normalized: str = Field(
-        ..., alias="actNameNormalized", description="Normalized Act name for matching (lowercase, no punctuation)"
+        ...,
+        alias="actNameNormalized",
+        description="Normalized Act name for matching (lowercase, no punctuation)",
     )
     act_name_display: str | None = Field(
-        None, alias="actNameDisplay", description="Display name (e.g., 'Negotiable Instruments Act, 1881')"
+        None,
+        alias="actNameDisplay",
+        description="Display name (e.g., 'Negotiable Instruments Act, 1881')",
     )
 
 
 class ActResolutionCreate(ActResolutionBase):
     """Model for creating an Act resolution record."""
 
-    matter_id: str = Field(..., alias="matterId", description="Matter UUID for isolation")
+    matter_id: str = Field(
+        ..., alias="matterId", description="Matter UUID for isolation"
+    )
 
 
 class ActResolutionUpdate(BaseModel):
@@ -194,7 +244,9 @@ class ActResolutionUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     act_document_id: str | None = Field(None, alias="actDocumentId")
-    resolution_status: ActResolutionStatus | None = Field(None, alias="resolutionStatus")
+    resolution_status: ActResolutionStatus | None = Field(
+        None, alias="resolutionStatus"
+    )
     user_action: UserAction | None = Field(None, alias="userAction")
     citation_count: int | None = Field(None, alias="citationCount")
 
@@ -204,21 +256,33 @@ class ActResolution(ActResolutionBase):
 
     id: str = Field(..., description="Resolution UUID")
     matter_id: str = Field(..., alias="matterId", description="Matter UUID")
-    act_document_id: str | None = Field(None, alias="actDocumentId", description="Uploaded Act document UUID")
+    act_document_id: str | None = Field(
+        None, alias="actDocumentId", description="Uploaded Act document UUID"
+    )
     resolution_status: ActResolutionStatus = Field(
-        default=ActResolutionStatus.MISSING, alias="resolutionStatus", description="Resolution status"
+        default=ActResolutionStatus.MISSING,
+        alias="resolutionStatus",
+        description="Resolution status",
     )
     user_action: UserAction = Field(
-        default=UserAction.PENDING, alias="userAction", description="User action on resolution"
+        default=UserAction.PENDING,
+        alias="userAction",
+        description="User action on resolution",
     )
     citation_count: int = Field(
-        default=0, alias="citationCount", description="Number of citations referencing this Act"
+        default=0,
+        alias="citationCount",
+        description="Number of citations referencing this Act",
     )
     first_seen_at: datetime | None = Field(
         None, alias="firstSeenAt", description="When Act was first referenced"
     )
-    created_at: datetime = Field(..., alias="createdAt", description="Creation timestamp")
-    updated_at: datetime = Field(..., alias="updatedAt", description="Last update timestamp")
+    created_at: datetime = Field(
+        ..., alias="createdAt", description="Creation timestamp"
+    )
+    updated_at: datetime = Field(
+        ..., alias="updatedAt", description="Last update timestamp"
+    )
 
 
 # =============================================================================
@@ -271,13 +335,23 @@ class ActDiscoverySummary(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     act_name: str = Field(..., alias="actName", description="Display name of Act")
-    act_name_normalized: str = Field(..., alias="actNameNormalized", description="Normalized name for matching")
-    citation_count: int = Field(..., alias="citationCount", description="Number of citations referencing this Act")
+    act_name_normalized: str = Field(
+        ..., alias="actNameNormalized", description="Normalized name for matching"
+    )
+    citation_count: int = Field(
+        ...,
+        alias="citationCount",
+        description="Number of citations referencing this Act",
+    )
     resolution_status: ActResolutionStatus = Field(
         ..., alias="resolutionStatus", description="Current resolution status"
     )
-    user_action: UserAction = Field(..., alias="userAction", description="User action status")
-    act_document_id: str | None = Field(None, alias="actDocumentId", description="Uploaded Act document UUID")
+    user_action: UserAction = Field(
+        ..., alias="userAction", description="User action status"
+    )
+    act_document_id: str | None = Field(
+        None, alias="actDocumentId", description="Uploaded Act document UUID"
+    )
 
 
 # =============================================================================
@@ -293,7 +367,9 @@ class PaginationMeta(BaseModel):
     total: int = Field(..., ge=0, description="Total number of items")
     page: int = Field(..., ge=1, description="Current page number")
     per_page: int = Field(..., ge=1, alias="perPage", description="Items per page")
-    total_pages: int | None = Field(None, ge=0, alias="totalPages", description="Total number of pages")
+    total_pages: int | None = Field(
+        None, ge=0, alias="totalPages", description="Total number of pages"
+    )
 
 
 class CitationListItem(BaseModel):
@@ -303,16 +379,30 @@ class CitationListItem(BaseModel):
 
     id: str = Field(..., description="Citation UUID")
     act_name: str = Field(..., alias="actName", description="Normalized Act name")
-    section_number: str = Field(..., alias="sectionNumber", description="Section number")
+    section_number: str = Field(
+        ..., alias="sectionNumber", description="Section number"
+    )
     subsection: str | None = Field(None, description="Subsection if present")
-    raw_citation_text: str | None = Field(None, alias="rawCitationText", description="Exact citation text")
-    source_page: int = Field(..., alias="sourcePage", description="Page number in source document")
-    verification_status: VerificationStatus = Field(..., alias="verificationStatus", description="Verification status")
+    raw_citation_text: str | None = Field(
+        None, alias="rawCitationText", description="Exact citation text"
+    )
+    source_page: int = Field(
+        ..., alias="sourcePage", description="Page number in source document"
+    )
+    verification_status: VerificationStatus = Field(
+        ..., alias="verificationStatus", description="Verification status"
+    )
     confidence: float = Field(..., description="Extraction confidence")
-    document_id: str = Field(..., alias="documentId", description="Source document UUID")
-    document_name: str | None = Field(None, alias="documentName", description="Source document name")
+    document_id: str = Field(
+        ..., alias="documentId", description="Source document UUID"
+    )
+    document_name: str | None = Field(
+        None, alias="documentName", description="Source document name"
+    )
     source_bbox_ids: list[str] = Field(
-        default_factory=list, alias="sourceBboxIds", description="Bounding box UUIDs for highlighting"
+        default_factory=list,
+        alias="sourceBboxIds",
+        description="Bounding box UUIDs for highlighting",
     )
 
 
@@ -335,9 +425,15 @@ class CitationSummaryItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     act_name: str = Field(..., alias="actName", description="Act name")
-    citation_count: int = Field(..., alias="citationCount", description="Number of citations")
-    verified_count: int = Field(default=0, alias="verifiedCount", description="Number verified")
-    pending_count: int = Field(default=0, alias="pendingCount", description="Number pending")
+    citation_count: int = Field(
+        ..., alias="citationCount", description="Number of citations"
+    )
+    verified_count: int = Field(
+        default=0, alias="verifiedCount", description="Number verified"
+    )
+    pending_count: int = Field(
+        default=0, alias="pendingCount", description="Number pending"
+    )
 
 
 class CitationSummaryResponse(BaseModel):
@@ -381,7 +477,9 @@ class DiffDetail(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    citation_text: str = Field(..., alias="citationText", description="Text from case document citation")
+    citation_text: str = Field(
+        ..., alias="citationText", description="Text from case document citation"
+    )
     act_text: str = Field(..., alias="actText", description="Text from Act document")
     match_type: str = Field(
         ..., alias="matchType", description="Match type: exact, paraphrase, mismatch"
@@ -396,14 +494,20 @@ class SectionMatch(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    section_number: str = Field(..., alias="sectionNumber", description="Section number matched")
-    section_text: str = Field(..., alias="sectionText", description="Full text of the section")
+    section_number: str = Field(
+        ..., alias="sectionNumber", description="Section number matched"
+    )
+    section_text: str = Field(
+        ..., alias="sectionText", description="Full text of the section"
+    )
     chunk_id: str = Field(..., alias="chunkId", description="Source chunk UUID")
     page_number: int | None = Field(
         None, alias="pageNumber", description="Page in Act document (None if unknown)"
     )
     bbox_ids: list[str] = Field(
-        default_factory=list, alias="bboxIds", description="Bounding boxes for highlighting"
+        default_factory=list,
+        alias="bboxIds",
+        description="Bounding boxes for highlighting",
     )
     confidence: float = Field(
         ..., ge=0.0, le=100.0, description="Match confidence (0-100)"
@@ -416,7 +520,11 @@ class QuoteComparison(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     similarity_score: float = Field(
-        ..., ge=0.0, le=100.0, alias="similarityScore", description="Semantic similarity (0-100)"
+        ...,
+        ge=0.0,
+        le=100.0,
+        alias="similarityScore",
+        description="Semantic similarity (0-100)",
     )
     match_type: str = Field(
         ..., alias="matchType", description="Match type: exact, paraphrase, mismatch"
@@ -435,11 +543,11 @@ class VerificationResult(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    status: VerificationStatus = Field(
-        ..., description="Verification outcome status"
-    )
+    status: VerificationStatus = Field(..., description="Verification outcome status")
     section_found: bool = Field(
-        ..., alias="sectionFound", description="Whether the cited section was found in Act"
+        ...,
+        alias="sectionFound",
+        description="Whether the cited section was found in Act",
     )
     section_text: str | None = Field(
         None, alias="sectionText", description="Matched section text from Act"
@@ -448,14 +556,18 @@ class VerificationResult(BaseModel):
         None, alias="targetPage", description="Page number in Act document"
     )
     target_bbox_ids: list[str] = Field(
-        default_factory=list, alias="targetBboxIds", description="Bounding boxes in Act document"
+        default_factory=list,
+        alias="targetBboxIds",
+        description="Bounding boxes in Act document",
     )
     similarity_score: float = Field(
-        default=0.0, ge=0.0, le=100.0, alias="similarityScore", description="Semantic similarity (0-100)"
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        alias="similarityScore",
+        description="Semantic similarity (0-100)",
     )
-    explanation: str = Field(
-        ..., description="Human-readable verification explanation"
-    )
+    explanation: str = Field(..., description="Human-readable verification explanation")
     diff_details: DiffDetail | None = Field(
         None, alias="diffDetails", description="Text difference details if mismatch"
     )
@@ -477,4 +589,6 @@ class BatchVerificationResponse(BaseModel):
     total_citations: int = Field(
         ..., alias="totalCitations", description="Number of citations to verify"
     )
-    act_name: str = Field(..., alias="actName", description="Act being verified against")
+    act_name: str = Field(
+        ..., alias="actName", description="Act being verified against"
+    )

@@ -243,9 +243,7 @@ class SummaryVerificationService:
             }
 
             result = await asyncio.to_thread(
-                lambda: self.supabase.table("summary_notes")
-                .insert(data)
-                .execute()
+                lambda: self.supabase.table("summary_notes").insert(data).execute()
             )
 
             if not result.data:

@@ -86,10 +86,18 @@ celery_app.conf.update(
         "app.workers.tasks.document_tasks.embed_chunks": {"queue": "llm"},
         "app.workers.tasks.document_tasks.extract_entities": {"queue": "llm"},
         "app.workers.tasks.document_tasks.extract_citations": {"queue": "llm"},
-        "app.workers.tasks.document_tasks.resolve_aliases": {"queue": "low"},  # WPS-001 L4: Phase 1 (CPU) on heavy worker
-        "app.workers.tasks.document_tasks.resolve_aliases_batch": {"queue": "low"},  # WPS-001 L4: Phase 2 (LLM) on heavy worker
-        "app.workers.tasks.document_tasks.resolve_aliases_finalize": {"queue": "low"},  # WPS-001 L4: Phase 3 (persist) on heavy worker
-        "app.workers.tasks.document_tasks.extract_dates_from_document": {"queue": "llm"},
+        "app.workers.tasks.document_tasks.resolve_aliases": {
+            "queue": "low"
+        },  # WPS-001 L4: Phase 1 (CPU) on heavy worker
+        "app.workers.tasks.document_tasks.resolve_aliases_batch": {
+            "queue": "low"
+        },  # WPS-001 L4: Phase 2 (LLM) on heavy worker
+        "app.workers.tasks.document_tasks.resolve_aliases_finalize": {
+            "queue": "low"
+        },  # WPS-001 L4: Phase 3 (persist) on heavy worker
+        "app.workers.tasks.document_tasks.extract_dates_from_document": {
+            "queue": "llm"
+        },
         "app.workers.tasks.engine_tasks.*": {"queue": "llm"},
         "app.workers.tasks.summary_tasks.*": {"queue": "llm"},
         "app.workers.tasks.voyage_embedding_tasks.*": {"queue": "llm"},
@@ -116,19 +124,19 @@ celery_app.conf.update(
     # Redis redelivers unacknowledged tasks after visibility_timeout expires
     # Default is 1 hour; we set 2 hours to handle long-running tasks safely
     broker_transport_options={
-        'visibility_timeout': 7200,  # 2 hours - must exceed task_time_limit (3600)
-        'polling_interval': 10,  # BRPOP every 10s instead of 1s — saves ~233K Redis cmds/day
-        'socket_keepalive': True,  # BUG-1 fix: TCP keepalive prevents idle disconnects
-        'socket_connect_timeout': 30,
-        'socket_timeout': 30,
-        'retry_on_timeout': True,
+        "visibility_timeout": 7200,  # 2 hours - must exceed task_time_limit (3600)
+        "polling_interval": 10,  # BRPOP every 10s instead of 1s — saves ~233K Redis cmds/day
+        "socket_keepalive": True,  # BUG-1 fix: TCP keepalive prevents idle disconnects
+        "socket_connect_timeout": 30,
+        "socket_timeout": 30,
+        "retry_on_timeout": True,
         **(_ssl_config if _uses_tls else {}),  # Merge SSL config if TLS enabled
     },
     # Result backend resilience for Redis connection drops
     result_backend_transport_options={
-        'socket_timeout': 30,
-        'socket_connect_timeout': 30,
-        'retry_on_timeout': True,
+        "socket_timeout": 30,
+        "socket_connect_timeout": 30,
+        "retry_on_timeout": True,
     },
     # SSL configuration for Upstash Redis (rediss:// protocol)
     # These settings are required for TLS connections to serverless Redis
@@ -140,7 +148,8 @@ celery_app.conf.update(
     beat_schedule={
         "recover-stale-jobs": {
             "task": "app.workers.tasks.maintenance_tasks.recover_stale_jobs",
-            "schedule": settings.job_recovery_scan_interval * 60,  # Convert minutes to seconds
+            "schedule": settings.job_recovery_scan_interval
+            * 60,  # Convert minutes to seconds
             "options": {"queue": "low"},  # Low priority queue
         },
         "cleanup-stale-chunks": {
@@ -210,7 +219,9 @@ celery_app.conf.update(
         "resume-stuck-pipelines": {
             "task": "app.workers.tasks.maintenance_tasks.resume_stuck_pipelines",
             "schedule": 900,  # Every 15 minutes (was 30 min — faster recovery after deploys)
-            "kwargs": {"stale_minutes": 30},  # Jobs/docs stuck for >30 minutes (was 1 hour)
+            "kwargs": {
+                "stale_minutes": 30
+            },  # Jobs/docs stuck for >30 minutes (was 1 hour)
             "options": {"queue": "low"},
         },
         # Sync act_resolutions with documents - runs every 15 minutes
@@ -255,7 +266,9 @@ celery_app.conf.update(
         # CASCADE delete handles all related records (documents, chunks, entities, etc.)
         "hard-delete-expired-matters": {
             "task": "app.workers.tasks.maintenance_tasks.hard_delete_expired_matters",
-            "schedule": crontab(hour=3, minute=30),  # Daily at 3:30 AM (after documents)
+            "schedule": crontab(
+                hour=3, minute=30
+            ),  # Daily at 3:30 AM (after documents)
             "args": [30],  # 30-day retention period
             "options": {"queue": "low"},
         },
@@ -312,9 +325,11 @@ _logger = structlog.get_logger(__name__)
 _is_beat_only = os.environ.get("CELERY_BEAT_ONLY") == "true"
 
 if _is_beat_only:
-    _logger.info("celery_beat_only_mode", hint="Skipping task module imports — beat needs only schedule config")
+    _logger.info(
+        "celery_beat_only_mode",
+        hint="Skipping task module imports — beat needs only schedule config",
+    )
 else:
-
     _TASK_MODULES = [
         "app.workers.tasks.act_validation_tasks",
         "app.workers.tasks.chunked_document_tasks",
@@ -351,6 +366,7 @@ else:
             verification_tasks,
             voyage_embedding_tasks,
         )
+
         _logger.info(
             "celery_task_modules_imported",
             module_count=len(_TASK_MODULES),
@@ -406,6 +422,7 @@ else:
             _logger.info("cost_persistence_service_initialized_in_worker")
 
             from app.core.pricing_loader import initialize_pricing
+
             initialize_pricing(supabase)
         except Exception as e:
             _logger.warning(
@@ -438,7 +455,11 @@ else:
         safe_kwargs = {}
         if kwargs:
             for key, value in kwargs.items():
-                if "password" in key.lower() or "secret" in key.lower() or "token" in key.lower():
+                if (
+                    "password" in key.lower()
+                    or "secret" in key.lower()
+                    or "token" in key.lower()
+                ):
                     safe_kwargs[key] = "[REDACTED]"
                 elif isinstance(value, str) and len(value) > 200:
                     safe_kwargs[key] = f"{value[:200]}...[truncated]"
@@ -470,7 +491,9 @@ else:
     ):
         """Log task retries for monitoring retry patterns."""
         retries = request.retries if request else 0
-        max_retries = sender.max_retries if sender and hasattr(sender, "max_retries") else 0
+        max_retries = (
+            sender.max_retries if sender and hasattr(sender, "max_retries") else 0
+        )
 
         _logger.warning(
             "celery_task_retrying",

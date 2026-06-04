@@ -179,6 +179,7 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
         try:
             from app.models.activity import ActivityTypeEnum
             from app.services.activity_service import get_activity_service
+
             activity_service = get_activity_service()
             run_async(
                 activity_service.create_activity_for_matter_members(
@@ -200,7 +201,10 @@ def generate_summary(self, matter_id: str, job_id: str | None = None) -> dict:
         log.error("summary_generation_soft_timeout")
         if job_id:
             _mark_job_failed(
-                tracker, matter_id, job_id, current_status,
+                tracker,
+                matter_id,
+                job_id,
+                current_status,
                 "Summary generation timed out (5 min limit)",
             )
         _release_dedup_lock(matter_id)

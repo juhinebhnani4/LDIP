@@ -61,9 +61,7 @@ def sample_document_data() -> dict:
 class TestDocumentServiceInit:
     """Tests for DocumentService initialization."""
 
-    def test_init_with_provided_client(
-        self, mock_supabase_client: MagicMock
-    ) -> None:
+    def test_init_with_provided_client(self, mock_supabase_client: MagicMock) -> None:
         """Test initialization with provided client."""
         service = DocumentService(client=mock_supabase_client)
         assert service.client == mock_supabase_client
@@ -110,17 +108,21 @@ class TestCreateDocument:
         mock_table = MagicMock()
         mock_supabase_client.table.return_value = mock_table
         mock_table.insert.return_value = mock_table
-        mock_table.execute.return_value = MagicMock(data=[{
-            "id": "doc-act",
-            "matter_id": "matter-123",
-            "filename": "contract_act.pdf",
-            "storage_path": "matter-123/acts/contract_act_abc.pdf",
-            "file_size": 2048,
-            "document_type": "act",
-            "is_reference_material": True,
-            "uploaded_by": "user-123",
-            "status": "pending",
-        }])
+        mock_table.execute.return_value = MagicMock(
+            data=[
+                {
+                    "id": "doc-act",
+                    "matter_id": "matter-123",
+                    "filename": "contract_act.pdf",
+                    "storage_path": "matter-123/acts/contract_act_abc.pdf",
+                    "file_size": 2048,
+                    "document_type": "act",
+                    "is_reference_material": True,
+                    "uploaded_by": "user-123",
+                    "status": "pending",
+                }
+            ]
+        )
 
         # Execute
         document_service.create_document(
@@ -288,9 +290,7 @@ class TestGetDocumentsByMatter:
         mock_table.select.return_value = mock_table
         mock_table.eq.return_value = mock_table
         mock_table.order.return_value = mock_table
-        mock_table.execute.return_value = MagicMock(
-            data=[sample_document_data, doc2]
-        )
+        mock_table.execute.return_value = MagicMock(data=[sample_document_data, doc2])
 
         # Execute
         results = document_service.get_documents_by_matter("matter-123")

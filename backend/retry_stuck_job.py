@@ -1,4 +1,5 @@
 """Retry the stuck processing job."""
+
 import os
 
 from dotenv import load_dotenv
@@ -9,15 +10,21 @@ client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KE
 
 # Get all jobs for the matter to find the stuck one
 matter_id = "44309951-44c3-4b9a-acfd-8ea82000c4df"
-jobs = client.table("processing_jobs").select("*").eq("matter_id", matter_id).eq("status", "PROCESSING").execute()
+jobs = (
+    client.table("processing_jobs")
+    .select("*")
+    .eq("matter_id", matter_id)
+    .eq("status", "PROCESSING")
+    .execute()
+)
 
 if not jobs.data:
     print("No stuck PROCESSING jobs found!")
     exit(1)
 
 job_data = jobs.data[0]
-job_id = job_data['id']
-document_id = job_data['document_id']
+job_id = job_data["id"]
+document_id = job_data["document_id"]
 
 print("Found stuck job:")
 print(f"  Job ID: {job_id}")
@@ -30,12 +37,19 @@ print(f"  Completed stages: {job_data['completed_stages']}/{job_data['total_stag
 # Reset job to re-queue it
 print("\nResetting job to QUEUED status to trigger re-processing...")
 
-result = client.table("processing_jobs").update({
-    "status": "QUEUED",
-    "celery_task_id": None,
-    "error_message": None,
-    "error_code": None,
-}).eq("id", job_id).execute()
+result = (
+    client.table("processing_jobs")
+    .update(
+        {
+            "status": "QUEUED",
+            "celery_task_id": None,
+            "error_message": None,
+            "error_code": None,
+        }
+    )
+    .eq("id", job_id)
+    .execute()
+)
 
 print("Job reset to QUEUED.")
 
@@ -47,8 +61,8 @@ task = process_document.delay(document_id)
 print(f"Task queued with ID: {task.id}")
 
 # Update job with new task ID
-client.table("processing_jobs").update({
-    "celery_task_id": task.id
-}).eq("id", job_id).execute()
+client.table("processing_jobs").update({"celery_task_id": task.id}).eq(
+    "id", job_id
+).execute()
 
 print("\nDone! Check Celery logs for processing.")

@@ -35,7 +35,9 @@ DOWNLOAD_CACHE_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
 class StorageError(Exception):
     """Base exception for storage operations."""
 
-    def __init__(self, message: str, code: str = "STORAGE_ERROR", status_code: int = 500):
+    def __init__(
+        self, message: str, code: str = "STORAGE_ERROR", status_code: int = 500
+    ):
         self.message = message
         self.code = code
         self.status_code = status_code
@@ -93,7 +95,7 @@ class StorageService:
         if subfolder not in VALID_SUBFOLDERS:
             raise StorageError(
                 message=f"Invalid subfolder: {subfolder}. Must be one of: {VALID_SUBFOLDERS}",
-                code="INVALID_SUBFOLDER"
+                code="INVALID_SUBFOLDER",
             )
 
     def upload_file(
@@ -123,8 +125,7 @@ class StorageService:
 
         if self.client is None:
             raise StorageError(
-                message="Storage client not configured",
-                code="STORAGE_NOT_CONFIGURED"
+                message="Storage client not configured", code="STORAGE_NOT_CONFIGURED"
             )
 
         # Generate unique filename to prevent conflicts
@@ -145,13 +146,14 @@ class StorageService:
             self.client.storage.from_(self.bucket).upload(
                 path=storage_path,
                 file=file_content,
-                file_options={"content-type": content_type}
+                file_options={"content-type": content_type},
             )
 
             # Generate signed URL for download
-            signed_url_response = self.client.storage.from_(self.bucket).create_signed_url(
-                path=storage_path,
-                expires_in=DEFAULT_SIGNED_URL_EXPIRES
+            signed_url_response = self.client.storage.from_(
+                self.bucket
+            ).create_signed_url(
+                path=storage_path, expires_in=DEFAULT_SIGNED_URL_EXPIRES
             )
 
             signed_url = signed_url_response.get("signedURL")
@@ -172,8 +174,7 @@ class StorageService:
                 error=str(e),
             )
             raise StorageError(
-                message=f"Failed to upload file: {e!s}",
-                code="UPLOAD_FAILED"
+                message=f"Failed to upload file: {e!s}", code="UPLOAD_FAILED"
             ) from e
 
     def delete_file(self, storage_path: str) -> bool:
@@ -190,8 +191,7 @@ class StorageService:
         """
         if self.client is None:
             raise StorageError(
-                message="Storage client not configured",
-                code="STORAGE_NOT_CONFIGURED"
+                message="Storage client not configured", code="STORAGE_NOT_CONFIGURED"
             )
 
         logger.info("storage_delete_starting", storage_path=storage_path)
@@ -209,8 +209,7 @@ class StorageService:
                 error=str(e),
             )
             raise StorageError(
-                message=f"Failed to delete file: {e!s}",
-                code="DELETE_FAILED"
+                message=f"Failed to delete file: {e!s}", code="DELETE_FAILED"
             ) from e
 
     def get_signed_url(
@@ -232,14 +231,12 @@ class StorageService:
         """
         if self.client is None:
             raise StorageError(
-                message="Storage client not configured",
-                code="STORAGE_NOT_CONFIGURED"
+                message="Storage client not configured", code="STORAGE_NOT_CONFIGURED"
             )
 
         try:
             response = self.client.storage.from_(self.bucket).create_signed_url(
-                path=storage_path,
-                expires_in=expires_in
+                path=storage_path, expires_in=expires_in
             )
 
             return response.get("signedURL", "")
@@ -252,7 +249,7 @@ class StorageService:
             )
             raise StorageError(
                 message=f"Failed to generate signed URL: {e!s}",
-                code="SIGNED_URL_FAILED"
+                code="SIGNED_URL_FAILED",
             ) from e
 
     def _evict_expired_cache(self) -> None:
@@ -266,7 +263,10 @@ class StorageService:
 
     def _evict_lru_until_fits(self, new_size: int) -> None:
         """Evict oldest entries until new_size fits within max. Must be called with _cache_lock held."""
-        while self._cache_total_bytes + new_size > DOWNLOAD_CACHE_MAX_BYTES and self._download_cache:
+        while (
+            self._cache_total_bytes + new_size > DOWNLOAD_CACHE_MAX_BYTES
+            and self._download_cache
+        ):
             # dict preserves insertion order; pop the first (oldest) entry
             oldest_key = next(iter(self._download_cache))
             data, _ = self._download_cache.pop(oldest_key)
@@ -282,7 +282,10 @@ class StorageService:
         with self._cache_lock:
             self._evict_expired_cache()
             self._evict_lru_until_fits(file_size)
-            self._download_cache[storage_path] = (data, time.monotonic() + DOWNLOAD_CACHE_TTL_SECONDS)
+            self._download_cache[storage_path] = (
+                data,
+                time.monotonic() + DOWNLOAD_CACHE_TTL_SECONDS,
+            )
             self._cache_total_bytes += file_size
 
     def clear_download_cache(self) -> None:
@@ -309,8 +312,7 @@ class StorageService:
         """
         if self.client is None:
             raise StorageError(
-                message="Storage client not configured",
-                code="STORAGE_NOT_CONFIGURED"
+                message="Storage client not configured", code="STORAGE_NOT_CONFIGURED"
             )
 
         # Check cache first
@@ -357,8 +359,7 @@ class StorageService:
                 error=str(e),
             )
             raise StorageError(
-                message=f"Failed to download file: {e!s}",
-                code="DOWNLOAD_FAILED"
+                message=f"Failed to download file: {e!s}", code="DOWNLOAD_FAILED"
             ) from e
 
 

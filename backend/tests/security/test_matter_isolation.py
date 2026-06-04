@@ -92,8 +92,10 @@ class TestMatterIsolation:
                     data=[matter_data]
                 )
             elif table_name == "users":
-                mock.select.return_value.eq.return_value.execute.return_value = MagicMock(
-                    data=[{"email": "usera@example.com", "full_name": "User A"}]
+                mock.select.return_value.eq.return_value.execute.return_value = (
+                    MagicMock(
+                        data=[{"email": "usera@example.com", "full_name": "User A"}]
+                    )
                 )
             return mock
 

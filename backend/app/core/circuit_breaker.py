@@ -287,10 +287,7 @@ class CircuitBreaker:
         """Get current circuit state, auto-transitioning if needed."""
         with self._lock:
             # Check if recovery timeout has passed when circuit is open
-            if (
-                self._state == CircuitState.OPEN
-                and self._last_failure_time is not None
-            ):
+            if self._state == CircuitState.OPEN and self._last_failure_time is not None:
                 elapsed = time.time() - self._last_failure_time
                 if elapsed >= self.config.recovery_timeout:
                     self._transition_to(CircuitState.HALF_OPEN)
@@ -533,8 +530,7 @@ class CircuitOpenError(Exception):
         self.circuit_name = circuit_name
         self.cooldown_remaining = cooldown_remaining
         super().__init__(
-            f"Circuit '{circuit_name}' is open. "
-            f"Retry after {cooldown_remaining:.1f}s"
+            f"Circuit '{circuit_name}' is open. Retry after {cooldown_remaining:.1f}s"
         )
 
 
@@ -626,7 +622,9 @@ def with_circuit_breaker(
                     "circuit_breaker_retries_exhausted",
                     circuit_name=service.value,
                     max_retries=max_retries,
-                    error=str(e.last_attempt.exception()) if e.last_attempt else "unknown",
+                    error=str(e.last_attempt.exception())
+                    if e.last_attempt
+                    else "unknown",
                     correlation_id=get_correlation_id(),
                 )
                 # Re-raise the underlying exception
@@ -787,7 +785,8 @@ def with_sync_circuit_breaker(
                         if attempt < max_retries - 1:
                             # Calculate backoff with jitter
                             wait_time = min(
-                                config.initial_wait * (2 ** attempt) + (config.jitter * (0.5 + 0.5 * time.time() % 1)),
+                                config.initial_wait * (2**attempt)
+                                + (config.jitter * (0.5 + 0.5 * time.time() % 1)),
                                 config.max_wait,
                             )
                             logger.warning(

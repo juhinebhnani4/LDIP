@@ -29,7 +29,9 @@ class TestStatementQueryService:
         return MagicMock()
 
     @pytest.fixture
-    def service(self, mock_mig_service: MagicMock, mock_engine: MagicMock) -> StatementQueryService:
+    def service(
+        self, mock_mig_service: MagicMock, mock_engine: MagicMock
+    ) -> StatementQueryService:
         """Create service instance with mocked dependencies."""
         svc = StatementQueryService()
         svc._mig_service = mock_mig_service
@@ -72,7 +74,9 @@ class TestStatementQueryService:
             )
 
         # Verify get_entity was called with both IDs
-        mock_mig_service.get_entity.assert_called_once_with("entity-123", "wrong-matter")
+        mock_mig_service.get_entity.assert_called_once_with(
+            "entity-123", "wrong-matter"
+        )
 
     @pytest.mark.asyncio
     async def test_get_entity_statements_success(
@@ -131,9 +135,7 @@ class TestStatementQueryService:
 
         mock_mig_service.get_entity = AsyncMock(return_value=mock_entity)
         mock_engine.count_statements_for_entity = AsyncMock(return_value=0)
-        mock_engine.get_statements_for_entity = AsyncMock(
-            return_value=mock_statements
-        )
+        mock_engine.get_statements_for_entity = AsyncMock(return_value=mock_statements)
 
         await service.get_entity_statements(
             entity_id="entity-123",

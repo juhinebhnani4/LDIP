@@ -1,6 +1,5 @@
 """Unit tests for recursive text splitter."""
 
-
 from app.services.chunking.text_splitter import RecursiveTextSplitter
 from app.services.chunking.token_counter import count_tokens
 
@@ -31,7 +30,9 @@ class TestRecursiveTextSplitter:
     def test_split_on_paragraph(self) -> None:
         """Should prefer splitting on paragraph boundaries."""
         splitter = RecursiveTextSplitter(chunk_size=10, chunk_overlap=2)
-        text = "First paragraph with some content.\n\nSecond paragraph with more content."
+        text = (
+            "First paragraph with some content.\n\nSecond paragraph with more content."
+        )
         result = splitter.split_text(text)
         assert len(result) >= 2
         # Each chunk should be reasonable size

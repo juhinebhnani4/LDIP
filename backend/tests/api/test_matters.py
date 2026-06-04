@@ -44,7 +44,9 @@ def get_test_settings() -> Settings:
     return settings
 
 
-def create_test_token(user_id: str = "test-user-id", email: str = "test@example.com") -> str:
+def create_test_token(
+    user_id: str = "test-user-id", email: str = "test@example.com"
+) -> str:
     """Create a valid JWT token for testing."""
     payload = {
         "sub": user_id,

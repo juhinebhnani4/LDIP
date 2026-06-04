@@ -3,9 +3,10 @@
 This script finds jobs that are QUEUED but not being processed
 and dispatches them to the Celery queue.
 """
+
 import sys
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 from app.services.supabase.client import get_supabase_client
 
@@ -17,7 +18,9 @@ def main():
         sys.exit(1)
 
     # Find QUEUED jobs
-    response = client.table("processing_jobs").select("*").eq("status", "QUEUED").execute()
+    response = (
+        client.table("processing_jobs").select("*").eq("status", "QUEUED").execute()
+    )
     queued_jobs = response.data
 
     if not queued_jobs:
@@ -35,34 +38,34 @@ def main():
     )
 
     for job in queued_jobs:
-        job_id = job['id']
-        doc_id = job.get('document_id')
-        stage = job.get('current_stage')
+        job_id = job["id"]
+        doc_id = job.get("document_id")
+        stage = job.get("current_stage")
 
         if not doc_id:
             print(f"  [SKIP] {job_id[:12]}... - no document_id")
             continue
 
         # Dispatch based on current stage
-        if stage == 'embedding':
+        if stage == "embedding":
             embed_chunks.apply_async(
                 kwargs={"document_id": doc_id, "force": True},
                 countdown=1,
             )
             print(f"  [QUEUED] {job_id[:12]}... -> embed_chunks")
-        elif stage == 'entity_extraction':
+        elif stage == "entity_extraction":
             extract_entities.apply_async(
                 kwargs={"document_id": doc_id, "force": True},
                 countdown=1,
             )
             print(f"  [QUEUED] {job_id[:12]}... -> extract_entities")
-        elif stage == 'alias_resolution':
+        elif stage == "alias_resolution":
             resolve_aliases.apply_async(
                 kwargs={"document_id": doc_id},
                 countdown=1,
             )
             print(f"  [QUEUED] {job_id[:12]}... -> resolve_aliases")
-        elif stage is None or stage == '':
+        elif stage is None or stage == "":
             # Fresh job - start from beginning
             process_document.apply_async(
                 args=[doc_id],
@@ -73,6 +76,7 @@ def main():
             print(f"  [SKIP] {job_id[:12]}... - unknown stage: {stage}")
 
     print("\n[DONE] Dispatched jobs to Celery")
+
 
 if __name__ == "__main__":
     main()

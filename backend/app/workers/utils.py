@@ -165,10 +165,12 @@ def _get_or_create_shared_loop() -> asyncio.AbstractEventLoop:
 
         # _thread is a C module, NOT monkey-patched by gevent
         import _thread
+
         _thread.start_new_thread(_run_loop, ())
 
         # Wait for loop to start (brief spin)
         import time
+
         for _ in range(500):
             if loop.is_running():
                 break

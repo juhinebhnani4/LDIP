@@ -44,10 +44,12 @@ class TestStatementComparisonService:
     def mock_mig_service(self) -> MagicMock:
         """Create mock MIG service."""
         mock = MagicMock()
-        mock.get_entity = AsyncMock(return_value=MagicMock(
-            id="entity-123",
-            canonical_name="Test Entity",
-        ))
+        mock.get_entity = AsyncMock(
+            return_value=MagicMock(
+                id="entity-123",
+                canonical_name="Test Entity",
+            )
+        )
         return mock
 
     @pytest.fixture
@@ -55,52 +57,54 @@ class TestStatementComparisonService:
         """Create mock statement query service."""
         mock = MagicMock()
         mock.get_entity_statement_count = AsyncMock(return_value=10)
-        mock.get_entity_statements = AsyncMock(return_value=EntityStatementsResponse(
-            data=EntityStatements(
-                entity_id="entity-123",
-                entity_name="Test Entity",
-                total_statements=10,
-                documents=[
-                    DocumentStatements(
-                        document_id="doc-1",
-                        document_name="Contract.pdf",
-                        statements=[
-                            Statement(
-                                entity_id="entity-123",
-                                chunk_id=f"chunk-{i}",
-                                document_id="doc-1",
-                                content=f"Statement {i}",
-                                page_number=i,
-                            )
-                            for i in range(5)
-                        ],
-                        statement_count=5,
-                    ),
-                    DocumentStatements(
-                        document_id="doc-2",
-                        document_name="Statement.pdf",
-                        statements=[
-                            Statement(
-                                entity_id="entity-123",
-                                chunk_id=f"chunk-{i+5}",
-                                document_id="doc-2",
-                                content=f"Statement {i+5}",
-                                page_number=i,
-                            )
-                            for i in range(5)
-                        ],
-                        statement_count=5,
-                    ),
-                ],
-                aliases_included=[],
-            ),
-            meta=PaginationMeta(
-                total=10,
-                page=1,
-                per_page=1000,
-                total_pages=1,
-            ),
-        ))
+        mock.get_entity_statements = AsyncMock(
+            return_value=EntityStatementsResponse(
+                data=EntityStatements(
+                    entity_id="entity-123",
+                    entity_name="Test Entity",
+                    total_statements=10,
+                    documents=[
+                        DocumentStatements(
+                            document_id="doc-1",
+                            document_name="Contract.pdf",
+                            statements=[
+                                Statement(
+                                    entity_id="entity-123",
+                                    chunk_id=f"chunk-{i}",
+                                    document_id="doc-1",
+                                    content=f"Statement {i}",
+                                    page_number=i,
+                                )
+                                for i in range(5)
+                            ],
+                            statement_count=5,
+                        ),
+                        DocumentStatements(
+                            document_id="doc-2",
+                            document_name="Statement.pdf",
+                            statements=[
+                                Statement(
+                                    entity_id="entity-123",
+                                    chunk_id=f"chunk-{i + 5}",
+                                    document_id="doc-2",
+                                    content=f"Statement {i + 5}",
+                                    page_number=i,
+                                )
+                                for i in range(5)
+                            ],
+                            statement_count=5,
+                        ),
+                    ],
+                    aliases_included=[],
+                ),
+                meta=PaginationMeta(
+                    total=10,
+                    page=1,
+                    per_page=1000,
+                    total_pages=1,
+                ),
+            )
+        )
         return mock
 
     @pytest.fixture
@@ -109,45 +113,47 @@ class TestStatementComparisonService:
         from app.engines.contradiction.comparator import ComparisonBatchResult
 
         mock = MagicMock()
-        mock.compare_all_entity_statements = AsyncMock(return_value=ComparisonBatchResult(
-            comparisons=[
-                StatementPairComparison(
-                    statement_a_id="chunk-0",
-                    statement_b_id="chunk-5",
-                    statement_a_content="Statement 0",
-                    statement_b_content="Statement 5",
-                    result=ComparisonResult.CONTRADICTION,
-                    reasoning="Test reasoning",
-                    confidence=0.9,
-                    evidence=ContradictionEvidence(
-                        type=EvidenceType.AMOUNT_MISMATCH,
-                        value_a="500000",
-                        value_b="800000",
+        mock.compare_all_entity_statements = AsyncMock(
+            return_value=ComparisonBatchResult(
+                comparisons=[
+                    StatementPairComparison(
+                        statement_a_id="chunk-0",
+                        statement_b_id="chunk-5",
+                        statement_a_content="Statement 0",
+                        statement_b_content="Statement 5",
+                        result=ComparisonResult.CONTRADICTION,
+                        reasoning="Test reasoning",
+                        confidence=0.9,
+                        evidence=ContradictionEvidence(
+                            type=EvidenceType.AMOUNT_MISMATCH,
+                            value_a="500000",
+                            value_b="800000",
+                        ),
+                        document_a_id="doc-1",
+                        document_b_id="doc-2",
+                        page_a=0,
+                        page_b=0,
                     ),
-                    document_a_id="doc-1",
-                    document_b_id="doc-2",
-                    page_a=0,
-                    page_b=0,
-                ),
-                StatementPairComparison(
-                    statement_a_id="chunk-1",
-                    statement_b_id="chunk-6",
-                    statement_a_content="Statement 1",
-                    statement_b_content="Statement 6",
-                    result=ComparisonResult.CONSISTENT,
-                    reasoning="No conflict",
-                    confidence=0.85,
-                    evidence=ContradictionEvidence(type=EvidenceType.NONE),
-                    document_a_id="doc-1",
-                    document_b_id="doc-2",
-                    page_a=1,
-                    page_b=1,
-                ),
-            ],
-            total_input_tokens=1000,
-            total_output_tokens=300,
-            processing_time_ms=5000,
-        ))
+                    StatementPairComparison(
+                        statement_a_id="chunk-1",
+                        statement_b_id="chunk-6",
+                        statement_a_content="Statement 1",
+                        statement_b_content="Statement 6",
+                        result=ComparisonResult.CONSISTENT,
+                        reasoning="No conflict",
+                        confidence=0.85,
+                        evidence=ContradictionEvidence(type=EvidenceType.NONE),
+                        document_a_id="doc-1",
+                        document_b_id="doc-2",
+                        page_a=1,
+                        page_b=1,
+                    ),
+                ],
+                total_input_tokens=1000,
+                total_output_tokens=300,
+                processing_time_ms=5000,
+            )
+        )
         return mock
 
     @pytest.fixture
@@ -223,16 +229,18 @@ class TestStatementComparisonService:
     ) -> None:
         """Should return empty result for <2 statements."""
         mock_statement_service.get_entity_statement_count = AsyncMock(return_value=1)
-        mock_statement_service.get_entity_statements = AsyncMock(return_value=EntityStatementsResponse(
-            data=EntityStatements(
-                entity_id="entity-123",
-                entity_name="Test Entity",
-                total_statements=1,
-                documents=[],
-                aliases_included=[],
-            ),
-            meta=PaginationMeta(total=1, page=1, per_page=1000, total_pages=1),
-        ))
+        mock_statement_service.get_entity_statements = AsyncMock(
+            return_value=EntityStatementsResponse(
+                data=EntityStatements(
+                    entity_id="entity-123",
+                    entity_name="Test Entity",
+                    total_statements=1,
+                    documents=[],
+                    aliases_included=[],
+                ),
+                meta=PaginationMeta(total=1, page=1, per_page=1000, total_pages=1),
+            )
+        )
 
         response = await service.compare_entity_statements(
             entity_id="entity-123",

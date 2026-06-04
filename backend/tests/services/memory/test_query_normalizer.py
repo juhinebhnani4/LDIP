@@ -68,51 +68,69 @@ class TestQueryNormalization:
         result = normalizer.normalize("   what is sarfaesi?   ")
         assert result == "what is sarfaesi?"
 
-    def test_normalize_punctuation_preserved_question(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_question(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve question marks."""
         result = normalizer.normalize("what is sarfaesi?")
         assert "?" in result
 
-    def test_normalize_punctuation_preserved_period(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_period(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve periods."""
         result = normalizer.normalize("Dr. Smith mentioned SARFAESI.")
         assert "." in result
 
-    def test_normalize_punctuation_preserved_comma(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_comma(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve commas."""
         result = normalizer.normalize("banks, lenders, and NBFCs")
         assert "," in result
 
-    def test_normalize_punctuation_preserved_quotes(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_quotes(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve quotes for semantic meaning."""
         result = normalizer.normalize("what does 'secured creditor' mean?")
         assert "'" in result
 
-    def test_normalize_punctuation_preserved_hyphen(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_hyphen(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve hyphens."""
         result = normalizer.normalize("cross-border transactions")
         assert "-" in result
 
-    def test_normalize_punctuation_preserved_parentheses(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_parentheses(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve parentheses for legal section references."""
         result = normalizer.normalize("Section 13(2) of SARFAESI")
         assert "(" in result
         assert ")" in result
         assert "13(2)" in result
 
-    def test_normalize_punctuation_preserved_slash(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_punctuation_preserved_slash(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should preserve slashes for legal section references like 13(2)/14(1)."""
         result = normalizer.normalize("Section 13(2)/14(1)")
         assert "/" in result
         assert "13(2)/14(1)" in result
 
-    def test_normalize_legal_citation_distinct_hashes(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_legal_citation_distinct_hashes(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Different section refs should produce different hashes."""
         hash1 = normalizer.hash("Section 13(2)")
         hash2 = normalizer.hash("Section 132")
         assert hash1 != hash2  # Must be distinct for cache isolation
 
-    def test_normalize_special_chars_stripped(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_special_chars_stripped(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should strip special characters like @ # $ % etc."""
         result = normalizer.normalize("what @#$% is sarfaesi?")
         # Special chars removed, spaces collapsed
@@ -153,13 +171,17 @@ class TestQueryHashing:
         hash2 = normalizer.hash("what is sarfaesi?")
         assert hash1 == hash2
 
-    def test_hash_consistency_different_whitespace(self, normalizer: QueryNormalizer) -> None:
+    def test_hash_consistency_different_whitespace(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Same query with different whitespace should produce same hash."""
         hash1 = normalizer.hash("what is sarfaesi?")
         hash2 = normalizer.hash("what   is    sarfaesi?")
         assert hash1 == hash2
 
-    def test_hash_consistency_leading_trailing_space(self, normalizer: QueryNormalizer) -> None:
+    def test_hash_consistency_leading_trailing_space(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Same query with leading/trailing space should produce same hash."""
         hash1 = normalizer.hash("what is sarfaesi?")
         hash2 = normalizer.hash("  what is sarfaesi?  ")
@@ -185,13 +207,17 @@ class TestQueryHashing:
 class TestNormalizeAndHash:
     """Tests for combined normalize_and_hash method."""
 
-    def test_normalize_and_hash_returns_tuple(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_and_hash_returns_tuple(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should return tuple of (normalized, hash)."""
         result = normalizer.normalize_and_hash("What is SARFAESI?")
         assert isinstance(result, tuple)
         assert len(result) == 2
 
-    def test_normalize_and_hash_normalized_value(self, normalizer: QueryNormalizer) -> None:
+    def test_normalize_and_hash_normalized_value(
+        self, normalizer: QueryNormalizer
+    ) -> None:
         """Should return correct normalized value."""
         normalized, _ = normalizer.normalize_and_hash("What is SARFAESI?")
         assert normalized == "what is sarfaesi?"

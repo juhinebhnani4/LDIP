@@ -94,7 +94,9 @@ class AliasesListResponse(BaseModel):
 
     data: list[str] = Field(..., description="List of alias names")
     entity_id: str = Field(..., alias="entityId", description="Entity UUID")
-    canonical_name: str = Field(..., alias="canonicalName", description="Entity canonical name")
+    canonical_name: str = Field(
+        ..., alias="canonicalName", description="Entity canonical name"
+    )
 
 
 class MergeResultResponse(BaseModel):
@@ -103,9 +105,15 @@ class MergeResultResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     success: bool = Field(..., description="Whether merge was successful")
-    kept_entity_id: str = Field(..., alias="keptEntityId", description="ID of kept entity")
-    deleted_entity_id: str = Field(..., alias="deletedEntityId", description="ID of deleted entity")
-    aliases_added: list[str] = Field(..., alias="aliasesAdded", description="Aliases added to kept entity")
+    kept_entity_id: str = Field(
+        ..., alias="keptEntityId", description="ID of kept entity"
+    )
+    deleted_entity_id: str = Field(
+        ..., alias="deletedEntityId", description="ID of deleted entity"
+    )
+    aliases_added: list[str] = Field(
+        ..., alias="aliasesAdded", description="Aliases added to kept entity"
+    )
 
 
 class UnmergeEntityRequest(BaseModel):
@@ -126,9 +134,13 @@ class UnmergeResultResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     success: bool = Field(..., description="Whether unmerge was successful")
-    restored_entity_id: str = Field(..., alias="restoredEntityId", description="ID of restored entity")
+    restored_entity_id: str = Field(
+        ..., alias="restoredEntityId", description="ID of restored entity"
+    )
     previously_merged_into_id: str = Field(
-        ..., alias="previouslyMergedIntoId", description="ID of entity it was merged into"
+        ...,
+        alias="previouslyMergedIntoId",
+        description="ID of entity it was merged into",
     )
 
 
@@ -138,12 +150,22 @@ class MergeSuggestionItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     entity_a_id: str = Field(..., alias="entityAId", description="First entity ID")
-    entity_a_name: str = Field(..., alias="entityAName", description="First entity canonical name")
+    entity_a_name: str = Field(
+        ..., alias="entityAName", description="First entity canonical name"
+    )
     entity_b_id: str = Field(..., alias="entityBId", description="Second entity ID")
-    entity_b_name: str = Field(..., alias="entityBName", description="Second entity canonical name")
-    entity_type: str = Field(..., alias="entityType", description="Entity type (PERSON, ORG, etc.)")
-    similarity_score: float = Field(..., alias="similarityScore", description="Similarity score 0-1")
-    shared_documents: int = Field(0, alias="sharedDocuments", description="Documents mentioning both")
+    entity_b_name: str = Field(
+        ..., alias="entityBName", description="Second entity canonical name"
+    )
+    entity_type: str = Field(
+        ..., alias="entityType", description="Entity type (PERSON, ORG, etc.)"
+    )
+    similarity_score: float = Field(
+        ..., alias="similarityScore", description="Similarity score 0-1"
+    )
+    shared_documents: int = Field(
+        0, alias="sharedDocuments", description="Documents mentioning both"
+    )
     reason: str = Field(..., description="Human-readable reason for suggestion")
 
 
@@ -152,8 +174,11 @@ class MergeSuggestionsResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    data: list[MergeSuggestionItem] = Field(..., description="List of merge suggestions")
+    data: list[MergeSuggestionItem] = Field(
+        ..., description="List of merge suggestions"
+    )
     total: int = Field(..., description="Total suggestions found")
+
 
 router = APIRouter(prefix="/matters/{matter_id}/entities", tags=["entities"])
 logger = structlog.get_logger(__name__)
@@ -289,11 +314,21 @@ class BulkRelationshipEdge(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., description="Relationship UUID")
-    source_entity_id: str = Field(..., alias="sourceEntityId", description="Source entity UUID")
-    target_entity_id: str = Field(..., alias="targetEntityId", description="Target entity UUID")
-    relationship_type: str = Field(..., alias="relationshipType", description="Type of relationship")
-    source_entity_name: str | None = Field(None, alias="sourceEntityName", description="Source entity name")
-    target_entity_name: str | None = Field(None, alias="targetEntityName", description="Target entity name")
+    source_entity_id: str = Field(
+        ..., alias="sourceEntityId", description="Source entity UUID"
+    )
+    target_entity_id: str = Field(
+        ..., alias="targetEntityId", description="Target entity UUID"
+    )
+    relationship_type: str = Field(
+        ..., alias="relationshipType", description="Type of relationship"
+    )
+    source_entity_name: str | None = Field(
+        None, alias="sourceEntityName", description="Source entity name"
+    )
+    target_entity_name: str | None = Field(
+        None, alias="targetEntityName", description="Target entity name"
+    )
     weight: float = Field(1.0, description="Relationship weight/strength")
 
 
@@ -302,11 +337,17 @@ class BulkRelationshipsResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    data: list[BulkRelationshipEdge] = Field(..., description="List of relationship edges")
+    data: list[BulkRelationshipEdge] = Field(
+        ..., description="List of relationship edges"
+    )
     total: int = Field(..., description="Total relationships")
 
 
-@router.get("/relationships", response_model=BulkRelationshipsResponse, response_model_by_alias=True)
+@router.get(
+    "/relationships",
+    response_model=BulkRelationshipsResponse,
+    response_model_by_alias=True,
+)
 async def get_all_relationships(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -349,9 +390,14 @@ async def get_all_relationships(
 
         # Run sync Supabase queries in thread to avoid blocking event loop
         def _fetch_relationships() -> tuple[list, dict]:
-            result = client.table("identity_edges").select(
-                "id, source_node_id, target_node_id, relationship_type, confidence"
-            ).eq("matter_id", matter_id).execute()
+            result = (
+                client.table("identity_edges")
+                .select(
+                    "id, source_node_id, target_node_id, relationship_type, confidence"
+                )
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             if not result.data:
                 return [], {}
@@ -363,10 +409,13 @@ async def get_all_relationships(
 
             names: dict[str, str] = {}
             if ids:
-                entities_result = client.table("identity_nodes").select(
-                    "id, canonical_name"
-                ).in_("id", list(ids)).execute()
-                for e in (entities_result.data or []):
+                entities_result = (
+                    client.table("identity_nodes")
+                    .select("id, canonical_name")
+                    .in_("id", list(ids))
+                    .execute()
+                )
+                for e in entities_result.data or []:
                     names[e["id"]] = e["canonical_name"]
 
             return result.data, names
@@ -427,7 +476,11 @@ async def get_all_relationships(
 # =============================================================================
 
 
-@router.get("/merge-suggestions", response_model=MergeSuggestionsResponse, response_model_by_alias=True)
+@router.get(
+    "/merge-suggestions",
+    response_model=MergeSuggestionsResponse,
+    response_model_by_alias=True,
+)
 async def get_merge_suggestions(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_type: EntityType | None = Query(
@@ -502,7 +555,9 @@ async def get_merge_suggestions(
                     continue
 
                 # Avoid duplicates (A,B and B,A)
-                pair_key = tuple(sorted([candidate.entity_id, candidate.candidate_entity_id]))
+                pair_key = tuple(
+                    sorted([candidate.entity_id, candidate.candidate_entity_id])
+                )
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)
@@ -686,7 +741,11 @@ async def get_entity(
 # =============================================================================
 
 
-@router.get("/{entity_id}/mentions", response_model=EntityMentionsResponse, response_model_by_alias=True)
+@router.get(
+    "/{entity_id}/mentions",
+    response_model=EntityMentionsResponse,
+    response_model_by_alias=True,
+)
 async def get_entity_mentions(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -804,7 +863,11 @@ async def get_entity_mentions(
 # =============================================================================
 
 
-@router.get("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
+@router.get(
+    "/{entity_id}/aliases",
+    response_model=AliasesListResponse,
+    response_model_by_alias=True,
+)
 async def get_entity_aliases(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -880,7 +943,11 @@ async def get_entity_aliases(
         ) from e
 
 
-@router.post("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
+@router.post(
+    "/{entity_id}/aliases",
+    response_model=AliasesListResponse,
+    response_model_by_alias=True,
+)
 async def add_entity_alias(
     request: AddAliasRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1021,7 +1088,11 @@ async def add_entity_alias(
         ) from e
 
 
-@router.delete("/{entity_id}/aliases", response_model=AliasesListResponse, response_model_by_alias=True)
+@router.delete(
+    "/{entity_id}/aliases",
+    response_model=AliasesListResponse,
+    response_model_by_alias=True,
+)
 async def remove_entity_alias(
     request: RemoveAliasRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1355,7 +1426,9 @@ async def merge_entities(
 # =============================================================================
 
 
-@router.post("/unmerge", response_model=UnmergeResultResponse, response_model_by_alias=True)
+@router.post(
+    "/unmerge", response_model=UnmergeResultResponse, response_model_by_alias=True
+)
 async def unmerge_entity(
     request: UnmergeEntityRequest,
     matter_id: str = Path(..., description="Matter UUID"),
@@ -1414,9 +1487,11 @@ async def unmerge_entity(
 
         # Check if entity exists and is merged (in thread to avoid blocking)
         entity_result = await asyncio.to_thread(
-            lambda: client.table("identity_nodes").select(
-                "id, canonical_name, merged_into_id, matter_id"
-            ).eq("id", request.entity_id).eq("matter_id", matter_id).execute()
+            lambda: client.table("identity_nodes")
+            .select("id, canonical_name, merged_into_id, matter_id")
+            .eq("id", request.entity_id)
+            .eq("matter_id", matter_id)
+            .execute()
         )
 
         if not entity_result.data or len(entity_result.data) == 0:
@@ -1524,9 +1599,13 @@ class MergedEntityItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., description="Merged entity ID")
-    canonical_name: str = Field(..., alias="canonicalName", description="Entity canonical name")
+    canonical_name: str = Field(
+        ..., alias="canonicalName", description="Entity canonical name"
+    )
     entity_type: str = Field(..., alias="entityType", description="Entity type")
-    merged_at: str | None = Field(None, alias="mergedAt", description="When the merge occurred")
+    merged_at: str | None = Field(
+        None, alias="mergedAt", description="When the merge occurred"
+    )
 
 
 class MergedEntitiesResponse(BaseModel):
@@ -1538,7 +1617,11 @@ class MergedEntitiesResponse(BaseModel):
     total: int = Field(..., description="Total merged entities")
 
 
-@router.get("/{entity_id}/merged-from", response_model=MergedEntitiesResponse, response_model_by_alias=True)
+@router.get(
+    "/{entity_id}/merged-from",
+    response_model=MergedEntitiesResponse,
+    response_model_by_alias=True,
+)
 async def get_merged_entities(
     matter_id: str = Path(..., description="Matter UUID"),
     entity_id: str = Path(..., description="Entity UUID"),
@@ -1586,9 +1669,11 @@ async def get_merged_entities(
 
         # Query entities where merged_into_id = entity_id (in thread to avoid blocking)
         result = await asyncio.to_thread(
-            lambda: client.table("identity_nodes").select(
-                "id, canonical_name, entity_type, merged_at"
-            ).eq("merged_into_id", entity_id).eq("matter_id", matter_id).execute()
+            lambda: client.table("identity_nodes")
+            .select("id, canonical_name, entity_type, merged_at")
+            .eq("merged_into_id", entity_id)
+            .eq("matter_id", matter_id)
+            .execute()
         )
 
         merged_entities = [
@@ -1633,4 +1718,3 @@ async def get_merged_entities(
                 }
             },
         ) from e
-

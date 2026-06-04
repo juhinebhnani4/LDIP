@@ -142,7 +142,11 @@ class TestInjectionDetectorScanDocument:
         result = await detector.scan_document(text, use_llm=False)
 
         # Single pattern = LOW risk
-        assert result.risk_level in [InjectionRisk.LOW, InjectionRisk.MEDIUM, InjectionRisk.NONE]
+        assert result.risk_level in [
+            InjectionRisk.LOW,
+            InjectionRisk.MEDIUM,
+            InjectionRisk.NONE,
+        ]
 
     @pytest.mark.asyncio
     async def test_returns_none_for_clean_document(self) -> None:

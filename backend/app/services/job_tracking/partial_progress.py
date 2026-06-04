@@ -284,7 +284,9 @@ class PartialProgressTracker:
                 error=str(e),
             )
 
-    async def save_progress_async(self, stage: StageProgress, force: bool = False) -> None:
+    async def save_progress_async(
+        self, stage: StageProgress, force: bool = False
+    ) -> None:
         """Persist stage progress to job metadata (async variant).
 
         For use inside async functions to avoid nested sync->async bridging.
@@ -344,7 +346,10 @@ class PartialProgressTracker:
             job = await self.job_tracker.get_job(self.job_id)
             if job and job.metadata:
                 metadata = job.metadata
-                if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
+                if (
+                    "partial_progress" in metadata
+                    and stage_name in metadata["partial_progress"]
+                ):
                     del metadata["partial_progress"][stage_name]
 
                     from app.models.job import ProcessingJobUpdate
@@ -382,7 +387,10 @@ class PartialProgressTracker:
             )
             if response.data:
                 metadata = response.data[0].get("metadata") or {}
-                if "partial_progress" in metadata and stage_name in metadata["partial_progress"]:
+                if (
+                    "partial_progress" in metadata
+                    and stage_name in metadata["partial_progress"]
+                ):
                     del metadata["partial_progress"][stage_name]
 
                     now = datetime.now(UTC).isoformat()

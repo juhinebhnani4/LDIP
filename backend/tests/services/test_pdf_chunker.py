@@ -386,7 +386,7 @@ class TestPageValidation:
             prev_end = chunks[i - 1][2]
             curr_start = chunks[i][1]
             assert curr_start == prev_end + 1, (
-                f"Gap between chunk {i-1} (end={prev_end}) "
+                f"Gap between chunk {i - 1} (end={prev_end}) "
                 f"and chunk {i} (start={curr_start})"
             )
 
@@ -521,6 +521,7 @@ class TestStreamingChunkResultClass:
             # Ensure cleanup even if test fails
             if temp_dir.exists():
                 import shutil
+
                 shutil.rmtree(temp_dir)
 
     def test_manual_cleanup(self):
@@ -538,6 +539,7 @@ class TestStreamingChunkResultClass:
         finally:
             if temp_dir.exists():
                 import shutil
+
                 shutil.rmtree(temp_dir)
 
 

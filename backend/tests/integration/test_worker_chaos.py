@@ -241,7 +241,9 @@ class TestRecoveryScenarios:
         assert len(pending_chunks) == 4
 
         # Complete the pending chunks
-        completed_chunks = [c for c in sample_chunks if c.chunk_index in completed_indices]
+        completed_chunks = [
+            c for c in sample_chunks if c.chunk_index in completed_indices
+        ]
         all_chunks = completed_chunks + pending_chunks
 
         # Full merge should now succeed
@@ -290,7 +292,9 @@ class TestAtomicOperations:
         with chunker.split_pdf_streaming(pdf_bytes, chunk_size=25) as result:
             # Verify no .tmp files exist (atomic write completed)
             tmp_files = list(result.temp_dir.glob("*.tmp"))
-            assert len(tmp_files) == 0, "Temporary files should not exist after atomic write"
+            assert len(tmp_files) == 0, (
+                "Temporary files should not exist after atomic write"
+            )
 
             # All chunk files should be complete PDFs
             for chunk_path, _, _ in result.chunks:
@@ -310,8 +314,28 @@ class TestAtomicOperations:
         # Verify all bboxes are present (transaction committed)
         pages = {b["page"] for b in result.bounding_boxes}
         # Should have pages from all chunks
-        expected_pages = {1, 25, 26, 50, 51, 75, 76, 100, 101, 125,
-                         126, 150, 151, 175, 176, 200, 201, 225, 226, 250}
+        expected_pages = {
+            1,
+            25,
+            26,
+            50,
+            51,
+            75,
+            76,
+            100,
+            101,
+            125,
+            126,
+            150,
+            151,
+            175,
+            176,
+            200,
+            201,
+            225,
+            226,
+            250,
+        }
         assert pages == expected_pages
 
 
@@ -362,8 +386,11 @@ class TestChaosSimulation:
             expected_first_page = chunk.page_start
             expected_last_page = chunk.page_end
             # Find corresponding bboxes
-            chunk_bboxes = [b for b in result.bounding_boxes
-                           if expected_first_page <= b["page"] <= expected_last_page]
+            chunk_bboxes = [
+                b
+                for b in result.bounding_boxes
+                if expected_first_page <= b["page"] <= expected_last_page
+            ]
             assert len(chunk_bboxes) == 2
 
 

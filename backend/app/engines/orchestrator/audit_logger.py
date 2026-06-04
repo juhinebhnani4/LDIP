@@ -388,7 +388,9 @@ class QueryAuditLogger:
                     document_name=data.get("document_name"),
                     chunk_id=data.get("chunk_id"),
                     page_number=data.get("page_number"),
-                    text_preview=data.get("text", "")[:200] if data.get("text") else None,
+                    text_preview=data.get("text", "")[:200]
+                    if data.get("text")
+                    else None,
                     engine=engine,
                 )
             )

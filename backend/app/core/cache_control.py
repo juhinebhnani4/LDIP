@@ -16,21 +16,16 @@ CACHEABLE_ENDPOINTS = [
     # Health endpoints - cache for 30 seconds
     ("/api/health", 30, 60),
     ("/api/health/circuits", 30, 60),
-
     # Static-ish data endpoints - cache for 60 seconds
     ("/api/matters/{matter_id}/entities", 60, 120),
     ("/api/matters/{matter_id}/timeline/stats", 60, 120),
     ("/api/matters/{matter_id}/citations/acts/discovery", 60, 120),
-
     # Job stats - cache for 5 seconds (frequently polled)
     ("/api/jobs/matters/{matter_id}/stats", 5, 10),
-
     # Summary data - cache for 2 minutes (rarely changes)
     ("/api/matters/{matter_id}/summary", 120, 300),
-
     # Timeline events - cache for 30 seconds
     ("/api/matters/{matter_id}/timeline", 30, 60),
-
     # Document list - cache for 10 seconds
     ("/api/matters/{matter_id}/documents", 10, 30),
 ]

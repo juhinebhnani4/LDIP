@@ -53,6 +53,7 @@ def _get_usd_to_inr_rate() -> float:
     """Get current USD to INR rate from settings (or fallback constant)."""
     try:
         from app.core.config import get_settings
+
         return get_settings().usd_to_inr_rate
     except Exception:
         return USD_TO_INR_RATE
@@ -162,7 +163,7 @@ PROVIDER_PRICING: dict[LLMProvider, ProviderPricing] = {
     ),
     # Gemini 2.5 Flash — $0.30/$2.50 per 1M tokens (NOT 1.5 Flash rates)
     LLMProvider.GEMINI_FLASH: ProviderPricing(
-        input_cost_per_1k=0.0003,   # $0.30 per 1M input tokens
+        input_cost_per_1k=0.0003,  # $0.30 per 1M input tokens
         output_cost_per_1k=0.0025,  # $2.50 per 1M output tokens
     ),
     # Gemini 1.5 Pro — $1.25/$5.00 per 1M tokens (≤128K context)
@@ -245,6 +246,7 @@ class CostTracker:
     def pricing(self) -> ProviderPricing:
         """Get pricing for this provider."""
         from app.core.pricing_loader import get_pricing
+
         return get_pricing(self.provider)
 
     @property
@@ -714,11 +716,17 @@ class CostPersistenceService:
                 "duration_ms": tracker.duration_ms,
                 "metadata": {
                     **(metadata or {}),
-                    **({"cached_input_tokens": tracker.cached_input_tokens,
-                        "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
-                       if tracker.cached_input_tokens > 0 else {}),
-                    **({"correlation_id": cid}
-                       if (cid := get_correlation_id()) else {}),
+                    **(
+                        {
+                            "cached_input_tokens": tracker.cached_input_tokens,
+                            "cache_hit_rate": round(tracker.cache_hit_rate, 3),
+                        }
+                        if tracker.cached_input_tokens > 0
+                        else {}
+                    ),
+                    **(
+                        {"correlation_id": cid} if (cid := get_correlation_id()) else {}
+                    ),
                 },
             }
             # GAP-11: only include when set — avoids PostgREST 400 if migration not yet applied
@@ -782,7 +790,9 @@ class CostPersistenceService:
 
             result = (
                 self.supabase.table("llm_costs")
-                .select("provider, operation, input_tokens, output_tokens, total_cost_inr, total_cost_usd")
+                .select(
+                    "provider, operation, input_tokens, output_tokens, total_cost_inr, total_cost_usd"
+                )
                 .eq("matter_id", matter_id)
                 .gte("created_at", start_date.isoformat())
                 .execute()
@@ -891,13 +901,10 @@ class CostPersistenceService:
             List of daily cost records.
         """
         try:
-            result = (
-                self.supabase.rpc(
-                    "get_matter_daily_costs",
-                    {"p_matter_id": matter_id, "p_days": days},
-                )
-                .execute()
-            )
+            result = self.supabase.rpc(
+                "get_matter_daily_costs",
+                {"p_matter_id": matter_id, "p_days": days},
+            ).execute()
 
             return result.data or []
 
@@ -917,7 +924,9 @@ class CostPersistenceService:
 _cost_service: CostPersistenceService | None = None
 
 
-def get_cost_service(supabase_client: Any | None = None) -> CostPersistenceService | None:
+def get_cost_service(
+    supabase_client: Any | None = None,
+) -> CostPersistenceService | None:
     """Get or create the global cost persistence service.
 
     Args:
@@ -991,9 +1000,14 @@ def persist_cost_sync(
             "usd_to_inr_rate": _get_usd_to_inr_rate(),
             "duration_ms": tracker.duration_ms,
             "metadata": {
-                **({"cached_input_tokens": tracker.cached_input_tokens,
-                    "cache_hit_rate": round(tracker.cache_hit_rate, 3)}
-                   if tracker.cached_input_tokens > 0 else {}),
+                **(
+                    {
+                        "cached_input_tokens": tracker.cached_input_tokens,
+                        "cache_hit_rate": round(tracker.cache_hit_rate, 3),
+                    }
+                    if tracker.cached_input_tokens > 0
+                    else {}
+                ),
                 **(metadata or {}),
             },
         }
@@ -1111,19 +1125,19 @@ class QuotaMonitoringService:
             Dictionary keyed by provider with limit configurations.
         """
         try:
-            result = (
-                self.supabase.table("llm_quota_limits")
-                .select("*")
-                .execute()
-            )
+            result = self.supabase.table("llm_quota_limits").select("*").execute()
 
             limits = {}
             for row in result.data or []:
                 limits[row["provider"]] = {
                     "daily_token_limit": row.get("daily_token_limit"),
                     "monthly_token_limit": row.get("monthly_token_limit"),
-                    "daily_cost_limit_inr": float(row["daily_cost_limit_inr"]) if row.get("daily_cost_limit_inr") else None,
-                    "monthly_cost_limit_inr": float(row["monthly_cost_limit_inr"]) if row.get("monthly_cost_limit_inr") else None,
+                    "daily_cost_limit_inr": float(row["daily_cost_limit_inr"])
+                    if row.get("daily_cost_limit_inr")
+                    else None,
+                    "monthly_cost_limit_inr": float(row["monthly_cost_limit_inr"])
+                    if row.get("monthly_cost_limit_inr")
+                    else None,
                     "alert_threshold_pct": row.get("alert_threshold_pct", 80),
                 }
             return limits
@@ -1217,12 +1231,15 @@ class QuotaMonitoringService:
                 provider = self._normalize_provider(row["provider"])
                 if provider not in usage_by_provider:
                     usage_by_provider[provider] = []
-                usage_by_provider[provider].append({
-                    "date": row["cost_date"],
-                    "tokens": row.get("total_input_tokens", 0) + row.get("total_output_tokens", 0),
-                    "cost_inr": float(row.get("total_cost_inr", 0) or 0),
-                    "requests": row.get("operation_count", 0),
-                })
+                usage_by_provider[provider].append(
+                    {
+                        "date": row["cost_date"],
+                        "tokens": row.get("total_input_tokens", 0)
+                        + row.get("total_output_tokens", 0),
+                        "cost_inr": float(row.get("total_cost_inr", 0) or 0),
+                        "requests": row.get("operation_count", 0),
+                    }
+                )
 
             return usage_by_provider
 
@@ -1264,15 +1281,21 @@ class QuotaMonitoringService:
         # With exactly 3 items, [-3:] and [:3] would be identical, always showing "stable"
         if len(daily_usage_history) >= 4:
             # Sort by date to ensure chronological order
-            sorted_history = sorted(daily_usage_history, key=lambda d: d.get("date", ""))
+            sorted_history = sorted(
+                daily_usage_history, key=lambda d: d.get("date", "")
+            )
 
             # Compare first half vs second half for more accurate trend
             mid = len(sorted_history) // 2
             older_data = sorted_history[:mid]
             recent_data = sorted_history[mid:]
 
-            older_avg = sum(d.get("tokens", 0) for d in older_data) / max(len(older_data), 1)
-            recent_avg = sum(d.get("tokens", 0) for d in recent_data) / max(len(recent_data), 1)
+            older_avg = sum(d.get("tokens", 0) for d in older_data) / max(
+                len(older_data), 1
+            )
+            recent_avg = sum(d.get("tokens", 0) for d in recent_data) / max(
+                len(recent_data), 1
+            )
 
             if recent_avg > older_avg * 1.1:
                 trend = "increasing"
@@ -1339,7 +1362,9 @@ class QuotaMonitoringService:
             for stat in stats:
                 provider = stat.get("provider", "unknown")
                 result[provider] = {
-                    "current_rpm": stat.get("total_requests", 0),  # Approximate from session
+                    "current_rpm": stat.get(
+                        "total_requests", 0
+                    ),  # Approximate from session
                     "rate_limited_count": stat.get("rate_limited_count", 0),
                     "max_concurrent": stat.get("max_concurrent", 0),
                 }

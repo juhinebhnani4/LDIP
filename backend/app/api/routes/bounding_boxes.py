@@ -87,7 +87,9 @@ class BoundingBoxPageResponse(BaseModel):
 class BoundingBoxIdsRequest(BaseModel):
     """Request model for fetching bboxes by IDs."""
 
-    bbox_ids: list[str] = Field(..., min_length=1, max_length=100, description="List of bbox UUIDs")
+    bbox_ids: list[str] = Field(
+        ..., min_length=1, max_length=100, description="List of bbox UUIDs"
+    )
     matter_id: str = Field(..., description="Matter UUID for access control")
     include_text: bool = Field(
         True,
@@ -199,7 +201,9 @@ async def get_document_bounding_boxes(
     (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Verify access to document
-    _verify_document_access(document_id, current_user.id, document_service, matter_service)
+    _verify_document_access(
+        document_id, current_user.id, document_service, matter_service
+    )
 
     try:
         boxes, total = bbox_service.get_bounding_boxes_for_document(
@@ -270,7 +274,9 @@ async def get_page_bounding_boxes(
     (e.g., for highlighting). This reduces egress by approximately 80%.
     """
     # Verify access to document
-    _verify_document_access(document_id, current_user.id, document_service, matter_service)
+    _verify_document_access(
+        document_id, current_user.id, document_service, matter_service
+    )
 
     try:
         boxes = bbox_service.get_bounding_boxes_for_page(
@@ -393,7 +399,9 @@ async def get_chunk_bounding_boxes(
         if not bbox_ids:
             return BoundingBoxPageResponse(data=[])
 
-        boxes = bbox_service.get_bounding_boxes_by_ids(bbox_ids, include_text=include_text)
+        boxes = bbox_service.get_bounding_boxes_by_ids(
+            bbox_ids, include_text=include_text
+        )
 
         return BoundingBoxPageResponse(
             data=[BoundingBoxData(**box) for box in boxes],

@@ -168,7 +168,9 @@ class TestExtractBoundingBoxes:
 
                 # Create 4 vertices for rectangle
                 vertices = []
-                for _i, (x, y) in enumerate([(0.1, 0.2), (0.3, 0.2), (0.3, 0.4), (0.1, 0.4)]):
+                for _i, (x, y) in enumerate(
+                    [(0.1, 0.2), (0.3, 0.2), (0.3, 0.4), (0.1, 0.4)]
+                ):
                     v = MagicMock()
                     v.x = x
                     v.y = y
@@ -288,7 +290,9 @@ class TestCalculateReadingOrder:
     def test_single_box(self) -> None:
         """Should assign index 0 to single box."""
         boxes = [
-            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"),
+            OCRBoundingBox(
+                page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"
+            ),
         ]
 
         result = calculate_reading_order(boxes)
@@ -299,8 +303,12 @@ class TestCalculateReadingOrder:
     def test_horizontal_ordering(self) -> None:
         """Should order boxes left to right on same line."""
         boxes = [
-            OCRBoundingBox(page=1, x=50.0, y=10.0, width=20.0, height=5.0, text="World"),
-            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"),
+            OCRBoundingBox(
+                page=1, x=50.0, y=10.0, width=20.0, height=5.0, text="World"
+            ),
+            OCRBoundingBox(
+                page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="Hello"
+            ),
         ]
 
         result = calculate_reading_order(boxes)
@@ -314,8 +322,12 @@ class TestCalculateReadingOrder:
     def test_vertical_ordering(self) -> None:
         """Should order boxes top to bottom on different lines."""
         boxes = [
-            OCRBoundingBox(page=1, x=10.0, y=50.0, width=20.0, height=5.0, text="Second"),
-            OCRBoundingBox(page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="First"),
+            OCRBoundingBox(
+                page=1, x=10.0, y=50.0, width=20.0, height=5.0, text="Second"
+            ),
+            OCRBoundingBox(
+                page=1, x=10.0, y=10.0, width=20.0, height=5.0, text="First"
+            ),
         ]
 
         result = calculate_reading_order(boxes)

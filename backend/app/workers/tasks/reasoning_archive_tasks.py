@@ -38,6 +38,7 @@ def archive_reasoning_traces(self) -> dict[str, int]:
     Raises:
         Retry: If task fails and retries are available.
     """
+
     async def run_archival() -> dict[str, int]:
         from app.services.reasoning_archive_service import get_reasoning_archive_service
 
@@ -119,6 +120,7 @@ def restore_reasoning_trace(self, trace_id: str, matter_id: str) -> bool:
     Returns:
         True if restoration succeeded.
     """
+
     async def run_restore() -> bool:
         from app.services.reasoning_archive_service import get_reasoning_archive_service
 

@@ -38,7 +38,9 @@ def setup_ocr_chunks_bucket() -> bool:
     key = os.environ.get("SUPABASE_SERVICE_KEY")
 
     if not url or not key:
-        print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables required")
+        print(
+            "ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables required"
+        )
         print("  Set these in your .env file or CI/CD secrets")
         return False
 
@@ -69,7 +71,7 @@ def setup_ocr_chunks_bucket() -> bool:
                 "public": False,  # Private bucket - requires auth
                 "file_size_limit": 10 * 1024 * 1024,  # 10MB (JSON results are small)
                 "allowed_mime_types": ["application/json"],
-            }
+            },
         )
         print(f"✓ Bucket '{bucket_name}' created successfully")
         return True
@@ -92,6 +94,7 @@ def main() -> int:
     # Try to load .env file if python-dotenv is available
     try:
         from dotenv import load_dotenv
+
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         if os.path.exists(env_path):
             load_dotenv(env_path)
@@ -104,7 +107,9 @@ def main() -> int:
     print("=" * 60)
     if success:
         print("OCR chunks bucket setup complete!")
-        print("\nPath structure: ocr-chunks/{matter_id}/{document_id}/{chunk_index}.json")
+        print(
+            "\nPath structure: ocr-chunks/{matter_id}/{document_id}/{chunk_index}.json"
+        )
         return 0
     else:
         print("OCR chunks bucket setup FAILED. Check errors above.")

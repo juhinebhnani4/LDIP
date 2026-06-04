@@ -625,7 +625,9 @@ class TestOCRBoundingBoxIntegration:
         mock_bbox_service.save_bounding_boxes.assert_called_once()
 
         # Verify the order: delete was called before save
-        assert call_order == ["delete", "save"], f"Expected delete before save, got: {call_order}"
+        assert call_order == ["delete", "save"], (
+            f"Expected delete before save, got: {call_order}"
+        )
 
         assert result["bbox_count"] == 3
 

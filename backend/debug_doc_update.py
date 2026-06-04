@@ -1,7 +1,8 @@
 """Debug document status update."""
+
 import sys
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 from datetime import UTC, datetime
 
@@ -34,10 +35,17 @@ def main():
 
     print("\nTrying to update status to 'searchable'...")
     try:
-        result = client.table("documents").update({
-            "status": "searchable",
-            "updated_at": datetime.now(UTC).isoformat(),
-        }).eq("id", doc_id).execute()
+        result = (
+            client.table("documents")
+            .update(
+                {
+                    "status": "searchable",
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("id", doc_id)
+            .execute()
+        )
         print("SUCCESS!")
         print(f"Updated: {result.data}")
     except Exception as e:
@@ -47,17 +55,30 @@ def main():
         print("\nTrying with page_count...")
         try:
             # Get page count from chunks
-            chunks = client.table("chunks").select("page_number").eq("document_id", doc_id).execute()
+            chunks = (
+                client.table("chunks")
+                .select("page_number")
+                .eq("document_id", doc_id)
+                .execute()
+            )
             max_page = max(c["page_number"] for c in chunks.data) if chunks.data else 1
 
-            result = client.table("documents").update({
-                "status": "searchable",
-                "page_count": max_page,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }).eq("id", doc_id).execute()
+            result = (
+                client.table("documents")
+                .update(
+                    {
+                        "status": "searchable",
+                        "page_count": max_page,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
+                .eq("id", doc_id)
+                .execute()
+            )
             print("SUCCESS with page_count!")
         except Exception as e2:
             print(f"FAILED again: {e2}")
+
 
 if __name__ == "__main__":
     main()

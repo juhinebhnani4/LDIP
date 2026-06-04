@@ -27,7 +27,9 @@ from app.services.pdf_chunker import PDFChunker
 
 
 @st.composite
-def chunk_configuration(draw, min_pages=1, max_pages=1000, min_chunk_size=10, max_chunk_size=30):
+def chunk_configuration(
+    draw, min_pages=1, max_pages=1000, min_chunk_size=10, max_chunk_size=30
+):
     """Generate a valid chunk configuration.
 
     Returns:
@@ -69,13 +71,15 @@ def valid_chunk_results(draw, total_pages, chunk_size):
             relative_page = draw(st.integers(min_value=1, max_value=page_count))
             reading_order = draw(st.integers(min_value=0, max_value=20))
 
-            bboxes.append({
-                "page": relative_page,
-                "reading_order_index": reading_order,
-                "text": f"chunk{chunk_index}_page{relative_page}_roi{reading_order}",
-                # Store expected absolute page for verification
-                "_expected_absolute_page": relative_page + (page_start - 1),
-            })
+            bboxes.append(
+                {
+                    "page": relative_page,
+                    "reading_order_index": reading_order,
+                    "text": f"chunk{chunk_index}_page{relative_page}_roi{reading_order}",
+                    # Store expected absolute page for verification
+                    "_expected_absolute_page": relative_page + (page_start - 1),
+                }
+            )
 
         confidence = draw(st.floats(min_value=0.5, max_value=1.0))
 
@@ -123,17 +127,21 @@ class TestPageOffsetProperties:
             # Add bbox at first and last page of each chunk
             bboxes = []
             if page_count > 0:
-                bboxes.append({
-                    "page": 1,
-                    "reading_order_index": 0,
-                    "_expected": page_start,  # Expected absolute page
-                })
-                if page_count > 1:
-                    bboxes.append({
-                        "page": page_count,
+                bboxes.append(
+                    {
+                        "page": 1,
                         "reading_order_index": 0,
-                        "_expected": page_end,  # Expected absolute page
-                    })
+                        "_expected": page_start,  # Expected absolute page
+                    }
+                )
+                if page_count > 1:
+                    bboxes.append(
+                        {
+                            "page": page_count,
+                            "reading_order_index": 0,
+                            "_expected": page_end,  # Expected absolute page
+                        }
+                    )
 
             chunks.append(
                 ChunkOCRResult(
@@ -203,7 +211,9 @@ class TestPageOffsetProperties:
         for bbox in result.bounding_boxes:
             page = bbox["page"]
             assert page >= 1, f"Page number {page} is less than 1"
-            assert page <= total_pages, f"Page number {page} exceeds total pages {total_pages}"
+            assert page <= total_pages, (
+                f"Page number {page} exceeds total pages {total_pages}"
+            )
 
     @given(config=chunk_configuration())
     @settings(max_examples=1000, deadline=None)
@@ -324,8 +334,7 @@ class TestPDFChunkerProperties:
             last_chunk_pages = last_end - last_start + 1
 
             assert 1 <= last_chunk_pages <= chunk_size, (
-                f"Last chunk has {last_chunk_pages} pages, "
-                f"expected 1 to {chunk_size}"
+                f"Last chunk has {last_chunk_pages} pages, expected 1 to {chunk_size}"
             )
 
 
@@ -351,10 +360,12 @@ class TestMergerInvariants:
 
             bboxes = []
             for i in range(min(bboxes_per_chunk, page_count)):
-                bboxes.append({
-                    "page": (i % page_count) + 1,
-                    "reading_order_index": i,
-                })
+                bboxes.append(
+                    {
+                        "page": (i % page_count) + 1,
+                        "reading_order_index": i,
+                    }
+                )
             expected_total_bboxes += len(bboxes)
 
             chunks.append(
@@ -416,7 +427,7 @@ class TestMergerInvariants:
             next_start = chunks[i + 1].page_start
             assert next_start == curr_end + 1, (
                 f"Boundary gap: chunk {i} ends at {curr_end}, "
-                f"chunk {i+1} starts at {next_start}"
+                f"chunk {i + 1} starts at {next_start}"
             )
 
 
@@ -444,12 +455,14 @@ class TestRandomizedEndToEnd:
             bboxes = []
             for relative_page in range(1, page_count + 1):
                 absolute_page = page_start + relative_page - 1
-                bboxes.append({
-                    "page": relative_page,
-                    "reading_order_index": 0,
-                    "text": f"Page {absolute_page} content",
-                    "_expected_page": absolute_page,
-                })
+                bboxes.append(
+                    {
+                        "page": relative_page,
+                        "reading_order_index": 0,
+                        "text": f"Page {absolute_page} content",
+                        "_expected_page": absolute_page,
+                    }
+                )
 
             chunks.append(
                 ChunkOCRResult(

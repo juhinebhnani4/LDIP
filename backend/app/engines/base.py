@@ -61,6 +61,7 @@ class ReasoningCaptureMixin:
         """Get reasoning trace service, initializing if needed."""
         if self._reasoning_service is None:
             from app.services.reasoning_trace_service import get_reasoning_trace_service
+
             self._reasoning_service = get_reasoning_trace_service()
         return self._reasoning_service
 
@@ -182,7 +183,9 @@ class ReasoningCaptureMixin:
                 "model_used": trace.model_used,
                 "reasoning_text": trace.reasoning_text,
                 "reasoning_structured": trace.reasoning_structured,
-                "input_summary": trace.input_summary[:1000] if trace.input_summary else None,
+                "input_summary": trace.input_summary[:1000]
+                if trace.input_summary
+                else None,
                 "prompt_template_version": trace.prompt_template_version,
                 "confidence_score": trace.confidence_score,
                 "tokens_used": trace.tokens_used,

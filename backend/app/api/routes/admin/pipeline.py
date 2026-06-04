@@ -191,7 +191,9 @@ async def _get_document(document_id: str) -> dict:
     client = get_service_client()
     response = (
         client.table("documents")
-        .select("id, filename, status, matter_id, extracted_text, ocr_error, updated_at")
+        .select(
+            "id, filename, status, matter_id, extracted_text, ocr_error, updated_at"
+        )
         .eq("id", document_id)
         .single()
         .execute()
@@ -370,6 +372,7 @@ async def retry_failed_tasks(
         # 2. Delete RAG chunks (cascades to embeddings)
         try:
             from app.services.chunk_service import ChunkService
+
             chunk_svc = ChunkService()
             await chunk_svc.delete_chunks_for_document(document_id)
             cleanup_actions.append("deleted_rag_chunks")
@@ -378,22 +381,24 @@ async def retry_failed_tasks(
 
         # 3. Reset document status to pending
         try:
-            client.table("documents").update({
-                "status": "pending",
-                "ocr_error": None,
-            }).eq("id", document_id).execute()
+            client.table("documents").update(
+                {
+                    "status": "pending",
+                    "ocr_error": None,
+                }
+            ).eq("id", document_id).execute()
             cleanup_actions.append("reset_status_to_pending")
         except Exception as e:
             logger.warning("retry_cleanup_reset_status_failed", error=str(e))
 
         # 4. Mark any PROCESSING jobs as FAILED so they don't block
         try:
-            client.table("processing_jobs").update({
-                "status": "FAILED",
-                "error_message": "Superseded by admin retry",
-            }).eq("document_id", document_id).eq(
-                "status", "PROCESSING"
-            ).execute()
+            client.table("processing_jobs").update(
+                {
+                    "status": "FAILED",
+                    "error_message": "Superseded by admin retry",
+                }
+            ).eq("document_id", document_id).eq("status", "PROCESSING").execute()
             cleanup_actions.append("failed_stale_jobs")
         except Exception as e:
             logger.warning("retry_cleanup_jobs_failed", error=str(e))
@@ -401,6 +406,7 @@ async def retry_failed_tasks(
         # 5. Release pipeline lock
         try:
             from app.services.distributed_lock import PipelineLock
+
             PipelineLock(document_id).release()
             cleanup_actions.append("released_pipeline_lock")
         except Exception as e:
@@ -421,6 +427,7 @@ async def retry_failed_tasks(
         from celery import chain as celery_chain
 
         from app.workers.tasks.document_tasks import process_document
+
         post_ocr = create_post_ocr_chain(
             document_id=document_id,
             matter_id=matter_id or "",
@@ -437,6 +444,7 @@ async def retry_failed_tasks(
         # Stuck in ocr_complete with no chunks — release lock and run full post-OCR chain
         try:
             from app.services.distributed_lock import PipelineLock
+
             PipelineLock(document_id).release()
             cleanup_actions.append("released_pipeline_lock")
         except Exception as e:
@@ -465,9 +473,14 @@ async def retry_failed_tasks(
         from celery import chain as celery_chain
 
         from app.workers.tasks.document_tasks import embed_chunks, extract_entities
+
         embed_chain = celery_chain(
             embed_chunks.s(
-                prev_result={"document_id": document_id, "status": "chunking_complete", "job_id": None},
+                prev_result={
+                    "document_id": document_id,
+                    "status": "chunking_complete",
+                    "job_id": None,
+                },
             ),
             extract_entities.s(),
         )
@@ -561,7 +574,9 @@ async def get_pipeline_status(
         .execute()
     )
     chunks_count = chunks_resp.count or 0
-    chunks_with_embeddings = sum(1 for c in (chunks_resp.data or []) if c.get("embedding"))
+    chunks_with_embeddings = sum(
+        1 for c in (chunks_resp.data or []) if c.get("embedding")
+    )
 
     # Get entity count
     entities_resp = (
@@ -1191,11 +1206,13 @@ async def get_error_patterns(
         )
 
         for job_row in jobs_result.data or []:
-            rows.append({
-                "stage_name": job_row.get("current_stage") or "chunked_processing",
-                "error_message": job_row.get("error_message"),
-                "created_at": job_row.get("updated_at"),
-            })
+            rows.append(
+                {
+                    "stage_name": job_row.get("current_stage") or "chunked_processing",
+                    "error_message": job_row.get("error_message"),
+                    "created_at": job_row.get("updated_at"),
+                }
+            )
 
         # Group by (truncated error_message, stage_name)
         pattern_map: dict[tuple[str, str], dict] = {}

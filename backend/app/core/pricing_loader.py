@@ -124,6 +124,7 @@ def refresh_pricing() -> None:
 
             # Clear the get_model_pricing_info LRU cache so it picks up new prices
             from app.core.cost_tracking import get_model_pricing_info
+
             get_model_pricing_info.cache_clear()
 
             logger.info("pricing_refreshed", provider_count=len(_db_pricing))

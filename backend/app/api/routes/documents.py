@@ -221,9 +221,7 @@ class ManualReviewRequest(BaseModel):
     """Request body for requesting manual review of specific pages."""
 
     pages: list[int] = Field(
-        ...,
-        min_length=1,
-        description="List of page numbers to flag for manual review"
+        ..., min_length=1, description="List of page numbers to flag for manual review"
     )
 
 
@@ -231,6 +229,7 @@ class ManualReviewResponse(BaseModel):
     """Response for manual review request."""
 
     data: dict[str, str | int | bool]
+
 
 # File size limits (Story 2.5: Configurable limit with soft-launch mode)
 _settings = get_settings()
@@ -244,7 +243,9 @@ SMALL_DOCUMENT_THRESHOLD_PAGES = 100  # <100 pages -> 'high' priority queue
 SPOOL_MAX_SIZE = 10 * 1024 * 1024  # 10MB - files larger than this use disk
 
 # ZIP bomb protection limits
-ZIP_MAX_COMPRESSION_RATIO = 100  # Max allowed compression ratio (uncompressed/compressed)
+ZIP_MAX_COMPRESSION_RATIO = (
+    100  # Max allowed compression ratio (uncompressed/compressed)
+)
 ZIP_MAX_TOTAL_EXTRACTED_SIZE = 2 * 1024 * 1024 * 1024  # 2GB max total extracted size
 ZIP_MAX_FILES = 500  # Maximum number of files in a ZIP
 
@@ -310,6 +311,7 @@ def _verify_matter_access(
         )
 
     return role
+
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {
@@ -399,7 +401,8 @@ def _get_subfolder(document_type: DocumentType) -> str:
 def _extract_year_from_filename(filename: str) -> int | None:
     """Extract year from filename like 'Indian Contract Act, 1872.pdf'."""
     import re
-    match = re.search(r'\b(1[89]\d{2}|20\d{2})\b', filename)
+
+    match = re.search(r"\b(1[89]\d{2}|20\d{2})\b", filename)
     return int(match.group(1)) if match else None
 
 
@@ -412,14 +415,17 @@ def _detect_act_from_filename(filename: str) -> bool:
     Returns True if the filename matches a statute pattern.
     """
     import re
+
     # Remove extension
-    name = re.sub(r'\.[^.]+$', '', filename)
+    name = re.sub(r"\.[^.]+$", "", filename)
     # Match common statute keywords as whole words
-    return bool(re.search(
-        r'\b(act|code|statute|ordinance|regulation|rules|bill)\b',
-        name,
-        re.IGNORECASE,
-    ))
+    return bool(
+        re.search(
+            r"\b(act|code|statute|ordinance|regulation|rules|bill)\b",
+            name,
+            re.IGNORECASE,
+        )
+    )
 
 
 async def _upload_act_to_library(
@@ -459,13 +465,16 @@ async def _upload_act_to_library(
     # Upload to global acts storage (not matter-specific)
     # Use normalized filename for storage path
     import re
-    normalized_name = re.sub(r'[^\w\s-]', '', title.lower())
-    normalized_name = re.sub(r'\s+', '_', normalized_name)
+
+    normalized_name = re.sub(r"[^\w\s-]", "", title.lower())
+    normalized_name = re.sub(r"\s+", "_", normalized_name)
     storage_path = f"global/acts/{normalized_name}.pdf"  # noqa: F841  # TODO: wire into global acts upload path
 
     # GAP-12: Standardized dedup using find_library_duplicates RPC
     try:
-        duplicates = library_service.find_duplicates(title, year=year, similarity_threshold=0.6)
+        duplicates = library_service.find_duplicates(
+            title, year=year, similarity_threshold=0.6
+        )
         if duplicates:
             existing_id = duplicates[0].id
             logger.info(
@@ -538,6 +547,7 @@ async def _upload_act_to_library(
     ocr_queued = False
     try:
         from app.workers.tasks.library_tasks import ocr_and_process_library_document
+
         ocr_and_process_library_document.apply_async(
             kwargs={
                 "library_document_id": library_doc.id,
@@ -695,7 +705,9 @@ async def _read_file_with_streaming(file: UploadFile) -> tuple[bytes, int]:
     return content, total_size
 
 
-def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = None) -> None:
+def _queue_ocr_task(
+    document_id: str, file_size: int, matter_id: str | None = None
+) -> None:
     """Queue full document processing pipeline for a document.
 
     Uses Celery chain to run the complete document ingestion pipeline.
@@ -727,6 +739,7 @@ def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = No
     if matter_id:
         try:
             from app.services.supabase.client import get_service_client
+
             settings = get_settings()
             client = get_service_client()
             if client:
@@ -742,13 +755,15 @@ def _queue_ocr_task(document_id: str, file_size: int, matter_id: str | None = No
                     # Create a QUEUED processing_job so dispatch_stuck_queued_jobs
                     # maintenance task (runs every 10 min) picks it up when a slot opens
                     try:
-                        client.table("processing_jobs").insert({
-                            "matter_id": matter_id,
-                            "document_id": document_id,
-                            "job_type": "DOCUMENT_PROCESSING",
-                            "status": "QUEUED",
-                            "current_stage": "queued_concurrency_limit",
-                        }).execute()
+                        client.table("processing_jobs").insert(
+                            {
+                                "matter_id": matter_id,
+                                "document_id": document_id,
+                                "job_type": "DOCUMENT_PROCESSING",
+                                "status": "QUEUED",
+                                "current_stage": "queued_concurrency_limit",
+                            }
+                        ).execute()
                     except Exception as insert_err:
                         logger.warning(
                             "queued_job_insert_failed",
@@ -916,7 +931,8 @@ async def _extract_and_upload_zip(
 
             # Filter for PDF files only
             pdf_files = [
-                f for f in zf.namelist()
+                f
+                for f in zf.namelist()
                 if f.lower().endswith(".pdf") and not f.startswith("__MACOSX")
             ]
 
@@ -963,9 +979,9 @@ async def _extract_and_upload_zip(
                 # Per-file act detection (GAP-9 Gap 2):
                 # If user explicitly selected 'act', all files go to library.
                 # If user selected 'case_file', auto-detect per filename.
-                file_is_act = (
-                    document_type == DocumentType.ACT
-                    or (document_type == DocumentType.CASE_FILE and _detect_act_from_filename(filename))
+                file_is_act = document_type == DocumentType.ACT or (
+                    document_type == DocumentType.CASE_FILE
+                    and _detect_act_from_filename(filename)
                 )
 
                 if file_is_act and library_service:
@@ -980,7 +996,9 @@ async def _extract_and_upload_zip(
                             storage_service=storage_service,
                             library_service=library_service,
                         )
-                        lib_doc = library_service.get_document(result["library_document_id"])
+                        lib_doc = library_service.get_document(
+                            result["library_document_id"]
+                        )
                         doc = UploadedDocument(
                             document_id=lib_doc.id,
                             filename=lib_doc.filename,
@@ -1073,11 +1091,13 @@ async def _extract_and_upload_zip(
             try:
                 storage_service.delete_file(path)
             except Exception as delete_error:
-                rollback_failures.append({
-                    "type": "storage",
-                    "path": path,
-                    "error": str(delete_error),
-                })
+                rollback_failures.append(
+                    {
+                        "type": "storage",
+                        "path": path,
+                        "error": str(delete_error),
+                    }
+                )
                 logger.error(
                     "rollback_storage_delete_failed",
                     storage_path=path,
@@ -1089,11 +1109,13 @@ async def _extract_and_upload_zip(
             try:
                 document_service.delete_document(doc_id)
             except Exception as delete_error:
-                rollback_failures.append({
-                    "type": "document",
-                    "document_id": doc_id,
-                    "error": str(delete_error),
-                })
+                rollback_failures.append(
+                    {
+                        "type": "document",
+                        "document_id": doc_id,
+                        "error": str(delete_error),
+                    }
+                )
                 logger.error(
                     "rollback_document_delete_failed",
                     document_id=doc_id,
@@ -1106,15 +1128,23 @@ async def _extract_and_upload_zip(
                 "zip_rollback_incomplete",
                 matter_id=matter_id,
                 rollback_failures=rollback_failures,
-                orphaned_storage_paths=[f["path"] for f in rollback_failures if f["type"] == "storage"],
-                orphaned_document_ids=[f["document_id"] for f in rollback_failures if f["type"] == "document"],
+                orphaned_storage_paths=[
+                    f["path"] for f in rollback_failures if f["type"] == "storage"
+                ],
+                orphaned_document_ids=[
+                    f["document_id"]
+                    for f in rollback_failures
+                    if f["type"] == "document"
+                ],
             )
 
         # Include rollback failures in error response for visibility
         error_details: dict = {}
         if rollback_failures:
             error_details["rollback_failures"] = len(rollback_failures)
-            error_details["warning"] = "Some resources could not be cleaned up. Contact support if issues persist."
+            error_details["warning"] = (
+                "Some resources could not be cleaned up. Contact support if issues persist."
+            )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1137,8 +1167,7 @@ async def _extract_and_upload_zip(
 async def upload_document(
     file: UploadFile = File(..., description="PDF or ZIP file to upload"),
     document_type: DocumentType = Form(
-        default=DocumentType.CASE_FILE,
-        description="Document classification type"
+        default=DocumentType.CASE_FILE, description="Document classification type"
     ),
     membership: MatterMembership = Depends(
         require_matter_role_from_form([MatterRole.OWNER, MatterRole.EDITOR])
@@ -1189,7 +1218,9 @@ async def upload_document(
 
     # Auto-detect Act from filename when frontend sends default 'case_file'
     # Safety net: "TORTS Act 1992.pdf" should route to library even if UI didn't classify it
-    if document_type == DocumentType.CASE_FILE and _detect_act_from_filename(file.filename or ""):
+    if document_type == DocumentType.CASE_FILE and _detect_act_from_filename(
+        file.filename or ""
+    ):
         logger.info(
             "document_type_auto_detected",
             filename=file.filename,
@@ -1245,7 +1276,9 @@ async def upload_document(
 
                     # Return a document-like response for frontend compatibility
                     # Create a minimal Document-like object from library document
-                    lib_doc = library_service.get_document(result["library_document_id"])
+                    lib_doc = library_service.get_document(
+                        result["library_document_id"]
+                    )
 
                     # Return as UploadedDocument to maintain API compatibility
                     uploaded_doc = UploadedDocument(
@@ -1312,6 +1345,7 @@ async def upload_document(
             try:
                 from app.models.activity import ActivityTypeEnum
                 from app.services.activity_service import get_activity_service
+
                 activity_service = get_activity_service()
                 await activity_service.create_activity(
                     user_id=membership.user_id,
@@ -1321,7 +1355,9 @@ async def upload_document(
                     metadata={"document_id": doc.document_id, "file_size": file_size},
                 )
             except Exception as activity_err:
-                logger.warning("activity_creation_failed_on_upload", error=str(activity_err))
+                logger.warning(
+                    "activity_creation_failed_on_upload", error=str(activity_err)
+                )
 
             return DocumentResponse(data=doc)
 
@@ -1374,9 +1410,7 @@ async def list_documents(
     is_reference_material: bool | None = Query(
         None, description="Filter by reference material flag"
     ),
-    filename: str | None = Query(
-        None, description="Filter by exact filename match"
-    ),
+    filename: str | None = Query(None, description="Filter by exact filename match"),
     sort_by: str = Query(
         "uploaded_at",
         description="Column to sort by (uploaded_at, filename, file_size, document_type, status)",
@@ -1529,9 +1563,12 @@ async def bulk_update_documents(
                 if doc.document_type != "act":
                     continue  # Wasn't an act — skip
                 try:
-                    raw_row = document_service.client.table("documents").select(
-                        "migrated_to_library, library_document_id"
-                    ).eq("id", str(doc_id)).execute()
+                    raw_row = (
+                        document_service.client.table("documents")
+                        .select("migrated_to_library, library_document_id")
+                        .eq("id", str(doc_id))
+                        .execute()
+                    )
 
                     if raw_row.data:
                         row = raw_row.data[0]
@@ -1540,10 +1577,12 @@ async def bulk_update_documents(
 
                         if was_migrated or lib_doc_id:
                             # Clear promotion fields FIRST (hostile-review D2 fix)
-                            document_service.client.table("documents").update({
-                                "migrated_to_library": False,
-                                "library_document_id": None,
-                            }).eq("id", str(doc_id)).execute()
+                            document_service.client.table("documents").update(
+                                {
+                                    "migrated_to_library": False,
+                                    "library_document_id": None,
+                                }
+                            ).eq("id", str(doc_id)).execute()
 
                         if was_migrated and lib_doc_id:
                             library_svc = get_library_service()
@@ -1618,7 +1657,9 @@ async def get_document(
     try:
         # Get document and signed URL in thread to avoid blocking event loop
         doc = await asyncio.to_thread(document_service.get_document, document_id)
-        signed_url = await asyncio.to_thread(storage_service.get_signed_url, doc.storage_path, 3600)
+        signed_url = await asyncio.to_thread(
+            storage_service.get_signed_url, doc.storage_path, 3600
+        )
 
         # Query feature availability (Story 7.2)
         features = await _get_document_features(document_id)
@@ -1816,10 +1857,7 @@ async def update_document(
         )
 
         # Detect transition to Act → promote to shared library
-        if (
-            update.document_type == DocumentType.ACT
-            and doc.document_type != "act"
-        ):
+        if update.document_type == DocumentType.ACT and doc.document_type != "act":
             try:
                 library_service = get_library_service()
                 library_doc_id = library_service.promote_document_to_library(
@@ -1829,6 +1867,7 @@ async def update_document(
                 )
 
                 from app.workers.tasks.library_tasks import promote_chunks_to_library
+
                 promote_chunks_to_library.apply_async(
                     kwargs={
                         "library_document_id": library_doc_id,
@@ -1862,9 +1901,12 @@ async def update_document(
         ):
             try:
                 # Query raw row for library fields not in Document model
-                raw_row = document_service.client.table("documents").select(
-                    "migrated_to_library, library_document_id"
-                ).eq("id", str(document_id)).execute()
+                raw_row = (
+                    document_service.client.table("documents")
+                    .select("migrated_to_library, library_document_id")
+                    .eq("id", str(document_id))
+                    .execute()
+                )
 
                 if raw_row.data:
                     row = raw_row.data[0]
@@ -1874,10 +1916,12 @@ async def update_document(
                     if was_migrated or lib_doc_id:
                         # Clear promotion fields FIRST so document reappears in list
                         # even if the subsequent unlink fails (hostile-review D2 fix)
-                        document_service.client.table("documents").update({
-                            "migrated_to_library": False,
-                            "library_document_id": None,
-                        }).eq("id", str(document_id)).execute()
+                        document_service.client.table("documents").update(
+                            {
+                                "migrated_to_library": False,
+                                "library_document_id": None,
+                            }
+                        ).eq("id", str(document_id)).execute()
 
                     if was_migrated and lib_doc_id:
                         # Unlink from matter's library panel (safe if this fails —
@@ -2162,7 +2206,9 @@ async def retry_document_processing(
         "auto",
         description="Retry type: 'full' (full OCR), 'rag' (RAG only), 'auto' (detect)",
     ),
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
     doc_service: DocumentService = Depends(get_document_service),
 ) -> dict[str, RetryResponse]:
     """Retry processing for a stuck or failed document.
@@ -2218,18 +2264,29 @@ async def retry_document_processing(
         actual_retry_type = retry_type
         if retry_type == "auto":
             # Statuses where OCR already succeeded → RAG-only retry
-            rag_only_statuses = ["ocr_complete", "chunking_failed", "embedding_failed", "searchable"]
-            if doc.status.value in rag_only_statuses or doc.status.value in ["ocr_failed", "failed"] and doc.extracted_text:
+            rag_only_statuses = [
+                "ocr_complete",
+                "chunking_failed",
+                "embedding_failed",
+                "searchable",
+            ]
+            if (
+                doc.status.value in rag_only_statuses
+                or doc.status.value in ["ocr_failed", "failed"]
+                and doc.extracted_text
+            ):
                 actual_retry_type = "rag"
             else:
                 actual_retry_type = "full"
 
         # Reset or create processing_job so _mark_job_completed can fire
         from app.services.supabase.client import get_service_client as get_supa_client
+
         job_id: str | None = None
         try:
             supa = get_supa_client()
             if supa:
+
                 def _reset_or_create_job() -> str | None:
                     """Reset failed job or create new one (sync Supabase calls)."""
                     existing = (
@@ -2243,29 +2300,45 @@ async def retry_document_processing(
                     )
                     if existing.data:
                         jid = existing.data[0]["id"]
-                        supa.table("processing_jobs").update({
-                            "status": "PROCESSING",
-                            "current_stage": "retry_started",
-                            "error_message": None,
-                        }).eq("id", jid).execute()
+                        supa.table("processing_jobs").update(
+                            {
+                                "status": "PROCESSING",
+                                "current_stage": "retry_started",
+                                "error_message": None,
+                            }
+                        ).eq("id", jid).execute()
                         return jid
                     else:
-                        new_job = supa.table("processing_jobs").insert({
-                            "matter_id": matter_id,
-                            "document_id": document_id,
-                            "job_type": "DOCUMENT_PROCESSING",
-                            "status": "PROCESSING",
-                            "current_stage": "retry_started",
-                        }).execute()
+                        new_job = (
+                            supa.table("processing_jobs")
+                            .insert(
+                                {
+                                    "matter_id": matter_id,
+                                    "document_id": document_id,
+                                    "job_type": "DOCUMENT_PROCESSING",
+                                    "status": "PROCESSING",
+                                    "current_stage": "retry_started",
+                                }
+                            )
+                            .execute()
+                        )
                         if new_job.data:
                             return new_job.data[0]["id"]
                     return None
 
                 job_id = await asyncio.to_thread(_reset_or_create_job)
                 if job_id:
-                    logger.info("retry_job_tracking_setup", job_id=job_id, document_id=document_id)
+                    logger.info(
+                        "retry_job_tracking_setup",
+                        job_id=job_id,
+                        document_id=document_id,
+                    )
         except Exception as job_err:
-            logger.warning("retry_job_tracking_setup_failed", error=str(job_err), document_id=document_id)
+            logger.warning(
+                "retry_job_tracking_setup_failed",
+                error=str(job_err),
+                document_id=document_id,
+            )
 
         # Build and dispatch task chain
         from app.workers.tasks.pipeline_chains import create_post_ocr_chain
@@ -2349,7 +2422,9 @@ async def retry_document_processing(
     response_model=dict[str, Any],
 )
 async def retry_all_stuck_documents(
-    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])),
+    membership: MatterMembership = Depends(
+        require_matter_role([MatterRole.OWNER, MatterRole.EDITOR])
+    ),
     doc_service: DocumentService = Depends(get_document_service),
 ) -> dict[str, Any]:
     """Retry all stuck documents in a matter.
@@ -2369,7 +2444,13 @@ async def retry_all_stuck_documents(
 
         # Run all sync Supabase queries in a thread to avoid blocking event loop
         def _find_and_retry_stuck() -> dict:
-            stuck_statuses = ["ocr_complete", "failed", "ocr_failed", "chunking_failed", "embedding_failed"]
+            stuck_statuses = [
+                "ocr_complete",
+                "failed",
+                "ocr_failed",
+                "chunking_failed",
+                "embedding_failed",
+            ]
             docs_response = (
                 client.table("documents")
                 .select("id, filename, status, extracted_text")
@@ -2405,9 +2486,15 @@ async def retry_all_stuck_documents(
                         )
                         task_chain.apply_async()
                         results["retried"] += 1
-                        logger.info("stuck_document_full_retry_queued", document_id=doc_id, matter_id=matter_id)
+                        logger.info(
+                            "stuck_document_full_retry_queued",
+                            document_id=doc_id,
+                            matter_id=matter_id,
+                        )
                     except Exception as e:
-                        results["errors"].append({"document_id": doc_id, "error": str(e)})
+                        results["errors"].append(
+                            {"document_id": doc_id, "error": str(e)}
+                        )
                     continue
 
                 if not has_text:
@@ -2435,7 +2522,11 @@ async def retry_all_stuck_documents(
                     )
                     task_chain.apply_async()
                     results["retried"] += 1
-                    logger.info("stuck_document_rag_retry_queued", document_id=doc_id, matter_id=matter_id)
+                    logger.info(
+                        "stuck_document_rag_retry_queued",
+                        document_id=doc_id,
+                        matter_id=matter_id,
+                    )
                 except Exception as e:
                     results["errors"].append({"document_id": doc_id, "error": str(e)})
 

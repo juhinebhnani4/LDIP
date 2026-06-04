@@ -111,7 +111,11 @@ class IndiaCodeClient:
                           If None, uses value from settings.
         """
         settings = get_settings()
-        self.request_delay = request_delay if request_delay is not None else settings.india_code_request_delay
+        self.request_delay = (
+            request_delay
+            if request_delay is not None
+            else settings.india_code_request_delay
+        )
         self.request_timeout = settings.india_code_request_timeout
         self.enabled = settings.india_code_enabled
         self._client: httpx.AsyncClient | None = None
@@ -369,7 +373,9 @@ class IndiaCodeClient:
                     # For now, return the base pattern
                     # The actual filename would need to be discovered
 
-            logger.warning("india_code_bitstream_not_found", doc_id=doc_id, url=handle_url)
+            logger.warning(
+                "india_code_bitstream_not_found", doc_id=doc_id, url=handle_url
+            )
             return None
 
         except httpx.HTTPStatusError as e:
@@ -462,8 +468,9 @@ class IndiaCodeClient:
         except httpx.HTTPStatusError as e:
             error_msg = (
                 f"HTTP {e.response.status_code} from {e.request.url}"
-                f" — {e.response.text[:200]}" if e.response.text else
-                f"HTTP {e.response.status_code} from {e.request.url} (empty response body)"
+                f" — {e.response.text[:200]}"
+                if e.response.text
+                else f"HTTP {e.response.status_code} from {e.request.url} (empty response body)"
             )
             logger.error(
                 "india_code_download_http_error",
@@ -482,7 +489,11 @@ class IndiaCodeClient:
                 file_size=0,
             )
         except httpx.HTTPError as e:
-            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            error_msg = (
+                f"{type(e).__name__}: {str(e)}"
+                if str(e)
+                else f"{type(e).__name__} (no message)"
+            )
             logger.error(
                 "india_code_download_error",
                 doc_id=doc_id,
@@ -499,7 +510,11 @@ class IndiaCodeClient:
                 file_size=0,
             )
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__} (no message)"
+            error_msg = (
+                f"{type(e).__name__}: {str(e)}"
+                if str(e)
+                else f"{type(e).__name__} (no message)"
+            )
             logger.error(
                 "india_code_download_unexpected_error",
                 doc_id=doc_id,

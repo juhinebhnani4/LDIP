@@ -56,7 +56,9 @@ class TestCalculateDocumentConfidence:
     @pytest.fixture
     def mock_supabase(self) -> MagicMock:
         """Create a mock Supabase client."""
-        with patch("app.services.ocr.confidence_calculator.get_supabase_client") as mock:
+        with patch(
+            "app.services.ocr.confidence_calculator.get_supabase_client"
+        ) as mock:
             client = MagicMock()
             mock.return_value = client
             yield client
@@ -202,7 +204,9 @@ class TestUpdateDocumentConfidence:
     @pytest.fixture
     def mock_supabase(self) -> MagicMock:
         """Create a mock Supabase client."""
-        with patch("app.services.ocr.confidence_calculator.get_supabase_client") as mock:
+        with patch(
+            "app.services.ocr.confidence_calculator.get_supabase_client"
+        ) as mock:
             client = MagicMock()
             mock.return_value = client
             yield client

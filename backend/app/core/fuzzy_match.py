@@ -165,12 +165,16 @@ def _deduplicate_subsumed_matches(
             if s2_start >= s1_start and s2_end <= s1_end:
                 suppressed.add(s2_idx)
 
-    return [(eid, res) for idx, (eid, res) in enumerate(matches) if idx not in suppressed]
+    return [
+        (eid, res) for idx, (eid, res) in enumerate(matches) if idx not in suppressed
+    ]
 
 
 def fuzzy_match_entities(
     query: str,
-    entities: list[tuple[str, str, list[str] | None]],  # (entity_id, canonical_name, aliases)
+    entities: list[
+        tuple[str, str, list[str] | None]
+    ],  # (entity_id, canonical_name, aliases)
     threshold: float = DEFAULT_FUZZY_THRESHOLD,
 ) -> list[tuple[str, FuzzyMatchResult]]:
     """Match query against multiple entities, returning all matches.

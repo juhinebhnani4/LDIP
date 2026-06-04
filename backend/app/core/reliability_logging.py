@@ -245,7 +245,9 @@ def log_sse_parse_error(
         raw_chunk: Raw chunk content (truncated to 1KB max).
     """
     # Truncate raw chunk to 1KB for log storage
-    truncated_chunk = raw_chunk[:1024] if raw_chunk and len(raw_chunk) > 1024 else raw_chunk
+    truncated_chunk = (
+        raw_chunk[:1024] if raw_chunk and len(raw_chunk) > 1024 else raw_chunk
+    )
 
     event_type = (
         ReliabilityEventType.SSE_MAX_ERRORS_EXCEEDED

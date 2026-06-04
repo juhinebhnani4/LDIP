@@ -385,16 +385,40 @@ class TestApplyPatternCorrections:
         """Should separate words into corrected and remaining lists."""
         words = [
             LowConfidenceWord(
-                bbox_id="1", text="1O23", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="1",
+                text="1O23",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),  # Should be corrected
             LowConfidenceWord(
-                bbox_id="2", text="Section", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="2",
+                text="Section",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),  # Should remain
             LowConfidenceWord(
-                bbox_id="3", text="Rs. l000", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="3",
+                text="Rs. l000",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),  # Should be corrected
         ]
 
@@ -415,12 +439,28 @@ class TestApplyPatternCorrections:
         """Should return all words as remaining when no corrections apply."""
         words = [
             LowConfidenceWord(
-                bbox_id="1", text="Court", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="1",
+                text="Court",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),
             LowConfidenceWord(
-                bbox_id="2", text="Order", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="2",
+                text="Order",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),
         ]
 

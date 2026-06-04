@@ -43,8 +43,12 @@ logger = structlog.get_logger(__name__)
 
 MAX_RETRIES = 2
 INITIAL_RETRY_DELAY = 0.5
-MAX_ANSWER_LENGTH = 3500  # Max characters in generated answer (fallback; QueryProfile overrides)
-GEMINI_GENERATION_TIMEOUT_SECONDS = 35.0  # Hard timeout per Gemini call (overridden by config)
+MAX_ANSWER_LENGTH = (
+    3500  # Max characters in generated answer (fallback; QueryProfile overrides)
+)
+GEMINI_GENERATION_TIMEOUT_SECONDS = (
+    35.0  # Hard timeout per Gemini call (overridden by config)
+)
 
 
 # =============================================================================
@@ -208,7 +212,7 @@ class RAGAnswerGenerator:
         profile = query_profile or QueryProfile.default()
 
         # Limit chunks to max context (profile-aware)
-        chunks_to_use = chunks[:profile.max_context_chunks]
+        chunks_to_use = chunks[: profile.max_context_chunks]
 
         # Format prompt (with profile-aware chunk content limits)
         user_prompt = format_rag_answer_prompt(
@@ -263,20 +267,22 @@ class RAGAnswerGenerator:
                 original_text = answer_text
 
                 # Pattern 1: "(Document, p. ?)" -> "(Document)"
-                answer_text = re.sub(r',\s*p\.?\s*\?\s*\)', ')', answer_text)
+                answer_text = re.sub(r",\s*p\.?\s*\?\s*\)", ")", answer_text)
 
                 # Pattern 2: ", p. ?" at end of citation reference (before ] or newline)
-                answer_text = re.sub(r',\s*p\.?\s*\?(?=\s*[\]\)]|\s*$|\s*\n)', '', answer_text)
+                answer_text = re.sub(
+                    r",\s*p\.?\s*\?(?=\s*[\]\)]|\s*$|\s*\n)", "", answer_text
+                )
 
                 # Pattern 3: "p. ?" after opening paren - "(p. ?)" or "(Doc p. ?)"
                 # F6: Only match in parenthetical contexts, not standalone
-                answer_text = re.sub(r'(\()\s*p\.?\s*\?', r'\1', answer_text)
+                answer_text = re.sub(r"(\()\s*p\.?\s*\?", r"\1", answer_text)
 
                 # Pattern 4: "(Document p. ?)" without comma -> "(Document)"
-                answer_text = re.sub(r'\s+p\.?\s*\?\s*\)', ')', answer_text)
+                answer_text = re.sub(r"\s+p\.?\s*\?\s*\)", ")", answer_text)
 
                 # Clean up any double spaces created
-                answer_text = re.sub(r'  +', ' ', answer_text)
+                answer_text = re.sub(r"  +", " ", answer_text)
 
                 if original_text != answer_text:
                     logger.info(
@@ -285,16 +291,20 @@ class RAGAnswerGenerator:
                     )
 
                 # Track costs (use actual Gemini token counts with fallback)
-                usage = getattr(response, 'usage_metadata', None)
+                usage = getattr(response, "usage_metadata", None)
                 if usage:
-                    input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-                    output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
-                    cached_tokens = getattr(usage, 'cached_content_token_count', 0) or 0
+                    input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                    output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+                    cached_tokens = getattr(usage, "cached_content_token_count", 0) or 0
                 else:
                     input_tokens = estimate_tokens(user_prompt)
                     output_tokens = estimate_tokens(answer_text)
                     cached_tokens = 0
-                cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+                cost_tracker.add_tokens(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_input_tokens=cached_tokens,
+                )
                 cost_tracker.log_cost()
                 await persist_cost(cost_tracker)
 
@@ -308,10 +318,14 @@ class RAGAnswerGenerator:
                 # Build sources list from chunks used
                 sources = [
                     {
-                        "document_name": c.get("document_name") or c.get("documentName") or "Unknown",
+                        "document_name": c.get("document_name")
+                        or c.get("documentName")
+                        or "Unknown",
                         "document_id": c.get("document_id") or c.get("documentId"),
                         "page_number": c.get("page_number") or c.get("pageNumber"),
-                        "chunk_id": c.get("chunk_id") or c.get("chunkId") or c.get("id"),
+                        "chunk_id": c.get("chunk_id")
+                        or c.get("chunkId")
+                        or c.get("id"),
                         "bbox_ids": c.get("bbox_ids"),
                     }
                     for c in chunks_to_use
@@ -350,7 +364,9 @@ class RAGAnswerGenerator:
 
                 # Check for non-retryable errors
                 if "api key" in error_str or "authentication" in error_str:
-                    raise RAGConfigurationError(f"Gemini authentication failed: {e}") from e
+                    raise RAGConfigurationError(
+                        f"Gemini authentication failed: {e}"
+                    ) from e
 
                 if attempt < MAX_RETRIES:
                     logger.warning(

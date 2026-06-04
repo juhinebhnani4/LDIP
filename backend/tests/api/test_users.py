@@ -65,7 +65,9 @@ class TestGetUserPreferences:
     def test_get_preferences_success(self, client, mock_supabase):
         """Should return user preferences."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = MagicMock()
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            MagicMock()
+        )
         mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
             "user_id": "test-user-id",
             "email_notifications_processing": True,
@@ -89,7 +91,9 @@ class TestGetUserPreferences:
         """Should create default preferences if they don't exist."""
         # First call returns empty (no preferences)
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = MagicMock()
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            MagicMock()
+        )
 
         # Second call returns the created preferences
         mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {

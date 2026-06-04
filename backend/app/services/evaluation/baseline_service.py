@@ -193,8 +193,12 @@ class BaselineService:
             baseline_row = {
                 "matter_id": matter_id,
                 "avg_overall": round(avg_overall, 4),
-                "avg_faithfulness": round(avg_faithfulness, 4) if avg_faithfulness is not None else None,
-                "avg_relevancy": round(avg_relevancy, 4) if avg_relevancy is not None else None,
+                "avg_faithfulness": round(avg_faithfulness, 4)
+                if avg_faithfulness is not None
+                else None,
+                "avg_relevancy": round(avg_relevancy, 4)
+                if avg_relevancy is not None
+                else None,
                 "avg_recall": round(avg_recall, 4) if avg_recall is not None else None,
                 "per_item_scores": per_item_scores,
                 "total_items": len(rows),

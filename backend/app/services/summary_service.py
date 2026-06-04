@@ -249,7 +249,9 @@ class SummaryService:
             self.get_stats(matter_id),
             self.get_attention_items(matter_id),
             self.get_parties(matter_id),
-            self._get_top_chunks(matter_id, limit=15),  # More chunks for comprehensive overview
+            self._get_top_chunks(
+                matter_id, limit=15
+            ),  # More chunks for comprehensive overview
             self._get_recent_events(matter_id),
         )
 
@@ -271,9 +273,7 @@ class SummaryService:
         # Also handles the common case where get_parties() returns empty
         # because no entities have party roles — falls back to searching
         # ALL person/org entities by name.
-        overview_parties = self._parse_parties_from_overview(
-            subject_matter.description
-        )
+        overview_parties = self._parse_parties_from_overview(subject_matter.description)
         if overview_parties:
             # Build all entities per role (not just first) for better matching
             entities_by_role: dict[PartyRole, list[PartyInfo]] = {}
@@ -332,15 +332,17 @@ class SummaryService:
                         corrected_citation = entity_match.citation.model_copy(
                             update={"page": 1, "excerpt": None}
                         )
-                    enriched.append(PartyInfo(
-                        entity_id=entity_match.entity_id,
-                        entity_name=op.entity_name,  # Overview name wins
-                        role=op.role,
-                        source_document=entity_match.source_document,
-                        source_page=corrected_page,
-                        is_verified=entity_match.is_verified,
-                        citation=corrected_citation,
-                    ))
+                    enriched.append(
+                        PartyInfo(
+                            entity_id=entity_match.entity_id,
+                            entity_name=op.entity_name,  # Overview name wins
+                            role=op.role,
+                            source_document=entity_match.source_document,
+                            source_page=corrected_page,
+                            is_verified=entity_match.is_verified,
+                            citation=corrected_citation,
+                        )
+                    )
                 else:
                     # No entity match — search chunks for where the name
                     # actually appears (handles rate-limited extraction).
@@ -349,20 +351,22 @@ class SummaryService:
                     )
                     if chunk_hit:
                         doc_id, doc_name, page = chunk_hit
-                        enriched.append(PartyInfo(
-                            entity_id=op.entity_id,
-                            entity_name=op.entity_name,
-                            role=op.role,
-                            source_document=doc_name,
-                            source_page=page,
-                            is_verified=False,
-                            citation=Citation(
-                                document_id=doc_id,
-                                document_name=doc_name,
-                                page=page,
-                                excerpt=None,
-                            ),
-                        ))
+                        enriched.append(
+                            PartyInfo(
+                                entity_id=op.entity_id,
+                                entity_name=op.entity_name,
+                                role=op.role,
+                                source_document=doc_name,
+                                source_page=page,
+                                is_verified=False,
+                                citation=Citation(
+                                    document_id=doc_id,
+                                    document_name=doc_name,
+                                    page=page,
+                                    excerpt=None,
+                                ),
+                            )
+                        )
                     else:
                         enriched.append(op)
             parties = enriched
@@ -387,7 +391,8 @@ class SummaryService:
             logger.warning(
                 "summary_not_cached_due_to_failures",
                 matter_id=matter_id,
-                subject_matter_failed=summary.subject_matter.description == "Unable to generate summary at this time.",
+                subject_matter_failed=summary.subject_matter.description
+                == "Unable to generate summary at this time.",
                 key_issues_empty=len(summary.key_issues) == 0,
             )
 
@@ -567,10 +572,18 @@ class SummaryService:
                 role = None
                 for r in roles:
                     r_lower = r.lower() if isinstance(r, str) else ""
-                    if "petitioner" in r_lower or "appellant" in r_lower or "complainant" in r_lower:
+                    if (
+                        "petitioner" in r_lower
+                        or "appellant" in r_lower
+                        or "complainant" in r_lower
+                    ):
                         role = PartyRole.PETITIONER
                         break
-                    elif "respondent" in r_lower or "defendant" in r_lower or "accused" in r_lower:
+                    elif (
+                        "respondent" in r_lower
+                        or "defendant" in r_lower
+                        or "accused" in r_lower
+                    ):
                         role = PartyRole.RESPONDENT
                         break
                     elif "applicant" in r_lower:
@@ -579,11 +592,13 @@ class SummaryService:
                         break
 
                 if role:
-                    party_entities.append({
-                        "entity_id": entity["id"],
-                        "canonical_name": name,
-                        "role": role,
-                    })
+                    party_entities.append(
+                        {
+                            "entity_id": entity["id"],
+                            "canonical_name": name,
+                            "role": role,
+                        }
+                    )
 
             if not party_entities:
                 return []
@@ -702,7 +717,9 @@ class SummaryService:
                 matter_id=matter_id,
                 raw_count=len(entities_result.data or []),
                 filtered_count=len(entity_ids),
-                top_names=[e.get("canonical_name") for e in (entities_result.data or [])[:10]],
+                top_names=[
+                    e.get("canonical_name") for e in (entities_result.data or [])[:10]
+                ],
             )
             if not entity_ids:
                 return []
@@ -737,21 +754,25 @@ class SummaryService:
                     src = active_docs.get(doc_id, "Unknown")
                     page = mention.get("page_number")
                     citation = Citation(
-                        document_id=doc_id, document_name=src,
-                        page=page, excerpt=None,
+                        document_id=doc_id,
+                        document_name=src,
+                        page=page,
+                        excerpt=None,
                     )
                 else:
                     src, page, citation = "Unknown", None, None
 
-                pool.append(PartyInfo(
-                    entity_id=entity["id"],
-                    entity_name=name,
-                    role=PartyRole.OTHER,
-                    source_document=src,
-                    source_page=page,
-                    is_verified=False,
-                    citation=citation,
-                ))
+                pool.append(
+                    PartyInfo(
+                        entity_id=entity["id"],
+                        entity_name=name,
+                        role=PartyRole.OTHER,
+                        source_document=src,
+                        source_page=page,
+                        is_verified=False,
+                        citation=citation,
+                    )
+                )
             return pool
         except Exception as e:
             logger.warning(
@@ -785,16 +806,12 @@ class SummaryService:
                     .is_("deleted_at", "null")
                     .execute()
                 )
-                active_docs = {
-                    d["id"]: d["filename"] for d in docs_result.data or []
-                }
+                active_docs = {d["id"]: d["filename"] for d in docs_result.data or []}
             if not active_docs:
                 return None
 
             # Escape ilike wildcards in name
-            safe_name = (
-                party_name.replace("%", r"\%").replace("_", r"\_")
-            )
+            safe_name = party_name.replace("%", r"\%").replace("_", r"\_")
 
             # Try full name first
             result = await asyncio.to_thread(
@@ -818,7 +835,9 @@ class SummaryService:
 
             # Fall back to surname (last meaningful token)
             tokens = [
-                t for t in party_name.split() if len(t) > 2 and t not in ("Smt", "Shri", "Mr", "Mrs", "Ms", "Dr")
+                t
+                for t in party_name.split()
+                if len(t) > 2 and t not in ("Smt", "Shri", "Mr", "Mrs", "Ms", "Dr")
             ]
             if tokens:
                 surname = tokens[-1].replace("%", r"\%").replace("_", r"\_")
@@ -853,12 +872,39 @@ class SummaryService:
     # Party name matching helpers (BUG-005b)
     # ------------------------------------------------------------------
 
-    _NAME_STOPWORDS = frozenset({
-        "smt", "shri", "shrimati", "mr", "mrs", "ms", "dr", "sri",
-        "kumari", "late", "hon", "honble", "justice",
-        "the", "of", "and", "vs", "v", "through", "by", "in", "at",
-        "no", "nos", "etc", "ors", "anr", "another", "others",
-    })
+    _NAME_STOPWORDS = frozenset(
+        {
+            "smt",
+            "shri",
+            "shrimati",
+            "mr",
+            "mrs",
+            "ms",
+            "dr",
+            "sri",
+            "kumari",
+            "late",
+            "hon",
+            "honble",
+            "justice",
+            "the",
+            "of",
+            "and",
+            "vs",
+            "v",
+            "through",
+            "by",
+            "in",
+            "at",
+            "no",
+            "nos",
+            "etc",
+            "ors",
+            "anr",
+            "another",
+            "others",
+        }
+    )
 
     @staticmethod
     def _normalize_hindi_token(token: str) -> str:
@@ -910,7 +956,10 @@ class SummaryService:
 
         # Level 1: exact name, same role
         for entity in same_role:
-            if entity.entity_id not in used_ids and entity.entity_name.lower().strip() == target:
+            if (
+                entity.entity_id not in used_ids
+                and entity.entity_name.lower().strip() == target
+            ):
                 return entity
 
         # Level 2: fuzzy name, same role (threshold 0.5)
@@ -918,7 +967,9 @@ class SummaryService:
         for entity in same_role:
             if entity.entity_id in used_ids:
                 continue
-            score = self._name_similarity(target_tokens, self._name_tokens(entity.entity_name))
+            score = self._name_similarity(
+                target_tokens, self._name_tokens(entity.entity_name)
+            )
             if score > best_score:
                 best_score, best = score, entity
         if best and best_score >= 0.5:
@@ -929,7 +980,9 @@ class SummaryService:
         for entity in all_entities:
             if entity.entity_id in used_ids:
                 continue
-            score = self._name_similarity(target_tokens, self._name_tokens(entity.entity_name))
+            score = self._name_similarity(
+                target_tokens, self._name_tokens(entity.entity_name)
+            )
             if score > best_score:
                 best_score, best = score, entity
         if best and best_score >= 0.6:
@@ -1217,9 +1270,7 @@ class SummaryService:
                 .is_("deleted_at", "null")
                 .execute()
             )
-            return sum(
-                row.get("page_count", 0) or 0 for row in result.data or []
-            )
+            return sum(row.get("page_count", 0) or 0 for row in result.data or [])
         except Exception as e:
             logger.warning("get_total_pages_failed", error=str(e))
             return 0
@@ -1358,7 +1409,9 @@ class SummaryService:
             if response.usage:
                 cached_tokens = 0
                 if response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
@@ -1410,8 +1463,15 @@ class SummaryService:
                     retry_tracker.add_tokens(
                         input_tokens=retry_response.usage.prompt_tokens or 0,
                         output_tokens=retry_response.usage.completion_tokens or 0,
-                        cached_input_tokens=getattr(retry_response.usage, 'prompt_tokens_details', None)
-                        and getattr(retry_response.usage.prompt_tokens_details, 'cached_tokens', 0) or 0,
+                        cached_input_tokens=getattr(
+                            retry_response.usage, "prompt_tokens_details", None
+                        )
+                        and getattr(
+                            retry_response.usage.prompt_tokens_details,
+                            "cached_tokens",
+                            0,
+                        )
+                        or 0,
                     )
                 retry_tracker.log_cost()
                 await persist_cost(retry_tracker)
@@ -1472,7 +1532,8 @@ class SummaryService:
                 if section_retry_response.usage:
                     retry_tracker.add_tokens(
                         input_tokens=section_retry_response.usage.prompt_tokens or 0,
-                        output_tokens=section_retry_response.usage.completion_tokens or 0,
+                        output_tokens=section_retry_response.usage.completion_tokens
+                        or 0,
                         cached_input_tokens=getattr(
                             section_retry_response.usage, "prompt_tokens_details", None
                         )
@@ -1609,7 +1670,9 @@ class SummaryService:
             if response.usage:
                 cached_tokens = 0
                 if response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
@@ -1714,7 +1777,9 @@ class SummaryService:
             if response.usage:
                 cached_tokens = 0
                 if response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
                 cost_tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
@@ -1837,7 +1902,9 @@ class SummaryService:
             for doc_id in active_doc_ids:
                 result = await asyncio.to_thread(
                     lambda did=doc_id: self.supabase.table("chunks")
-                    .select("id, content, page_number, document_id, documents(filename)")
+                    .select(
+                        "id, content, page_number, document_id, documents(filename)"
+                    )
                     .eq("document_id", did)
                     .order("page_number")
                     .limit(chunks_per_doc)
@@ -1846,11 +1913,13 @@ class SummaryService:
 
                 for row in result.data or []:
                     doc_data = row.get("documents", {}) or {}
-                    all_chunks.append({
-                        "content": row.get("content", ""),
-                        "document_name": doc_data.get("filename", "Unknown"),
-                        "page_number": row.get("page_number"),
-                    })
+                    all_chunks.append(
+                        {
+                            "content": row.get("content", ""),
+                            "document_name": doc_data.get("filename", "Unknown"),
+                            "page_number": row.get("page_number"),
+                        }
+                    )
 
             # Return up to limit chunks
             return all_chunks[:limit]
@@ -1889,7 +1958,9 @@ class SummaryService:
 
             result = await asyncio.to_thread(
                 lambda: self.supabase.table("events")
-                .select("id, event_date, description, event_type, document_id, documents(filename)")
+                .select(
+                    "id, event_date, description, event_type, document_id, documents(filename)"
+                )
                 .eq("matter_id", matter_id)
                 .in_("document_id", active_doc_ids)
                 .order("event_date", desc=True)
@@ -1900,12 +1971,14 @@ class SummaryService:
             events = []
             for row in result.data or []:
                 doc_data = row.get("documents", {}) or {}
-                events.append({
-                    "event_date": row.get("event_date", ""),
-                    "description": row.get("description", ""),
-                    "event_type": row.get("event_type", ""),
-                    "document_name": doc_data.get("filename", ""),
-                })
+                events.append(
+                    {
+                        "event_date": row.get("event_date", ""),
+                        "description": row.get("description", ""),
+                        "event_type": row.get("event_type", ""),
+                        "document_name": doc_data.get("filename", ""),
+                    }
+                )
 
             return events
 

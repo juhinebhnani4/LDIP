@@ -115,11 +115,16 @@ def send_processing_complete_notification(
                 user_id=user_id,
                 matter_id=matter_id,
             )
-            return {"status": "skipped", "reason": "User opted out of email notifications"}
+            return {
+                "status": "skipped",
+                "reason": "User opted out of email notifications",
+            }
 
         # Get matter name
         matter_data = _get_matter_data_sync(client, matter_id)
-        matter_name = matter_data.get("title", "Your Matter") if matter_data else "Your Matter"
+        matter_name = (
+            matter_data.get("title", "Your Matter") if matter_data else "Your Matter"
+        )
 
         # Build workspace URL
         workspace_url = f"{settings.email_base_url}/matters/{matter_id}/documents"

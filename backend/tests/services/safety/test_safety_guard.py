@@ -228,9 +228,7 @@ class TestRegexPassLLMCheck:
             subtle_detector=mock_subtle_detector,
         )
 
-        result = await safety_guard.check_query(
-            "What does Section 138 of NI Act say?"
-        )
+        result = await safety_guard.check_query("What does Section 138 of NI Act say?")
 
         # Should pass both checks
         assert result.is_safe is True

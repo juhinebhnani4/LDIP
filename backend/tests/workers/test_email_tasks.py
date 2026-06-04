@@ -132,12 +132,15 @@ class TestSendProcessingCompleteNotification:
             data=mock_preferences_opted_out
         )
 
-        with patch(
-            "app.core.config.get_settings",
-            return_value=mock_settings,
-        ), patch(
-            "app.services.supabase.client.get_service_client",
-            return_value=mock_supabase_client,
+        with (
+            patch(
+                "app.core.config.get_settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "app.services.supabase.client.get_service_client",
+                return_value=mock_supabase_client,
+            ),
         ):
             from app.workers.tasks.email_tasks import (
                 send_processing_complete_notification,
@@ -160,12 +163,15 @@ class TestSendProcessingCompleteNotification:
         mock_auth_result.user = None
         mock_supabase_client.auth.admin.get_user_by_id.return_value = mock_auth_result
 
-        with patch(
-            "app.core.config.get_settings",
-            return_value=mock_settings,
-        ), patch(
-            "app.services.supabase.client.get_service_client",
-            return_value=mock_supabase_client,
+        with (
+            patch(
+                "app.core.config.get_settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "app.services.supabase.client.get_service_client",
+                return_value=mock_supabase_client,
+            ),
         ):
             from app.workers.tasks.email_tasks import (
                 send_processing_complete_notification,
@@ -233,9 +239,7 @@ class TestHelperFunctions:
         assert result is not None
         assert result["email_notifications_processing"] is True
 
-    def test_get_matter_data_sync_success(
-        self, mock_supabase_client, mock_matter_data
-    ):
+    def test_get_matter_data_sync_success(self, mock_supabase_client, mock_matter_data):
         """Test _get_matter_data_sync returns matter data."""
         from app.workers.tasks.email_tasks import _get_matter_data_sync
 

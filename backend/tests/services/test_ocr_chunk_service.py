@@ -87,7 +87,9 @@ class TestOCRChunkServiceInit:
         assert service._client is mock_client
 
     @patch("app.services.ocr_chunk_service.get_supabase_client")
-    def test_raises_when_client_not_configured(self, mock_get_client: MagicMock) -> None:
+    def test_raises_when_client_not_configured(
+        self, mock_get_client: MagicMock
+    ) -> None:
         """Should raise error when Supabase is not configured."""
         mock_get_client.return_value = None
 
@@ -126,7 +128,9 @@ class TestCreateChunk:
     """Tests for create_chunk method."""
 
     @pytest.mark.asyncio
-    async def test_create_chunk_success(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_create_chunk_success(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should create chunk with pending status."""
         mock_supabase.table.return_value.insert.return_value.execute.return_value.data = [
             sample_chunk_row
@@ -167,10 +171,12 @@ class TestCreateChunk:
         assert exc_info.value.code == "INVALID_PAGE_RANGE"
 
     @pytest.mark.asyncio
-    async def test_create_chunk_handles_unique_constraint(self, service, mock_supabase) -> None:
+    async def test_create_chunk_handles_unique_constraint(
+        self, service, mock_supabase
+    ) -> None:
         """Should raise DuplicateChunkError on unique constraint violation."""
-        mock_supabase.table.return_value.insert.return_value.execute.side_effect = Exception(
-            "duplicate key value violates unique constraint"
+        mock_supabase.table.return_value.insert.return_value.execute.side_effect = (
+            Exception("duplicate key value violates unique constraint")
         )
 
         with pytest.raises(DuplicateChunkError) as exc_info:
@@ -194,7 +200,9 @@ class TestGetChunk:
     """Tests for get_chunk method."""
 
     @pytest.mark.asyncio
-    async def test_get_chunk_found(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_get_chunk_found(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should return chunk when found."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
             sample_chunk_row
@@ -225,7 +233,9 @@ class TestUpdateStatus:
     """Tests for update_status method."""
 
     @pytest.mark.asyncio
-    async def test_update_status_to_processing(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_status_to_processing(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should set processing_started_at when transitioning to processing."""
         # Setup: chunk is pending
         pending_row = {**sample_chunk_row, "status": "pending"}
@@ -243,7 +253,9 @@ class TestUpdateStatus:
             processing_row
         ]
 
-        result = await service.update_status(sample_chunk_row["id"], ChunkStatus.PROCESSING)
+        result = await service.update_status(
+            sample_chunk_row["id"], ChunkStatus.PROCESSING
+        )
 
         assert result.status == ChunkStatus.PROCESSING
 
@@ -253,7 +265,9 @@ class TestUpdateStatus:
         assert "processing_started_at" in update_data
 
     @pytest.mark.asyncio
-    async def test_update_status_to_completed(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_status_to_completed(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should set processing_completed_at when transitioning to completed."""
         # Setup: chunk is processing
         processing_row = {**sample_chunk_row, "status": "processing"}
@@ -271,7 +285,9 @@ class TestUpdateStatus:
             completed_row
         ]
 
-        result = await service.update_status(sample_chunk_row["id"], ChunkStatus.COMPLETED)
+        result = await service.update_status(
+            sample_chunk_row["id"], ChunkStatus.COMPLETED
+        )
 
         assert result.status == ChunkStatus.COMPLETED
 
@@ -281,7 +297,9 @@ class TestUpdateStatus:
         assert "processing_completed_at" in update_data
 
     @pytest.mark.asyncio
-    async def test_update_status_to_failed_with_error(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_status_to_failed_with_error(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should set error_message when transitioning to failed."""
         # Setup: chunk is processing
         processing_row = {**sample_chunk_row, "status": "processing"}
@@ -314,7 +332,9 @@ class TestUpdateStatus:
         assert update_data["error_message"] == "OCR API timeout"
 
     @pytest.mark.asyncio
-    async def test_update_status_invalid_transition(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_status_invalid_transition(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should raise error for invalid status transition."""
         # Setup: chunk is completed (terminal state)
         completed_row = {**sample_chunk_row, "status": "completed"}
@@ -336,10 +356,16 @@ class TestUpdateStatus:
             await service.update_status("nonexistent-id", ChunkStatus.PROCESSING)
 
     @pytest.mark.asyncio
-    async def test_update_status_retry_clears_error(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_status_retry_clears_error(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should clear error_message when retrying (failed -> pending)."""
         # Setup: chunk is failed
-        failed_row = {**sample_chunk_row, "status": "failed", "error_message": "Previous error"}
+        failed_row = {
+            **sample_chunk_row,
+            "status": "failed",
+            "error_message": "Previous error",
+        }
         mock_supabase.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
             failed_row
         ]
@@ -367,13 +393,16 @@ class TestGetChunksByDocument:
     """Tests for get_chunks_by_document method."""
 
     @pytest.mark.asyncio
-    async def test_returns_chunks_ordered_by_index(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_returns_chunks_ordered_by_index(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should return chunks ordered by chunk_index."""
         chunk1 = {**sample_chunk_row, "id": str(uuid4()), "chunk_index": 0}
         chunk2 = {**sample_chunk_row, "id": str(uuid4()), "chunk_index": 1}
 
         mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = [
-            chunk1, chunk2
+            chunk1,
+            chunk2,
         ]
 
         result = await service.get_chunks_by_document(sample_chunk_row["document_id"])
@@ -383,7 +412,9 @@ class TestGetChunksByDocument:
         assert result[1].chunk_index == 1
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_chunks(self, service, mock_supabase) -> None:
+    async def test_returns_empty_list_when_no_chunks(
+        self, service, mock_supabase
+    ) -> None:
         """Should return empty list when document has no chunks."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = []
 
@@ -396,9 +427,15 @@ class TestGetFailedChunks:
     """Tests for get_failed_chunks method."""
 
     @pytest.mark.asyncio
-    async def test_returns_only_failed_chunks(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_returns_only_failed_chunks(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should return only chunks with 'failed' status."""
-        failed_chunk = {**sample_chunk_row, "status": "failed", "error_message": "API error"}
+        failed_chunk = {
+            **sample_chunk_row,
+            "status": "failed",
+            "error_message": "API error",
+        }
 
         mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value.data = [
             failed_chunk
@@ -414,7 +451,9 @@ class TestGetPendingChunks:
     """Tests for get_pending_chunks method."""
 
     @pytest.mark.asyncio
-    async def test_returns_only_pending_chunks(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_returns_only_pending_chunks(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should return only chunks with 'pending' status."""
         pending_chunk = {**sample_chunk_row, "status": "pending"}
 
@@ -432,7 +471,9 @@ class TestGetProcessingChunks:
     """Tests for get_processing_chunks method."""
 
     @pytest.mark.asyncio
-    async def test_returns_only_processing_chunks(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_returns_only_processing_chunks(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should return only chunks with 'processing' status."""
         processing_chunk = {
             **sample_chunk_row,
@@ -450,7 +491,9 @@ class TestGetProcessingChunks:
         assert result[0].status == ChunkStatus.PROCESSING
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_processing_chunks(self, service, mock_supabase) -> None:
+    async def test_returns_empty_when_no_processing_chunks(
+        self, service, mock_supabase
+    ) -> None:
         """Should return empty list when no chunks are processing."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value.data = []
 
@@ -468,7 +511,9 @@ class TestUpdateResult:
     """Tests for update_result method."""
 
     @pytest.mark.asyncio
-    async def test_update_result_success(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_result_success(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should update result_storage_path and result_checksum."""
         # Setup: chunk exists
         mock_supabase.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
@@ -522,7 +567,9 @@ class TestUpdateHeartbeat:
     """Tests for update_heartbeat method."""
 
     @pytest.mark.asyncio
-    async def test_update_heartbeat_success(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_update_heartbeat_success(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should update processing_started_at timestamp."""
         processing_row = {**sample_chunk_row, "status": "processing"}
         mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
@@ -537,7 +584,9 @@ class TestUpdateHeartbeat:
         mock_supabase.table.return_value.update.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_heartbeat_chunk_not_processing(self, service, mock_supabase) -> None:
+    async def test_update_heartbeat_chunk_not_processing(
+        self, service, mock_supabase
+    ) -> None:
         """Should return False when chunk is not in processing state."""
         mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
 
@@ -550,7 +599,9 @@ class TestDetectStaleChunks:
     """Tests for detect_stale_chunks method."""
 
     @pytest.mark.asyncio
-    async def test_detects_stale_chunks(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_detects_stale_chunks(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should find chunks stuck in processing past threshold."""
         # Chunk started 120 seconds ago (stale - past 90s threshold)
         stale_time = (datetime.now(UTC) - timedelta(seconds=120)).isoformat()
@@ -570,7 +621,9 @@ class TestDetectStaleChunks:
         assert result[0].id == stale_row["id"]
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_stale_chunks(self, service, mock_supabase) -> None:
+    async def test_returns_empty_when_no_stale_chunks(
+        self, service, mock_supabase
+    ) -> None:
         """Should return empty list when no stale chunks."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.lt.return_value.execute.return_value.data = []
 
@@ -583,7 +636,9 @@ class TestMarkChunkStale:
     """Tests for mark_chunk_stale method."""
 
     @pytest.mark.asyncio
-    async def test_marks_chunk_as_failed(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_marks_chunk_as_failed(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should mark chunk as failed with worker_timeout error."""
         # Setup: chunk is processing
         processing_row = {**sample_chunk_row, "status": "processing"}
@@ -607,7 +662,9 @@ class TestMarkChunkStale:
         assert result.error_message == "worker_timeout"
 
     @pytest.mark.asyncio
-    async def test_raises_error_when_chunk_not_processing(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_raises_error_when_chunk_not_processing(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should raise error when chunk is not in processing state."""
         # Setup: chunk is pending (not processing)
         pending_row = {**sample_chunk_row, "status": "pending"}
@@ -619,7 +676,9 @@ class TestMarkChunkStale:
             await service.mark_chunk_stale(sample_chunk_row["id"])
 
     @pytest.mark.asyncio
-    async def test_raises_error_when_chunk_not_found(self, service, mock_supabase) -> None:
+    async def test_raises_error_when_chunk_not_found(
+        self, service, mock_supabase
+    ) -> None:
         """Should raise ChunkNotFoundError when chunk doesn't exist."""
         mock_supabase.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
 
@@ -636,7 +695,9 @@ class TestCreateChunksForDocument:
     """Tests for create_chunks_for_document method."""
 
     @pytest.mark.asyncio
-    async def test_creates_multiple_chunks(self, service, mock_supabase, sample_chunk_row) -> None:
+    async def test_creates_multiple_chunks(
+        self, service, mock_supabase, sample_chunk_row
+    ) -> None:
         """Should create multiple chunks in batch."""
         doc_id = str(uuid4())
         matter_id = str(uuid4())
@@ -649,7 +710,13 @@ class TestCreateChunksForDocument:
 
         # Mock response with created chunks
         created_rows = [
-            {**sample_chunk_row, "id": str(uuid4()), "chunk_index": i, "page_start": spec.page_start, "page_end": spec.page_end}
+            {
+                **sample_chunk_row,
+                "id": str(uuid4()),
+                "chunk_index": i,
+                "page_start": spec.page_start,
+                "page_end": spec.page_end,
+            }
             for i, spec in enumerate(chunk_specs)
         ]
         mock_supabase.table.return_value.insert.return_value.execute.return_value.data = created_rows
@@ -738,32 +805,44 @@ class TestChunkProgressModel:
 
     def test_progress_pct_calculation(self) -> None:
         """Should calculate correct progress percentage."""
-        progress = ChunkProgress(total=10, pending=2, processing=1, completed=6, failed=1)
+        progress = ChunkProgress(
+            total=10, pending=2, processing=1, completed=6, failed=1
+        )
         assert progress.progress_pct == 60  # 6/10 = 60%
 
     def test_progress_pct_zero_total(self) -> None:
         """Should return 100% when total is 0."""
-        progress = ChunkProgress(total=0, pending=0, processing=0, completed=0, failed=0)
+        progress = ChunkProgress(
+            total=0, pending=0, processing=0, completed=0, failed=0
+        )
         assert progress.progress_pct == 100
 
     def test_is_complete_true(self) -> None:
         """Should return True when no pending or processing chunks."""
-        progress = ChunkProgress(total=5, pending=0, processing=0, completed=4, failed=1)
+        progress = ChunkProgress(
+            total=5, pending=0, processing=0, completed=4, failed=1
+        )
         assert progress.is_complete is True
 
     def test_is_complete_false(self) -> None:
         """Should return False when chunks are still processing."""
-        progress = ChunkProgress(total=5, pending=1, processing=1, completed=2, failed=1)
+        progress = ChunkProgress(
+            total=5, pending=1, processing=1, completed=2, failed=1
+        )
         assert progress.is_complete is False
 
     def test_has_failures_true(self) -> None:
         """Should return True when failed > 0."""
-        progress = ChunkProgress(total=5, pending=0, processing=0, completed=4, failed=1)
+        progress = ChunkProgress(
+            total=5, pending=0, processing=0, completed=4, failed=1
+        )
         assert progress.has_failures is True
 
     def test_has_failures_false(self) -> None:
         """Should return False when no failures."""
-        progress = ChunkProgress(total=5, pending=0, processing=0, completed=5, failed=0)
+        progress = ChunkProgress(
+            total=5, pending=0, processing=0, completed=5, failed=0
+        )
         assert progress.has_failures is False
 
 

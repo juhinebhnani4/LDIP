@@ -160,6 +160,7 @@ class AnomalyService:
         if loop and loop.is_running():
             # Already in async context (shouldn't happen in Celery, but handle it)
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, self.save_anomalies(anomalies))
                 return future.result()
@@ -190,9 +191,11 @@ class AnomalyService:
         """
         try:
             # Build query
-            query = self.client.table("anomalies").select(
-                "*", count="exact"
-            ).eq("matter_id", matter_id)
+            query = (
+                self.client.table("anomalies")
+                .select("*", count="exact")
+                .eq("matter_id", matter_id)
+            )
 
             # Apply filters
             if severity:
@@ -348,12 +351,14 @@ class AnomalyService:
         try:
             response = (
                 self.client.table("anomalies")
-                .update({
-                    "dismissed": True,
-                    "verified": False,  # Can't be both
-                    "verified_by": user_id,
-                    "verified_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "dismissed": True,
+                        "verified": False,  # Can't be both
+                        "verified_by": user_id,
+                        "verified_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -401,12 +406,14 @@ class AnomalyService:
         try:
             response = (
                 self.client.table("anomalies")
-                .update({
-                    "verified": True,
-                    "dismissed": False,  # Can't be both
-                    "verified_by": user_id,
-                    "verified_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "verified": True,
+                        "dismissed": False,  # Can't be both
+                        "verified_by": user_id,
+                        "verified_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", anomaly_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -458,9 +465,7 @@ class AnomalyService:
             deleted_count = count_response.count or 0
 
             # Delete all
-            self.client.table("anomalies").delete().eq(
-                "matter_id", matter_id
-            ).execute()
+            self.client.table("anomalies").delete().eq("matter_id", matter_id).execute()
 
             logger.info(
                 "anomalies_deleted",
@@ -496,8 +501,11 @@ class AnomalyService:
         if loop and loop.is_running():
             # Already in async context (shouldn't happen in Celery, but handle it)
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, self.delete_anomalies_for_matter(matter_id))
+                future = pool.submit(
+                    asyncio.run, self.delete_anomalies_for_matter(matter_id)
+                )
                 return future.result()
         else:
             return asyncio.run(self.delete_anomalies_for_matter(matter_id))

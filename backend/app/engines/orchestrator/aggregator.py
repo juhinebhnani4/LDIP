@@ -206,7 +206,9 @@ class ResultAggregator:
 
         # Apply language policing if enabled
         if self._policing_enabled and orchestrator_result.unified_response:
-            orchestrator_result = await self._apply_language_policing(orchestrator_result)
+            orchestrator_result = await self._apply_language_policing(
+                orchestrator_result
+            )
 
         return orchestrator_result
 
@@ -397,10 +399,14 @@ class ResultAggregator:
         )
 
         # Find primary engine result
-        primary_result = next(
-            (r for r in successful if r.engine == primary_engine),
-            None,
-        ) if primary_engine else None
+        primary_result = (
+            next(
+                (r for r in successful if r.engine == primary_engine),
+                None,
+            )
+            if primary_engine
+            else None
+        )
 
         if not primary_result:
             # Fallback to parallel_merge if primary missing
@@ -435,7 +441,9 @@ class ResultAggregator:
         # Add failed engine warning
         if failed:
             failed_engines = ", ".join(r.engine.value for r in failed)
-            woven_response += f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+            woven_response += (
+                f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+            )
 
         # Merge sources and calculate confidence
         all_sources = self._merge_sources(successful)
@@ -547,7 +555,9 @@ class ResultAggregator:
 
         if failed:
             failed_engines = ", ".join(r.engine.value for r in failed)
-            unified_response += f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+            unified_response += (
+                f"\n\n**Note:** Some engines encountered errors ({failed_engines})."
+            )
 
         # Merge sources and calculate confidence
         all_sources = self._merge_sources(successful)
@@ -597,8 +607,7 @@ class ResultAggregator:
                 return ""
 
             previews = "\n".join(
-                f"- {r.get('content', '')[:200]}..."
-                for r in results_list[:5]
+                f"- {r.get('content', '')[:200]}..." for r in results_list[:5]
             )
             return f"Found {len(results_list)} relevant passage(s):\n\n{previews}"
 
@@ -699,9 +708,7 @@ class ResultAggregator:
             if timeline_result.data:
                 events = timeline_result.data.get("events", [])[:3]
                 if events:
-                    event_list = ", ".join(
-                        f"{e.get('event_date')}" for e in events
-                    )
+                    event_list = ", ".join(f"{e.get('event_date')}" for e in events)
                     supplementary_notes.append(
                         f"**Key dates referenced:** {event_list}"
                     )
@@ -719,7 +726,9 @@ class ResultAggregator:
 
         if EngineType.CONTRADICTION in supporting_data:
             contradiction_result = supporting_data[EngineType.CONTRADICTION]
-            if contradiction_result.data and contradiction_result.data.get("analysis_ready"):
+            if contradiction_result.data and contradiction_result.data.get(
+                "analysis_ready"
+            ):
                 total = contradiction_result.data.get("total_statements", 0)
                 supplementary_notes.append(
                     f"**Statements analyzed:** {total} for potential contradictions"
@@ -767,7 +776,8 @@ class ResultAggregator:
 
             # Step 3: Apply language policing to unified response
             policing_result = await self._language_police.police_output(
-                result.unified_response, matter_id=result.matter_id,
+                result.unified_response,
+                matter_id=result.matter_id,
             )
 
             # Update result with sanitized text and metadata
@@ -1165,8 +1175,7 @@ class ResultAggregator:
 
             # Show preview of top results
             previews = "\n".join(
-                f"  - {r.get('content', '')[:150]}..."
-                for r in results_list[:3]
+                f"  - {r.get('content', '')[:150]}..." for r in results_list[:3]
             )
 
             return (
@@ -1311,4 +1320,3 @@ def get_result_aggregator() -> ResultAggregator:
         ResultAggregator instance.
     """
     return ResultAggregator()
-

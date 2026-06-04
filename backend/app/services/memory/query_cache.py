@@ -113,7 +113,8 @@ class QueryCacheRepository:
             logger.error(
                 "redis_get_cached_result_failed",
                 matter_id=matter_id,
-                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH] + "...",  # Truncate for logging
+                query_hash=query_hash[:LOG_HASH_DISPLAY_LENGTH]
+                + "...",  # Truncate for logging
                 error=str(e),
             )
             raise RuntimeError(f"Failed to get cached result from Redis: {e}") from e

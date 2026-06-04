@@ -316,7 +316,9 @@ class ChunkRecoveryService:
                 document_id=chunk.document_id,
                 chunk_index=chunk.chunk_index,
                 recovery_attempt=recovery_attempts + 1,
-                original_error=chunk.error_message[:100] if chunk.error_message else None,
+                original_error=chunk.error_message[:100]
+                if chunk.error_message
+                else None,
             )
 
             return {

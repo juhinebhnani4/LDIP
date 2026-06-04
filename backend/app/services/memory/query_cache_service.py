@@ -298,9 +298,15 @@ def get_query_cache_service(
         if _query_cache_service is None:
             _query_cache_service = QueryCacheService(cache_repository, query_normalizer)
         else:
-            if cache_repository is not None and _query_cache_service._repository is None:
+            if (
+                cache_repository is not None
+                and _query_cache_service._repository is None
+            ):
                 _query_cache_service._repository = cache_repository
-            if query_normalizer is not None and _query_cache_service._normalizer is None:
+            if (
+                query_normalizer is not None
+                and _query_cache_service._normalizer is None
+            ):
                 _query_cache_service._normalizer = query_normalizer
 
     return _query_cache_service

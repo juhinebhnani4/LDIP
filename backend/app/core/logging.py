@@ -58,8 +58,7 @@ def _get_axiom_processor() -> structlog.types.Processor | None:
     except Exception as e:
         # Axiom client initialization failed - log warning and continue
         logging.getLogger(__name__).warning(
-            f"Failed to initialize Axiom client: {e}. "
-            "Logs will not be sent to Axiom."
+            f"Failed to initialize Axiom client: {e}. Logs will not be sent to Axiom."
         )
         return None
 

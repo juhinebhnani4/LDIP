@@ -327,7 +327,9 @@ Example response:
 
         try:
             # Call Gemini asynchronously with circuit breaker
-            response_text = await self._call_gemini_validate(prompt, document_id=document_id, matter_id=matter_id)
+            response_text = await self._call_gemini_validate(
+                prompt, document_id=document_id, matter_id=matter_id
+            )
 
             # Parse response
             results = self._parse_response(response_text, words)
@@ -367,7 +369,9 @@ Example response:
             return self._fallback_results(words)
 
     @with_circuit_breaker(CircuitService.GEMINI_FLASH)
-    async def _call_gemini_validate(self, prompt: str, document_id: str | None = None, matter_id: str | None = None) -> str:
+    async def _call_gemini_validate(
+        self, prompt: str, document_id: str | None = None, matter_id: str | None = None
+    ) -> str:
         """Call Gemini API with circuit breaker protection.
 
         Args:
@@ -458,7 +462,9 @@ Example response:
                             corrected=corrected,
                             old_confidence=word.confidence,
                             new_confidence=confidence,
-                            correction_type=CorrectionType.GEMINI if was_corrected else None,
+                            correction_type=CorrectionType.GEMINI
+                            if was_corrected
+                            else None,
                             reasoning=reasoning if was_corrected else None,
                             was_corrected=was_corrected,
                         )

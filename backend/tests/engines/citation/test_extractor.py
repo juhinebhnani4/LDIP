@@ -123,17 +123,19 @@ class TestCitationExtractorGeminiParsing:
     def test_parse_valid_json_response(self) -> None:
         """Should parse valid JSON response."""
         extractor = CitationExtractor()
-        response = json.dumps({
-            "citations": [
-                {
-                    "act_name": "Negotiable Instruments Act",
-                    "section": "138",
-                    "subsection": "(1)",
-                    "raw_text": "Section 138(1) of NI Act",
-                    "confidence": 90,
-                }
-            ]
-        })
+        response = json.dumps(
+            {
+                "citations": [
+                    {
+                        "act_name": "Negotiable Instruments Act",
+                        "section": "138",
+                        "subsection": "(1)",
+                        "raw_text": "Section 138(1) of NI Act",
+                        "confidence": 90,
+                    }
+                ]
+            }
+        )
 
         citations = extractor._parse_gemini_response(response)
 
@@ -184,13 +186,19 @@ class TestCitationExtractorGeminiParsing:
     def test_parse_missing_required_fields(self) -> None:
         """Should skip citations missing act_name or section."""
         extractor = CitationExtractor()
-        response = json.dumps({
-            "citations": [
-                {"act_name": "IPC"},  # Missing section
-                {"section": "302"},  # Missing act_name
-                {"act_name": "NI Act", "section": "138", "raw_text": "test"},  # Valid
-            ]
-        })
+        response = json.dumps(
+            {
+                "citations": [
+                    {"act_name": "IPC"},  # Missing section
+                    {"section": "302"},  # Missing act_name
+                    {
+                        "act_name": "NI Act",
+                        "section": "138",
+                        "raw_text": "test",
+                    },  # Valid
+                ]
+            }
+        )
 
         citations = extractor._parse_gemini_response(response)
 
@@ -294,8 +302,12 @@ class TestGetUniqueActs:
         extractor = CitationExtractor()
 
         citations = [
-            ExtractedCitation(act_name="NI Act", section="138", raw_text="", confidence=80),
-            ExtractedCitation(act_name="NI Act", section="139", raw_text="", confidence=80),
+            ExtractedCitation(
+                act_name="NI Act", section="138", raw_text="", confidence=80
+            ),
+            ExtractedCitation(
+                act_name="NI Act", section="139", raw_text="", confidence=80
+            ),
         ]
 
         unique_acts = extractor._get_unique_acts(citations)
@@ -308,9 +320,15 @@ class TestGetUniqueActs:
         extractor = CitationExtractor()
 
         citations = [
-            ExtractedCitation(act_name="NI Act", section="138", raw_text="", confidence=80),
-            ExtractedCitation(act_name="IPC", section="420", raw_text="", confidence=80),
-            ExtractedCitation(act_name="CrPC", section="200", raw_text="", confidence=80),
+            ExtractedCitation(
+                act_name="NI Act", section="138", raw_text="", confidence=80
+            ),
+            ExtractedCitation(
+                act_name="IPC", section="420", raw_text="", confidence=80
+            ),
+            ExtractedCitation(
+                act_name="CrPC", section="200", raw_text="", confidence=80
+            ),
         ]
 
         unique_acts = extractor._get_unique_acts(citations)

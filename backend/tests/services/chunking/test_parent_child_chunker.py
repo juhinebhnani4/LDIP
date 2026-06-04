@@ -213,9 +213,7 @@ class TestParentChildChunkerLegalText:
         result = legal_chunker.chunk_document("legal-doc-1", legal_document)
 
         # At least some chunks should contain "ARTICLE"
-        articles_found = sum(
-            1 for c in result.parent_chunks if "ARTICLE" in c.content
-        )
+        articles_found = sum(1 for c in result.parent_chunks if "ARTICLE" in c.content)
         assert articles_found > 0
 
 
@@ -436,7 +434,18 @@ class TestLayoutAwareChunking:
             assert len(parent.block_types) > 0
             # Block types should be valid
             for bt in parent.block_types:
-                assert bt in ("paragraph", "heading", "table", "figure", "list", "code", "caption", "footer", "header", "stamp")
+                assert bt in (
+                    "paragraph",
+                    "heading",
+                    "table",
+                    "figure",
+                    "list",
+                    "code",
+                    "caption",
+                    "footer",
+                    "header",
+                    "stamp",
+                )
 
     def test_fallback_to_text_based_when_no_layout(
         self, chunker: ParentChildChunker
@@ -470,9 +479,7 @@ class TestLayoutAwareChunking:
         for parent in result.parent_chunks:
             assert parent.layout_derived is False
 
-    def test_fallback_when_layout_has_error(
-        self, chunker: ParentChildChunker
-    ) -> None:
+    def test_fallback_when_layout_has_error(self, chunker: ParentChildChunker) -> None:
         """Should fall back to text-based when layout has an error."""
         from app.services.table_extraction.models import DocumentLayout
 
@@ -526,7 +533,9 @@ class TestGetBlockText:
         result = chunker._get_block_text(block, "Full document text that differs")
         assert result == "Block's own text content"
 
-    def test_uses_text_offsets_when_no_content(self, chunker: ParentChildChunker) -> None:
+    def test_uses_text_offsets_when_no_content(
+        self, chunker: ParentChildChunker
+    ) -> None:
         """Should use text_start/text_end when text_content is None."""
         from app.services.table_extraction.models import BoundingBox, LayoutBlock
 
@@ -603,7 +612,11 @@ class TestCreateParentChunkFromBlocks:
                 reading_order=2,
             ),
         ]
-        text_parts = ["First paragraph text.", "Second paragraph text.", "Third paragraph text."]
+        text_parts = [
+            "First paragraph text.",
+            "Second paragraph text.",
+            "Third paragraph text.",
+        ]
 
         result = chunker._create_parent_chunk_from_blocks(blocks, text_parts, 0)
 
@@ -634,7 +647,11 @@ class TestCreateParentChunkFromBlocks:
                 reading_order=2,
             ),
         ]
-        text_parts = ["Section Title", "First paragraph content.", "Second paragraph content."]
+        text_parts = [
+            "Section Title",
+            "First paragraph content.",
+            "Second paragraph content.",
+        ]
 
         result = chunker._create_parent_chunk_from_blocks(blocks, text_parts, 0)
 

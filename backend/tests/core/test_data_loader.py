@@ -157,9 +157,7 @@ class TestKnownActsLoading:
 
             assert info == ("999", "test.pdf")
 
-    def test_get_known_act_info_returns_none_for_unknown(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_known_act_info_returns_none_for_unknown(self, tmp_path: Path) -> None:
         """get_known_act_info should return None for unknown act."""
         test_data = {"acts": []}
 

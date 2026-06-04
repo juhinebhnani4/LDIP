@@ -39,6 +39,7 @@ def clear_service_caches():
     get_pattern_corrector.cache_clear()
     get_validation_extractor.cache_clear()
 
+
 from app.models.ocr import OCRBoundingBox, OCRPage, OCRResult  # noqa: E402
 from app.models.ocr_validation import (  # noqa: E402
     CorrectionType,
@@ -184,7 +185,10 @@ class TestValidationPipelineIntegration:
                 height=5.0,
             ),
         ]
-        mock_validation_extractor.extract_low_confidence_words.return_value = (gemini_words, [])
+        mock_validation_extractor.extract_low_confidence_words.return_value = (
+            gemini_words,
+            [],
+        )
 
         # Mock pattern correction result
         pattern_corrected = [
@@ -279,7 +283,10 @@ class TestValidationPipelineIntegration:
                 height=5.0,
             ),
         ]
-        mock_validation_extractor.extract_low_confidence_words.return_value = ([], human_words)
+        mock_validation_extractor.extract_low_confidence_words.return_value = (
+            [],
+            human_words,
+        )
         mock_human_review_service.add_to_queue.return_value = 2
 
         # Run validate_ocr task using dependency injection
@@ -391,9 +398,7 @@ class TestValidationTaskChaining:
             patch(
                 "app.workers.tasks.document_tasks.get_storage_service"
             ) as mock_get_storage,
-            patch(
-                "app.workers.tasks.document_tasks.get_ocr_processor"
-            ) as mock_get_ocr,
+            patch("app.workers.tasks.document_tasks.get_ocr_processor") as mock_get_ocr,
             patch(
                 "app.workers.tasks.document_tasks.get_bounding_box_service"
             ) as mock_get_bbox,
@@ -545,7 +550,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify bounding_boxes table updated
         update_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "bounding_boxes"
         ]
         assert len(update_calls) > 0
@@ -623,7 +629,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify ocr_validation_log table has insert called
         insert_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "ocr_validation_log"
         ]
         assert len(insert_calls) > 0
@@ -665,7 +672,8 @@ class TestValidationDatabaseUpdates:
 
         # Verify documents table has validation_status updated
         update_calls = [
-            call for call in mock_client.table.call_args_list
+            call
+            for call in mock_client.table.call_args_list
             if call[0][0] == "documents"
         ]
         assert len(update_calls) > 0
@@ -919,7 +927,11 @@ class TestValidationErrorHandling:
         )
 
         # Either continues without Gemini corrections or marks as failed
-        assert result["status"] in ["validated", "validation_complete", "validation_failed"]
+        assert result["status"] in [
+            "validated",
+            "validation_complete",
+            "validation_failed",
+        ]
 
     def test_handles_missing_prev_result_fields(self) -> None:
         """Test handling when prev_result is missing required fields."""

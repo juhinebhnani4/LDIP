@@ -153,9 +153,7 @@ class AnomalySummaryData(BaseModel):
     by_type: dict[str, int] = Field(
         default_factory=dict, description="Count by anomaly type"
     )
-    unreviewed: int = Field(
-        ..., description="Anomalies not yet verified or dismissed"
-    )
+    unreviewed: int = Field(..., description="Anomalies not yet verified or dismissed")
     verified: int = Field(..., description="Anomalies verified as real issues")
     dismissed: int = Field(..., description="Anomalies dismissed as not issues")
 

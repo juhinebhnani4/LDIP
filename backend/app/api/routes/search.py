@@ -88,7 +88,8 @@ async def _check_query_safety(
             detail={
                 "error": {
                     "code": "SAFETY_VIOLATION",
-                    "message": safety_result.explanation or "Query blocked by safety guard",
+                    "message": safety_result.explanation
+                    or "Query blocked by safety guard",
                     "details": {
                         "violation_type": safety_result.violation_type,
                         "suggested_rewrite": safety_result.suggested_rewrite,
@@ -192,7 +193,9 @@ async def hybrid_search(
     await _check_query_safety(body.query, safety_guard, membership.matter_id)
 
     # Gap 4: Extract filters (None if not provided or empty)
-    search_filters = body.filters if body.filters and not body.filters.is_empty else None
+    search_filters = (
+        body.filters if body.filters and not body.filters.is_empty else None
+    )
 
     logger.info(
         "hybrid_search_request",
@@ -296,7 +299,9 @@ async def hybrid_search(
         ) from e
 
 
-@router.post("/bm25", response_model=SingleModeSearchResponse, response_model_by_alias=True)
+@router.post(
+    "/bm25", response_model=SingleModeSearchResponse, response_model_by_alias=True
+)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def bm25_search(
     request: Request,  # Required for rate limiter
@@ -380,7 +385,9 @@ async def bm25_search(
         ) from e
 
 
-@router.post("/semantic", response_model=SingleModeSearchResponse, response_model_by_alias=True)
+@router.post(
+    "/semantic", response_model=SingleModeSearchResponse, response_model_by_alias=True
+)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def semantic_search(
     request: Request,  # Required for rate limiter
@@ -464,7 +471,9 @@ async def semantic_search(
         ) from e
 
 
-@router.post("/rerank", response_model=RerankedSearchResponse, response_model_by_alias=True)
+@router.post(
+    "/rerank", response_model=RerankedSearchResponse, response_model_by_alias=True
+)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def rerank_search(
     request: Request,  # Required for rate limiter
@@ -570,7 +579,11 @@ async def rerank_search(
         ) from e
 
 
-@router.post("/alias-expanded", response_model=AliasExpandedSearchResponse, response_model_by_alias=True)
+@router.post(
+    "/alias-expanded",
+    response_model=AliasExpandedSearchResponse,
+    response_model_by_alias=True,
+)
 @limiter.limit(SEARCH_RATE_LIMIT)
 async def alias_expanded_search(
     request: Request,  # Required for rate limiter
@@ -674,14 +687,18 @@ async def alias_expanded_search(
                         all_variants = [entity.canonical_name] + (aliases_list or [])
 
                         # Remove the matched name from variants for expansion
-                        other_variants = [v for v in all_variants if v.lower() != matched_name.lower()]
+                        other_variants = [
+                            v for v in all_variants if v.lower() != matched_name.lower()
+                        ]
 
                         if other_variants:
                             aliases_found.extend(other_variants)
 
                             # Build OR query: replace matched name with (name OR alias1 OR alias2)
                             # Use case-insensitive replacement (re imported at module level)
-                            or_clause = f'({matched_name} OR {" OR ".join(other_variants)})'
+                            or_clause = (
+                                f"({matched_name} OR {' OR '.join(other_variants)})"
+                            )
                             expanded_query = re.sub(
                                 re.escape(matched_name),
                                 or_clause,
@@ -714,7 +731,9 @@ async def alias_expanded_search(
                 data=items,
                 meta=AliasExpandedSearchMeta(
                     query=body.query,
-                    expanded_query=expanded_query if expanded_query != body.query else None,
+                    expanded_query=expanded_query
+                    if expanded_query != body.query
+                    else None,
                     matter_id=membership.matter_id,
                     total_candidates=result.total_candidates,
                     bm25_weight=result.weights.bm25,

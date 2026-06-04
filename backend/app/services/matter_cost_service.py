@@ -224,7 +224,9 @@ class MatterCostService:
 
                 # Weekly totals
                 try:
-                    record_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    record_dt = datetime.fromisoformat(
+                        created_at.replace("Z", "+00:00")
+                    )
                     if record_dt >= seven_days_ago:
                         weekly_cost_inr += cost_inr
                         weekly_cost_usd += cost_usd

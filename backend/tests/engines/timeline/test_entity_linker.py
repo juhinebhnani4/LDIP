@@ -191,6 +191,7 @@ class TestEntityMatching:
 
     def test_match_by_alias(self, entity_linker, sample_entities):
         """Test matching via alias."""
+
         # Return low score for canonical name, high for alias
         def mock_similarity(name1, name2):
             if "N.D. Jobalia" in name2:
@@ -242,6 +243,7 @@ class TestEntityMatching:
 
     def test_match_best_of_multiple(self, entity_linker, sample_entities):
         """Test that best match is selected from multiple candidates."""
+
         # First entity scores lower, second scores higher
         def mock_similarity(name1, name2):
             if "HDFC" in name2:

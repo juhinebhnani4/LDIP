@@ -256,18 +256,20 @@ class CorrectionLearningService:
         def _insert():
             return (
                 self.client.table("alias_corrections")
-                .insert({
-                    "matter_id": matter_id,
-                    "entity_id": entity_id,
-                    "correction_type": correction_type,
-                    "alias_name": alias_name,
-                    "merged_entity_id": merged_entity_id,
-                    "merged_entity_name": merged_entity_name,
-                    "original_confidence": original_confidence,
-                    "corrected_by": corrected_by,
-                    "reason": reason,
-                    "metadata": metadata or {},
-                })
+                .insert(
+                    {
+                        "matter_id": matter_id,
+                        "entity_id": entity_id,
+                        "correction_type": correction_type,
+                        "alias_name": alias_name,
+                        "merged_entity_id": merged_entity_id,
+                        "merged_entity_name": merged_entity_name,
+                        "original_confidence": original_confidence,
+                        "corrected_by": corrected_by,
+                        "reason": reason,
+                        "metadata": metadata or {},
+                    }
+                )
                 .execute()
             )
 
@@ -486,7 +488,10 @@ class CorrectionLearningService:
 
                 # Check if this correction involves both names
                 names_in_correction = {alias, merged}
-                if name1_lower in names_in_correction or name2_lower in names_in_correction:
+                if (
+                    name1_lower in names_in_correction
+                    or name2_lower in names_in_correction
+                ):
                     if corr_type == "add" or corr_type == "merge":
                         add_count += 1
                     elif corr_type == "remove":

@@ -62,16 +62,18 @@ def create_mock_ocr_result():
         # Realistic: ~20 bboxes per page
         for relative_page in range(1, page_count + 1):
             for roi in range(20):
-                bboxes.append({
-                    "page": relative_page,
-                    "reading_order_index": roi,
-                    "text": f"Text block {roi}",
-                    "x": 72 + (roi % 5) * 100,
-                    "y": 72 + (roi // 5) * 50,
-                    "width": 90,
-                    "height": 15,
-                    "confidence": 0.95,
-                })
+                bboxes.append(
+                    {
+                        "page": relative_page,
+                        "reading_order_index": roi,
+                        "text": f"Text block {roi}",
+                        "x": 72 + (roi % 5) * 100,
+                        "y": 72 + (roi // 5) * 50,
+                        "width": 90,
+                        "height": 15,
+                        "confidence": 0.95,
+                    }
+                )
 
         return ChunkOCRResult(
             chunk_index=chunk_index,
@@ -127,7 +129,9 @@ class TestSplitPerformance:
             f"expected <{max_expected:.2f}s"
         )
 
-        print(f"\n{page_count}-page PDF split: {elapsed:.2f}s ({elapsed/page_count*1000:.1f}ms/page)")
+        print(
+            f"\n{page_count}-page PDF split: {elapsed:.2f}s ({elapsed / page_count * 1000:.1f}ms/page)"
+        )
 
 
 class TestMergePerformance:
@@ -232,7 +236,9 @@ class TestMemoryBenchmarks:
         assert peak_mb < 200, f"Peak memory {peak_mb:.2f}MB exceeds 200MB limit"
 
     @pytest.mark.benchmark
-    def test_no_memory_leak_repeated_operations(self, create_pdf, create_mock_ocr_result):
+    def test_no_memory_leak_repeated_operations(
+        self, create_pdf, create_mock_ocr_result
+    ):
         """Repeated operations don't leak memory."""
         pdf_bytes = create_pdf(100)
         chunker = PDFChunker(enable_memory_tracking=False)
@@ -273,7 +279,9 @@ class TestMemoryBenchmarks:
 
         # Allow some growth but flag significant leaks
         # Note: Some growth is normal due to Python's memory allocator
-        assert growth < 50, f"Memory grew {growth:.2f}MB over 5 iterations (possible leak)"
+        assert growth < 50, (
+            f"Memory grew {growth:.2f}MB over 5 iterations (possible leak)"
+        )
 
 
 class TestStreamingPerformance:

@@ -48,7 +48,9 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": "Bearer test-token"}
 
 
-@pytest.mark.skip(reason="These tests require proper database mocking - endpoint functionality tested via integration tests")
+@pytest.mark.skip(
+    reason="These tests require proper database mocking - endpoint functionality tested via integration tests"
+)
 class TestGetValidationStatus:
     """Tests for GET /documents/{document_id}/validation-status."""
 
@@ -127,7 +129,9 @@ class TestGetValidationStatus:
         assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
 
 
-@pytest.mark.skip(reason="These tests require proper database mocking - endpoint functionality tested via integration tests")
+@pytest.mark.skip(
+    reason="These tests require proper database mocking - endpoint functionality tested via integration tests"
+)
 class TestGetValidationLog:
     """Tests for GET /documents/{document_id}/validation-log."""
 
@@ -171,7 +175,9 @@ class TestGetValidationLog:
 
         mock_get_client.return_value = mock_client
 
-        response = test_client.get("/api/documents/doc-123/validation-log?page=1&per_page=20")
+        response = test_client.get(
+            "/api/documents/doc-123/validation-log?page=1&per_page=20"
+        )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

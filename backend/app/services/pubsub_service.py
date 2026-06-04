@@ -61,8 +61,7 @@ class PubSubService:
             except Exception as e:
                 logger.error("redis_client_init_failed", error=str(e))
                 raise PubSubServiceError(
-                    f"Failed to connect to Redis: {e}",
-                    code="REDIS_CONNECTION_FAILED"
+                    f"Failed to connect to Redis: {e}", code="REDIS_CONNECTION_FAILED"
                 ) from e
         return self._client
 
@@ -541,7 +540,9 @@ def broadcast_verification_progress(
         service = get_pubsub_service()
         channel = CITATION_CHANNEL_PATTERN.format(matter_id=matter_id)
 
-        progress_pct = int((verified_count / total_count) * 100) if total_count > 0 else 0
+        progress_pct = (
+            int((verified_count / total_count) * 100) if total_count > 0 else 0
+        )
 
         message = {
             "event": "verification_progress",

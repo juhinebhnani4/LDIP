@@ -69,12 +69,10 @@ It shall not be a defence in a prosecution for an offence.""",
 def mock_chunk_service(sample_chunks):
     """Create a mock ChunkService."""
     service = MagicMock()
-    service.get_chunks_for_document = MagicMock(
-        return_value=(sample_chunks, 3, 0)
+    service.get_chunks_for_document = MagicMock(return_value=(sample_chunks, 3, 0))
+    service.get_chunk = MagicMock(
+        side_effect=lambda cid: next((c for c in sample_chunks if c.id == cid), None)
     )
-    service.get_chunk = MagicMock(side_effect=lambda cid: next(
-        (c for c in sample_chunks if c.id == cid), None
-    ))
     return service
 
 

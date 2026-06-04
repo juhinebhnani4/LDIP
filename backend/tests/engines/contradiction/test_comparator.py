@@ -49,8 +49,11 @@ class TestLLMCostTracker:
     def test_cost_calculation_input_only(self, mock_pricing) -> None:
         """Should calculate cost for input tokens."""
         from app.core.cost_tracking import ProviderPricing
+
         mock_pricing.return_value = {
-            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+            "gpt-4o": ProviderPricing(
+                input_cost_per_1k=0.0025, output_cost_per_1k=0.01
+            ),
         }
         tracker = LLMCostTracker(input_tokens=1000, output_tokens=0)
         # $0.0025 per 1K input tokens (GPT-4o)
@@ -60,8 +63,11 @@ class TestLLMCostTracker:
     def test_cost_calculation_output_only(self, mock_pricing) -> None:
         """Should calculate cost for output tokens."""
         from app.core.cost_tracking import ProviderPricing
+
         mock_pricing.return_value = {
-            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+            "gpt-4o": ProviderPricing(
+                input_cost_per_1k=0.0025, output_cost_per_1k=0.01
+            ),
         }
         tracker = LLMCostTracker(input_tokens=0, output_tokens=1000)
         # $0.01 per 1K output tokens (GPT-4o)
@@ -71,8 +77,11 @@ class TestLLMCostTracker:
     def test_cost_calculation_combined(self, mock_pricing) -> None:
         """Should calculate combined input + output cost."""
         from app.core.cost_tracking import ProviderPricing
+
         mock_pricing.return_value = {
-            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+            "gpt-4o": ProviderPricing(
+                input_cost_per_1k=0.0025, output_cost_per_1k=0.01
+            ),
         }
         tracker = LLMCostTracker(input_tokens=2000, output_tokens=500)
         # 2K input = $0.005, 0.5K output = $0.005 (GPT-4o)
@@ -97,8 +106,11 @@ class TestComparisonBatchResult:
     def test_empty_result(self, mock_pricing) -> None:
         """Should handle empty results."""
         from app.core.cost_tracking import ProviderPricing
+
         mock_pricing.return_value = {
-            "gpt-4o": ProviderPricing(input_cost_per_1k=0.0025, output_cost_per_1k=0.01),
+            "gpt-4o": ProviderPricing(
+                input_cost_per_1k=0.0025, output_cost_per_1k=0.01
+            ),
         }
         result = ComparisonBatchResult()
         assert result.total_cost_usd == 0.0
@@ -304,53 +316,63 @@ class TestStatementComparator:
     def mock_openai_response(self) -> dict:
         """Create mock GPT-4 response for contradiction."""
         return {
-            "choices": [{
-                "message": {
-                    "content": json.dumps({
-                        "reasoning": "Statement A claims loan was Rs. 5 lakhs. Statement B claims Rs. 8 lakhs. These amounts conflict.",
-                        "result": "contradiction",
-                        "confidence": 0.95,
-                        "evidence": {
-                            "type": "amount_mismatch",
-                            "value_a": "500000",
-                            "value_b": "800000"
-                        }
-                    })
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "reasoning": "Statement A claims loan was Rs. 5 lakhs. Statement B claims Rs. 8 lakhs. These amounts conflict.",
+                                "result": "contradiction",
+                                "confidence": 0.95,
+                                "evidence": {
+                                    "type": "amount_mismatch",
+                                    "value_a": "500000",
+                                    "value_b": "800000",
+                                },
+                            }
+                        )
+                    }
                 }
-            }],
+            ],
             "usage": {
                 "prompt_tokens": 500,
                 "completion_tokens": 150,
-            }
+            },
         }
 
     @pytest.fixture
     def mock_consistent_response(self) -> dict:
         """Create mock GPT-4 response for consistent pair."""
         return {
-            "choices": [{
-                "message": {
-                    "content": json.dumps({
-                        "reasoning": "Both statements discuss the loan but from different perspectives. No conflict.",
-                        "result": "consistent",
-                        "confidence": 0.85,
-                        "evidence": {
-                            "type": "none",
-                            "value_a": None,
-                            "value_b": None
-                        }
-                    })
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "reasoning": "Both statements discuss the loan but from different perspectives. No conflict.",
+                                "result": "consistent",
+                                "confidence": 0.85,
+                                "evidence": {
+                                    "type": "none",
+                                    "value_a": None,
+                                    "value_b": None,
+                                },
+                            }
+                        )
+                    }
                 }
-            }],
+            ],
             "usage": {
                 "prompt_tokens": 500,
                 "completion_tokens": 100,
-            }
+            },
         }
 
     def test_init_without_api_key(self) -> None:
         """Should raise error when API key not configured."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="")
             comparator = StatementComparator()
 
@@ -363,7 +385,9 @@ class TestStatementComparator:
         mock_openai_response: dict,
     ) -> None:
         """Should detect contradiction with amount mismatch (AC #2)."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -376,12 +400,16 @@ class TestStatementComparator:
             mock_client = AsyncMock()
             mock_completion = MagicMock()
             mock_completion.choices = [MagicMock()]
-            mock_completion.choices[0].message.content = mock_openai_response["choices"][0]["message"]["content"]
+            mock_completion.choices[0].message.content = mock_openai_response[
+                "choices"
+            ][0]["message"]["content"]
             mock_completion.usage = MagicMock()
             mock_completion.usage.prompt_tokens = 500
             mock_completion.usage.completion_tokens = 150
             mock_completion.usage.prompt_tokens_details = None
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
+            mock_client.chat.completions.create = AsyncMock(
+                return_value=mock_completion
+            )
             comparator._openai_client = mock_client
 
             stmt_a = Statement(
@@ -411,7 +439,10 @@ class TestStatementComparator:
             assert comparison.confidence == 0.95
 
             # Verify reasoning captured (AC #4)
-            assert "Rs. 5 lakhs" in comparison.reasoning or "500000" in comparison.reasoning
+            assert (
+                "Rs. 5 lakhs" in comparison.reasoning
+                or "500000" in comparison.reasoning
+            )
 
             # Verify cost tracking
             assert cost_tracker.input_tokens == 500
@@ -424,7 +455,9 @@ class TestStatementComparator:
         mock_consistent_response: dict,
     ) -> None:
         """Should mark consistent pairs as consistent (AC #3)."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -436,12 +469,16 @@ class TestStatementComparator:
             mock_client = AsyncMock()
             mock_completion = MagicMock()
             mock_completion.choices = [MagicMock()]
-            mock_completion.choices[0].message.content = mock_consistent_response["choices"][0]["message"]["content"]
+            mock_completion.choices[0].message.content = mock_consistent_response[
+                "choices"
+            ][0]["message"]["content"]
             mock_completion.usage = MagicMock()
             mock_completion.usage.prompt_tokens = 500
             mock_completion.usage.completion_tokens = 100
             mock_completion.usage.prompt_tokens_details = None
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
+            mock_client.chat.completions.create = AsyncMock(
+                return_value=mock_completion
+            )
             comparator._openai_client = mock_client
 
             stmt_a = Statement(
@@ -471,32 +508,44 @@ class TestStatementComparator:
 
     def test_parse_comparison_response_valid(self) -> None:
         """Should parse valid GPT-4 JSON response."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
 
-            response_text = json.dumps({
-                "reasoning": "Test reasoning",
-                "result": "contradiction",
-                "confidence": 0.9,
-                "evidence": {
-                    "type": "date_mismatch",
-                    "value_a": "2024-01-15",
-                    "value_b": "2024-06-20"
+            response_text = json.dumps(
+                {
+                    "reasoning": "Test reasoning",
+                    "result": "contradiction",
+                    "confidence": 0.9,
+                    "evidence": {
+                        "type": "date_mismatch",
+                        "value_a": "2024-01-15",
+                        "value_b": "2024-06-20",
+                    },
                 }
-            })
+            )
 
             stmt_a = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="A", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="A",
+                page_number=1,
             )
             stmt_b = Statement(
-                entity_id="e1", chunk_id="c2", document_id="d2",
-                content="B", page_number=2,
+                entity_id="e1",
+                chunk_id="c2",
+                document_id="d2",
+                content="B",
+                page_number=2,
             )
 
-            result = comparator._parse_comparison_response(response_text, stmt_a, stmt_b)
+            result = comparator._parse_comparison_response(
+                response_text, stmt_a, stmt_b
+            )
 
             assert result.result == ComparisonResult.CONTRADICTION
             assert result.evidence.type == EvidenceType.DATE_MISMATCH
@@ -505,14 +554,19 @@ class TestStatementComparator:
 
     def test_parse_comparison_response_invalid_json(self) -> None:
         """Should raise error for invalid JSON."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
 
             stmt = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="A", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="A",
+                page_number=1,
             )
 
             with pytest.raises(ComparisonParseError):
@@ -586,7 +640,9 @@ class TestPairGeneration:
         entity_statements: EntityStatements,
     ) -> None:
         """Should only generate cross-document pairs when flag is True."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
@@ -609,7 +665,9 @@ class TestPairGeneration:
         entity_statements: EntityStatements,
     ) -> None:
         """Should include same-document pairs when flag is False."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
@@ -628,7 +686,9 @@ class TestPairGeneration:
         entity_statements: EntityStatements,
     ) -> None:
         """Should respect max_pairs limit."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
@@ -646,7 +706,9 @@ class TestPairGeneration:
         entity_statements: EntityStatements,
     ) -> None:
         """Should not generate duplicate pairs (A,B) == (B,A)."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
@@ -674,7 +736,9 @@ class TestComparatorFactory:
         """Should return singleton instance."""
         get_statement_comparator.cache_clear()
 
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator1 = get_statement_comparator()
@@ -696,7 +760,9 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_retry_on_rate_limit_error(self) -> None:
         """Should retry on transient connection errors (circuit breaker retries)."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -710,12 +776,14 @@ class TestRetryLogic:
             mock_client = AsyncMock()
             success_response = MagicMock()
             success_response.choices = [MagicMock()]
-            success_response.choices[0].message.content = json.dumps({
-                "reasoning": "Test",
-                "result": "consistent",
-                "confidence": 0.8,
-                "evidence": {"type": "none"}
-            })
+            success_response.choices[0].message.content = json.dumps(
+                {
+                    "reasoning": "Test",
+                    "result": "consistent",
+                    "confidence": 0.8,
+                    "evidence": {"type": "none"},
+                }
+            )
             success_response.usage = MagicMock()
             success_response.usage.prompt_tokens = 100
             success_response.usage.completion_tokens = 50
@@ -731,8 +799,11 @@ class TestRetryLogic:
             comparator._openai_client = mock_client
 
             stmt = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="Test", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="Test",
+                page_number=1,
             )
 
             # Should succeed after retry
@@ -748,7 +819,9 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_retry_on_transient_500_error(self) -> None:
         """Should retry on transient connection errors (circuit breaker retries)."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -761,12 +834,14 @@ class TestRetryLogic:
             mock_client = AsyncMock()
             success_response = MagicMock()
             success_response.choices = [MagicMock()]
-            success_response.choices[0].message.content = json.dumps({
-                "reasoning": "Test",
-                "result": "consistent",
-                "confidence": 0.8,
-                "evidence": {"type": "none"}
-            })
+            success_response.choices[0].message.content = json.dumps(
+                {
+                    "reasoning": "Test",
+                    "result": "consistent",
+                    "confidence": 0.8,
+                    "evidence": {"type": "none"},
+                }
+            )
             success_response.usage = MagicMock()
             success_response.usage.prompt_tokens = 100
             success_response.usage.completion_tokens = 50
@@ -782,8 +857,11 @@ class TestRetryLogic:
             comparator._openai_client = mock_client
 
             stmt = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="Test", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="Test",
+                page_number=1,
             )
 
             comparison, _ = await comparator.compare_statement_pair(
@@ -798,7 +876,9 @@ class TestRetryLogic:
     @pytest.mark.asyncio
     async def test_no_retry_on_non_retryable_error(self) -> None:
         """Should not retry on non-retryable errors."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(
                 openai_api_key="test-key",
                 openai_comparison_model="gpt-4o",
@@ -814,8 +894,11 @@ class TestRetryLogic:
             comparator._openai_client = mock_client
 
             stmt = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="Test", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="Test",
+                page_number=1,
             )
 
             with (
@@ -842,30 +925,42 @@ class TestPrefilteringSuspiciousness:
 
     def test_suspiciousness_score_amount_conflict(self) -> None:
         """Should score higher for amount conflicts."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
 
             stmt_a = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="Rs. 5 lakhs", page_number=1,
-                amounts=[StatementValue(
-                    type=StatementValueType.AMOUNT,
-                    raw_text="5 lakhs",
-                    normalized="500000",
-                    confidence=0.9,
-                )],
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="Rs. 5 lakhs",
+                page_number=1,
+                amounts=[
+                    StatementValue(
+                        type=StatementValueType.AMOUNT,
+                        raw_text="5 lakhs",
+                        normalized="500000",
+                        confidence=0.9,
+                    )
+                ],
             )
             stmt_b = Statement(
-                entity_id="e1", chunk_id="c2", document_id="d2",
-                content="Rs. 8 lakhs", page_number=2,
-                amounts=[StatementValue(
-                    type=StatementValueType.AMOUNT,
-                    raw_text="8 lakhs",
-                    normalized="800000",
-                    confidence=0.9,
-                )],
+                entity_id="e1",
+                chunk_id="c2",
+                document_id="d2",
+                content="Rs. 8 lakhs",
+                page_number=2,
+                amounts=[
+                    StatementValue(
+                        type=StatementValueType.AMOUNT,
+                        raw_text="8 lakhs",
+                        normalized="800000",
+                        confidence=0.9,
+                    )
+                ],
             )
 
             score = comparator._calculate_suspiciousness(stmt_a, stmt_b)
@@ -875,30 +970,42 @@ class TestPrefilteringSuspiciousness:
 
     def test_suspiciousness_score_date_conflict(self) -> None:
         """Should score higher for date conflicts."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
 
             stmt_a = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="15/01/2024", page_number=1,
-                dates=[StatementValue(
-                    type=StatementValueType.DATE,
-                    raw_text="15/01/2024",
-                    normalized="2024-01-15",
-                    confidence=0.9,
-                )],
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="15/01/2024",
+                page_number=1,
+                dates=[
+                    StatementValue(
+                        type=StatementValueType.DATE,
+                        raw_text="15/01/2024",
+                        normalized="2024-01-15",
+                        confidence=0.9,
+                    )
+                ],
             )
             stmt_b = Statement(
-                entity_id="e1", chunk_id="c2", document_id="d2",
-                content="15/06/2024", page_number=2,
-                dates=[StatementValue(
-                    type=StatementValueType.DATE,
-                    raw_text="15/06/2024",
-                    normalized="2024-06-15",
-                    confidence=0.9,
-                )],
+                entity_id="e1",
+                chunk_id="c2",
+                document_id="d2",
+                content="15/06/2024",
+                page_number=2,
+                dates=[
+                    StatementValue(
+                        type=StatementValueType.DATE,
+                        raw_text="15/06/2024",
+                        normalized="2024-06-15",
+                        confidence=0.9,
+                    )
+                ],
             )
 
             score = comparator._calculate_suspiciousness(stmt_a, stmt_b)
@@ -908,18 +1015,26 @@ class TestPrefilteringSuspiciousness:
 
     def test_suspiciousness_score_no_conflict(self) -> None:
         """Should score low when no extracted values conflict."""
-        with patch("app.engines.contradiction.comparator.get_settings") as mock_settings:
+        with patch(
+            "app.engines.contradiction.comparator.get_settings"
+        ) as mock_settings:
             mock_settings.return_value = MagicMock(openai_api_key="test-key")
 
             comparator = StatementComparator()
 
             stmt_a = Statement(
-                entity_id="e1", chunk_id="c1", document_id="d1",
-                content="Some text", page_number=1,
+                entity_id="e1",
+                chunk_id="c1",
+                document_id="d1",
+                content="Some text",
+                page_number=1,
             )
             stmt_b = Statement(
-                entity_id="e1", chunk_id="c2", document_id="d2",
-                content="Other text", page_number=2,
+                entity_id="e1",
+                chunk_id="c2",
+                document_id="d2",
+                content="Other text",
+                page_number=2,
             )
 
             score = comparator._calculate_suspiciousness(stmt_a, stmt_b)

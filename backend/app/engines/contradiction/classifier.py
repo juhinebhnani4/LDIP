@@ -84,18 +84,29 @@ INDIAN_DATE_PATTERNS = [
 ]
 
 MONTH_MAP = {
-    "jan": "01", "january": "01",
-    "feb": "02", "february": "02",
-    "mar": "03", "march": "03",
-    "apr": "04", "april": "04",
+    "jan": "01",
+    "january": "01",
+    "feb": "02",
+    "february": "02",
+    "mar": "03",
+    "march": "03",
+    "apr": "04",
+    "april": "04",
     "may": "05",
-    "jun": "06", "june": "06",
-    "jul": "07", "july": "07",
-    "aug": "08", "august": "08",
-    "sep": "09", "september": "09",
-    "oct": "10", "october": "10",
-    "nov": "11", "november": "11",
-    "dec": "12", "december": "12",
+    "jun": "06",
+    "june": "06",
+    "jul": "07",
+    "july": "07",
+    "aug": "08",
+    "august": "08",
+    "sep": "09",
+    "september": "09",
+    "oct": "10",
+    "october": "10",
+    "nov": "11",
+    "november": "11",
+    "dec": "12",
+    "december": "12",
 }
 
 
@@ -446,7 +457,9 @@ class ContradictionClassifier(ReasoningCaptureMixin):
         )
 
         classification_result, cost_tracker = await self._classify_with_llm(
-            comparison, document_id=document_id, matter_id=matter_id,
+            comparison,
+            document_id=document_id,
+            matter_id=matter_id,
         )
         processing_time = int((time.time() - start_time) * 1000)
 
@@ -595,7 +608,10 @@ class ContradictionClassifier(ReasoningCaptureMixin):
                 response = await self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[
-                        {"role": "system", "content": CLASSIFICATION_ENHANCEMENT_SYSTEM_PROMPT},
+                        {
+                            "role": "system",
+                            "content": CLASSIFICATION_ENHANCEMENT_SYSTEM_PROMPT,
+                        },
                         {"role": "user", "content": user_prompt},
                     ],
                     response_format={"type": "json_object"},
@@ -603,11 +619,17 @@ class ContradictionClassifier(ReasoningCaptureMixin):
                 )
 
                 # Track tokens
-                cost_tracker.input_tokens = response.usage.prompt_tokens if response.usage else 0
-                cost_tracker.output_tokens = response.usage.completion_tokens if response.usage else 0
+                cost_tracker.input_tokens = (
+                    response.usage.prompt_tokens if response.usage else 0
+                )
+                cost_tracker.output_tokens = (
+                    response.usage.completion_tokens if response.usage else 0
+                )
                 cached_tokens = 0
                 if response.usage and response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
 
                 # Persist cost to DB
                 tracker = CostTracker(
@@ -637,7 +659,9 @@ class ContradictionClassifier(ReasoningCaptureMixin):
                     )
 
                 # Parse classification type
-                type_str = parsed.get("contradiction_type", "semantic_contradiction").lower()
+                type_str = parsed.get(
+                    "contradiction_type", "semantic_contradiction"
+                ).lower()
                 contradiction_type = ContradictionType(type_str)
 
                 # Extract values if they exist in evidence
@@ -665,8 +689,12 @@ class ContradictionClassifier(ReasoningCaptureMixin):
                         model_used=self.model_name,
                         reasoning_text=parsed.get("explanation", comparison.reasoning),
                         input_summary=f"Contradiction classification: {comparison.statement_a_id} vs {comparison.statement_b_id}",
-                        confidence_score=float(parsed.get("confidence", 0)) if parsed.get("confidence") else None,
-                        tokens_used=(cost_tracker.input_tokens + cost_tracker.output_tokens),
+                        confidence_score=float(parsed.get("confidence", 0))
+                        if parsed.get("confidence")
+                        else None,
+                        tokens_used=(
+                            cost_tracker.input_tokens + cost_tracker.output_tokens
+                        ),
                         cost_usd=cost_tracker.cost_usd,
                     )
 
@@ -737,8 +765,7 @@ class ContradictionClassifier(ReasoningCaptureMixin):
         """
         # Filter to contradictions only
         contradictions = [
-            c for c in comparisons
-            if c.result == ComparisonResult.CONTRADICTION
+            c for c in comparisons if c.result == ComparisonResult.CONTRADICTION
         ]
 
         if not contradictions:
@@ -749,7 +776,9 @@ class ContradictionClassifier(ReasoningCaptureMixin):
         for comparison in contradictions:
             try:
                 result = await self.classify_contradiction(
-                    comparison, document_id=document_id, matter_id=matter_id,
+                    comparison,
+                    document_id=document_id,
+                    matter_id=matter_id,
                 )
                 results.append(result)
             except ClassifierError as e:

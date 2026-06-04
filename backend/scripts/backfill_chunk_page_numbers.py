@@ -51,7 +51,9 @@ async def backfill_document_chunks(document_id: str, client, bbox_service) -> di
     # Get chunks without page_number
     response = (
         client.table("chunks")
-        .select("id, content, chunk_type, chunk_index, parent_chunk_id, token_count, bbox_ids, page_number")
+        .select(
+            "id, content, chunk_type, chunk_index, parent_chunk_id, token_count, bbox_ids, page_number"
+        )
         .eq("document_id", document_id)
         .is_("page_number", "null")
         .execute()
@@ -70,7 +72,9 @@ async def backfill_document_chunks(document_id: str, client, bbox_service) -> di
             content=row["content"],
             chunk_type=row["chunk_type"],
             chunk_index=row.get("chunk_index", 0),
-            parent_id=UUID(row["parent_chunk_id"]) if row.get("parent_chunk_id") else None,
+            parent_id=UUID(row["parent_chunk_id"])
+            if row.get("parent_chunk_id")
+            else None,
             token_count=row.get("token_count", 0),
         )
         chunk_data_list.append(chunk)
@@ -85,10 +89,14 @@ async def backfill_document_chunks(document_id: str, client, bbox_service) -> di
             # Update the chunk with page_number and bbox_ids
             await asyncio.to_thread(
                 lambda c=chunk, oid=original["id"]: client.table("chunks")
-                .update({
-                    "page_number": c.page_number,
-                    "bbox_ids": [str(bid) for bid in c.bbox_ids] if c.bbox_ids else None,
-                })
+                .update(
+                    {
+                        "page_number": c.page_number,
+                        "bbox_ids": [str(bid) for bid in c.bbox_ids]
+                        if c.bbox_ids
+                        else None,
+                    }
+                )
                 .eq("id", oid)
                 .execute()
             )
@@ -121,11 +129,7 @@ async def backfill_all(matter_id: str | None = None, limit: int | None = None):
 
     if matter_id:
         # Need to filter by matter_id through documents table
-        doc_query = (
-            client.table("documents")
-            .select("id")
-            .eq("matter_id", matter_id)
-        )
+        doc_query = client.table("documents").select("id").eq("matter_id", matter_id)
         doc_result = doc_query.execute()
         doc_ids = [d["id"] for d in doc_result.data or []]
 
@@ -169,13 +173,19 @@ async def backfill_all(matter_id: str | None = None, limit: int | None = None):
             print(f"  Error: {e}")
             logger.exception("backfill_document_failed", document_id=doc_id)
 
-    print(f"\nDone! Updated {total_updated} chunks across {len(document_ids)} documents")
+    print(
+        f"\nDone! Updated {total_updated} chunks across {len(document_ids)} documents"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill chunk page numbers from bounding boxes")
+    parser = argparse.ArgumentParser(
+        description="Backfill chunk page numbers from bounding boxes"
+    )
     parser.add_argument("--matter-id", help="Filter to specific matter ID")
-    parser.add_argument("--limit", type=int, help="Limit number of documents to process")
+    parser.add_argument(
+        "--limit", type=int, help="Limit number of documents to process"
+    )
 
     args = parser.parse_args()
 

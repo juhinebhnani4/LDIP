@@ -157,7 +157,9 @@ class CitationStorageService:
         # Fetch bboxes for per-citation page detection if not provided
         # This improves accuracy when chunks span multiple pages
         bboxes_for_page_lookup: list[dict] = []
-        bbox_index: BboxWordIndex | None = None  # F7: Pre-computed index for O(1) lookup
+        bbox_index: BboxWordIndex | None = (
+            None  # F7: Pre-computed index for O(1) lookup
+        )
         if source_bboxes:
             bboxes_for_page_lookup = source_bboxes
         elif source_bbox_ids:
@@ -204,7 +206,9 @@ class CitationStorageService:
 
                     if bbox_index and citation.raw_text:
                         # F7: Use pre-computed index for O(1) candidate lookup
-                        candidates = bbox_index.find_candidates(citation.raw_text, min_words=2)
+                        candidates = bbox_index.find_candidates(
+                            citation.raw_text, min_words=2
+                        )
                         if candidates:
                             detected_page = detect_item_page(
                                 citation.raw_text,
@@ -287,7 +291,10 @@ class CitationStorageService:
                     for act_name in unique_acts:
                         # Validate act name before creating resolution
                         validation_result = validation_service.validate(act_name)
-                        if validation_result.validation_status == ValidationStatus.INVALID:
+                        if (
+                            validation_result.validation_status
+                            == ValidationStatus.INVALID
+                        ):
                             logger.debug(
                                 "skipping_garbage_act",
                                 act_name=act_name,
@@ -383,11 +390,14 @@ class CitationStorageService:
                 # When filtering, fetch all and filter in Python
                 # EGRESS OPTIMIZATION: Use selective columns - excludes large quoted_text, extraction_metadata
                 def _query_all():
-                    return self.client.table("citations").select(CITATION_LIST_COLUMNS).eq(
-                        "source_document_id", document_id
-                    ).eq(
-                        "matter_id", matter_id
-                    ).order("source_page").execute()
+                    return (
+                        self.client.table("citations")
+                        .select(CITATION_LIST_COLUMNS)
+                        .eq("source_document_id", document_id)
+                        .eq("matter_id", matter_id)
+                        .order("source_page")
+                        .execute()
+                    )
 
                 result = await asyncio.to_thread(_query_all)
                 all_rows = result.data or []
@@ -405,8 +415,7 @@ class CitationStorageService:
                 offset = (page - 1) * per_page
                 paginated_rows = valid_rows[offset : offset + per_page]
                 citations = [
-                    self._row_to_citation(row, document_names)
-                    for row in paginated_rows
+                    self._row_to_citation(row, document_names) for row in paginated_rows
                 ]
 
                 return citations, total
@@ -416,15 +425,15 @@ class CitationStorageService:
                 offset = (page - 1) * per_page
 
                 def _query():
-                    return self.client.table("citations").select(
-                        CITATION_LIST_COLUMNS, count="exact"
-                    ).eq(
-                        "source_document_id", document_id
-                    ).eq(
-                        "matter_id", matter_id
-                    ).order("source_page").range(
-                        offset, offset + per_page - 1
-                    ).execute()
+                    return (
+                        self.client.table("citations")
+                        .select(CITATION_LIST_COLUMNS, count="exact")
+                        .eq("source_document_id", document_id)
+                        .eq("matter_id", matter_id)
+                        .order("source_page")
+                        .range(offset, offset + per_page - 1)
+                        .execute()
+                    )
 
                 result = await asyncio.to_thread(_query)
 
@@ -482,20 +491,29 @@ class CitationStorageService:
             document_names = await self._get_document_names_for_matter(matter_id)
 
             # Get Act document IDs to filter out citations from Acts
-            act_doc_ids = await self._get_act_document_ids_for_matter(matter_id) if filter_act_sources else set()
+            act_doc_ids = (
+                await self._get_act_document_ids_for_matter(matter_id)
+                if filter_act_sources
+                else set()
+            )
 
             # Always fetch all and filter in Python when we need any filtering
             # This handles garbage detection, act-source filtering, or both
             # EGRESS OPTIMIZATION: Use selective columns - excludes large quoted_text, extraction_metadata
             if filter_invalid or filter_act_sources:
+
                 def _query_all():
-                    query = self.client.table("citations").select(CITATION_LIST_COLUMNS).eq(
-                        "matter_id", matter_id
+                    query = (
+                        self.client.table("citations")
+                        .select(CITATION_LIST_COLUMNS)
+                        .eq("matter_id", matter_id)
                     )
                     if act_name:
                         query = query.eq("act_name", act_name)
                     if verification_status:
-                        query = query.eq("verification_status", verification_status.value)
+                        query = query.eq(
+                            "verification_status", verification_status.value
+                        )
                     return query.order("created_at", desc=True).execute()
 
                 result = await asyncio.to_thread(_query_all)
@@ -505,7 +523,10 @@ class CitationStorageService:
                 valid_rows = []
                 for row in all_rows:
                     # Filter out citations from Act documents
-                    if filter_act_sources and row.get("source_document_id") in act_doc_ids:
+                    if (
+                        filter_act_sources
+                        and row.get("source_document_id") in act_doc_ids
+                    ):
                         continue
 
                     # Filter out invalid act names
@@ -522,8 +543,7 @@ class CitationStorageService:
                 offset = (page - 1) * per_page
                 paginated_rows = valid_rows[offset : offset + per_page]
                 citations = [
-                    self._row_to_citation(row, document_names)
-                    for row in paginated_rows
+                    self._row_to_citation(row, document_names) for row in paginated_rows
                 ]
 
                 return citations, total
@@ -533,19 +553,25 @@ class CitationStorageService:
                 offset = (page - 1) * per_page
 
                 def _query():
-                    query = self.client.table("citations").select(
-                        CITATION_LIST_COLUMNS, count="exact"
-                    ).eq("matter_id", matter_id)
+                    query = (
+                        self.client.table("citations")
+                        .select(CITATION_LIST_COLUMNS, count="exact")
+                        .eq("matter_id", matter_id)
+                    )
 
                     if act_name:
                         query = query.eq("act_name", act_name)
 
                     if verification_status:
-                        query = query.eq("verification_status", verification_status.value)
+                        query = query.eq(
+                            "verification_status", verification_status.value
+                        )
 
-                    return query.order("created_at", desc=True).range(
-                        offset, offset + per_page - 1
-                    ).execute()
+                    return (
+                        query.order("created_at", desc=True)
+                        .range(offset, offset + per_page - 1)
+                        .execute()
+                    )
 
                 result = await asyncio.to_thread(_query)
 
@@ -580,6 +606,7 @@ class CitationStorageService:
             Citation or None if not found.
         """
         try:
+
             def _query():
                 query = self.client.table("citations").select("*").eq("id", citation_id)
                 if matter_id:
@@ -623,18 +650,22 @@ class CitationStorageService:
             # Direct upsert (the upsert_act_resolution RPC fails with
             # service-role calls because auth.uid() returns NULL inside it)
             def _upsert():
-                return self.client.table("act_resolutions").upsert(
-                    {
-                        "matter_id": matter_id,
-                        "act_name_normalized": normalized,
-                        "act_name_display": act_name,
-                        "resolution_status": ActResolutionStatus.MISSING.value,
-                        "user_action": UserAction.PENDING.value,
-                        "citation_count": 1,
-                        "updated_at": datetime.now(UTC).isoformat(),
-                    },
-                    on_conflict="matter_id,act_name_normalized",
-                ).execute()
+                return (
+                    self.client.table("act_resolutions")
+                    .upsert(
+                        {
+                            "matter_id": matter_id,
+                            "act_name_normalized": normalized,
+                            "act_name_display": act_name,
+                            "resolution_status": ActResolutionStatus.MISSING.value,
+                            "user_action": UserAction.PENDING.value,
+                            "citation_count": 1,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        },
+                        on_conflict="matter_id,act_name_normalized",
+                    )
+                    .execute()
+                )
 
             upsert_result = await asyncio.to_thread(_upsert)
 
@@ -646,10 +677,20 @@ class CitationStorageService:
                 if row.get("citation_count", 0) >= 1:
                     # Record existed - increment the citation count
                     def _increment():
-                        return self.client.table("act_resolutions").update({
-                            "citation_count": (row.get("citation_count", 0) or 0) + 1,
-                            "updated_at": datetime.now(UTC).isoformat(),
-                        }).eq("id", row["id"]).execute()
+                        return (
+                            self.client.table("act_resolutions")
+                            .update(
+                                {
+                                    "citation_count": (
+                                        row.get("citation_count", 0) or 0
+                                    )
+                                    + 1,
+                                    "updated_at": datetime.now(UTC).isoformat(),
+                                }
+                            )
+                            .eq("id", row["id"])
+                            .execute()
+                        )
 
                     # Try to increment - if it fails, return the upserted result anyway
                     try:
@@ -687,9 +728,12 @@ class CitationStorageService:
             List of act resolutions.
         """
         try:
+
             def _query():
-                query = self.client.table("act_resolutions").select("*").eq(
-                    "matter_id", matter_id
+                query = (
+                    self.client.table("act_resolutions")
+                    .select("*")
+                    .eq("matter_id", matter_id)
                 )
                 if status:
                     query = query.eq("resolution_status", status.value)
@@ -697,9 +741,7 @@ class CitationStorageService:
 
             result = await asyncio.to_thread(_query)
 
-            return [
-                self._row_to_act_resolution(row) for row in (result.data or [])
-            ]
+            return [self._row_to_act_resolution(row) for row in (result.data or [])]
 
         except Exception as e:
             logger.error(
@@ -742,9 +784,13 @@ class CitationStorageService:
                 update_data["user_action"] = user_action.value
 
             def _update():
-                return self.client.table("act_resolutions").update(update_data).eq(
-                    "matter_id", matter_id
-                ).eq("act_name_normalized", act_name_normalized).execute()
+                return (
+                    self.client.table("act_resolutions")
+                    .update(update_data)
+                    .eq("matter_id", matter_id)
+                    .eq("act_name_normalized", act_name_normalized)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_update)
 
@@ -790,9 +836,12 @@ class CitationStorageService:
         try:
             # EGRESS OPTIMIZATION: Select only needed columns
             def _query():
-                return self.client.table("citations").select(
-                    CITATION_STATS_COLUMNS
-                ).eq("matter_id", matter_id).execute()
+                return (
+                    self.client.table("citations")
+                    .select(CITATION_STATS_COLUMNS)
+                    .eq("matter_id", matter_id)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_query)
 
@@ -800,11 +849,15 @@ class CitationStorageService:
             validation_service = get_validation_service() if filter_invalid else None
 
             # Get Act document IDs to filter out citations from Acts
-            act_doc_ids = await self._get_act_document_ids_for_matter(matter_id) if filter_act_sources else set()
+            act_doc_ids = (
+                await self._get_act_document_ids_for_matter(matter_id)
+                if filter_act_sources
+                else set()
+            )
 
             # Aggregate counts
             counts: dict[str, dict] = {}
-            for row in (result.data or []):
+            for row in result.data or []:
                 act_name = row["act_name"]
                 status = row["verification_status"]
 
@@ -864,6 +917,7 @@ class CitationStorageService:
             Dictionary mapping document_id to filename.
         """
         try:
+
             def _query():
                 return (
                     self.client.table("documents")
@@ -902,6 +956,7 @@ class CitationStorageService:
             Set of document IDs that are Act documents.
         """
         try:
+
             def _query():
                 return (
                     self.client.table("documents")
@@ -974,16 +1029,17 @@ class CitationStorageService:
             id=row["id"],
             matter_id=row["matter_id"],
             act_name_normalized=row["act_name_normalized"],
-            act_name_display=row.get("act_name_display") or get_display_name(
-                row["act_name_normalized"]
-            ),
+            act_name_display=row.get("act_name_display")
+            or get_display_name(row["act_name_normalized"]),
             act_document_id=row.get("act_document_id"),
             resolution_status=ActResolutionStatus(row["resolution_status"]),
             user_action=UserAction(row["user_action"]),
             citation_count=row.get("citation_count") or 0,
             first_seen_at=datetime.fromisoformat(
                 row["first_seen_at"].replace("Z", "+00:00")
-            ) if row.get("first_seen_at") else None,
+            )
+            if row.get("first_seen_at")
+            else None,
             created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
             updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
         )
@@ -1036,9 +1092,13 @@ class CitationStorageService:
                 update_data["confidence"] = confidence / 100.0
 
             def _update():
-                return self.client.table("citations").update(update_data).eq(
-                    "id", citation_id
-                ).eq("matter_id", matter_id).execute()
+                return (
+                    self.client.table("citations")
+                    .update(update_data)
+                    .eq("id", citation_id)
+                    .eq("matter_id", matter_id)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_update)
 
@@ -1081,8 +1141,10 @@ class CitationStorageService:
             normalized_target = normalize_act_name(act_name)
 
             def _query():
-                query = self.client.table("citations").select("*").eq(
-                    "matter_id", matter_id
+                query = (
+                    self.client.table("citations")
+                    .select("*")
+                    .eq("matter_id", matter_id)
                 )
 
                 if exclude_verified:
@@ -1110,7 +1172,7 @@ class CitationStorageService:
 
             # Filter by normalized act name match (handles case and year differences)
             citations = []
-            for row in (result.data or []):
+            for row in result.data or []:
                 row_act_name = row.get("act_name", "")
                 if normalize_act_name(row_act_name) == normalized_target:
                     citations.append(self._row_to_citation(row))
@@ -1149,15 +1211,19 @@ class CitationStorageService:
             List of citations needing verification.
         """
         try:
+
             def _query():
-                query = self.client.table("citations").select("*").eq(
-                    "matter_id", matter_id
-                ).in_(
-                    "verification_status",
-                    [
-                        VerificationStatus.PENDING.value,
-                        VerificationStatus.ACT_UNAVAILABLE.value,
-                    ],
+                query = (
+                    self.client.table("citations")
+                    .select("*")
+                    .eq("matter_id", matter_id)
+                    .in_(
+                        "verification_status",
+                        [
+                            VerificationStatus.PENDING.value,
+                            VerificationStatus.ACT_UNAVAILABLE.value,
+                        ],
+                    )
                 )
 
                 # Note: We can't filter by target_act_document_id here since
@@ -1208,11 +1274,13 @@ class CitationStorageService:
 
             # First, get all citations with matching status to find normalized matches
             def _get_candidates():
-                return self.client.table("citations").select("id, act_name").eq(
-                    "matter_id", matter_id
-                ).eq(
-                    "verification_status", from_status.value
-                ).execute()
+                return (
+                    self.client.table("citations")
+                    .select("id, act_name")
+                    .eq("matter_id", matter_id)
+                    .eq("verification_status", from_status.value)
+                    .execute()
+                )
 
             candidates_result = await asyncio.to_thread(_get_candidates)
             candidates = candidates_result.data or []
@@ -1236,12 +1304,17 @@ class CitationStorageService:
 
             # Update matching citations by ID
             def _update():
-                return self.client.table("citations").update({
-                    "verification_status": to_status.value,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }).in_(
-                    "id", matching_ids
-                ).execute()
+                return (
+                    self.client.table("citations")
+                    .update(
+                        {
+                            "verification_status": to_status.value,
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        }
+                    )
+                    .in_("id", matching_ids)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_update)
 
@@ -1270,7 +1343,6 @@ class CitationStorageService:
             )
             return 0
 
-
     async def bulk_update_by_ids(
         self,
         matter_id: str,
@@ -1294,7 +1366,9 @@ class CitationStorageService:
 
         try:
             # For manual verification, set confidence to 100%
-            confidence_value = 1.0 if verification_status == VerificationStatus.VERIFIED else None
+            confidence_value = (
+                1.0 if verification_status == VerificationStatus.VERIFIED else None
+            )
 
             update_data: dict = {
                 "verification_status": verification_status.value,
@@ -1305,11 +1379,13 @@ class CitationStorageService:
                 update_data["confidence"] = confidence_value
 
             def _update():
-                return self.client.table("citations").update(update_data).eq(
-                    "matter_id", matter_id
-                ).in_(
-                    "id", citation_ids
-                ).execute()
+                return (
+                    self.client.table("citations")
+                    .update(update_data)
+                    .eq("matter_id", matter_id)
+                    .in_("id", citation_ids)
+                    .execute()
+                )
 
             result = await asyncio.to_thread(_update)
 

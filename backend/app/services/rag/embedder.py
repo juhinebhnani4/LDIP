@@ -149,7 +149,9 @@ class EmbeddingService:
                 error=str(e),
             )
 
-    async def embed_text(self, text: str, matter_id: str | None = None) -> list[float] | None:
+    async def embed_text(
+        self, text: str, matter_id: str | None = None
+    ) -> list[float] | None:
         """Generate embedding for single text with circuit breaker protection.
 
         Args:
@@ -235,7 +237,9 @@ class EmbeddingService:
             ) from e
 
     @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
-    async def _call_openai_embedding(self, text: str, matter_id: str | None = None) -> list[float]:
+    async def _call_openai_embedding(
+        self, text: str, matter_id: str | None = None
+    ) -> list[float]:
         """Call OpenAI API with circuit breaker protection.
 
         Args:
@@ -313,7 +317,12 @@ class EmbeddingService:
 
         try:
             # Generate embeddings in batch with circuit breaker
-            embeddings = await self._call_openai_batch_embedding(valid_texts, matter_id=matter_id, document_id=document_id, library_document_id=library_document_id)
+            embeddings = await self._call_openai_batch_embedding(
+                valid_texts,
+                matter_id=matter_id,
+                document_id=document_id,
+                library_document_id=library_document_id,
+            )
 
             # Map back to original indices
             results: list[list[float] | None] = [None] * len(texts)
@@ -365,7 +374,11 @@ class EmbeddingService:
 
     @with_circuit_breaker(CircuitService.OPENAI_EMBEDDINGS)
     async def _call_openai_batch_embedding(
-        self, texts: list[str], matter_id: str | None = None, document_id: str | None = None, library_document_id: str | None = None,
+        self,
+        texts: list[str],
+        matter_id: str | None = None,
+        document_id: str | None = None,
+        library_document_id: str | None = None,
     ) -> list[list[float]]:
         """Call OpenAI batch API with circuit breaker protection.
 

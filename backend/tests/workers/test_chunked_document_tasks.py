@@ -69,15 +69,19 @@ class TestProcessDocumentChunked:
 
         mock_services["chunk_service"].get_pending_chunks = AsyncMock(return_value=[])
 
-        with patch(
-            "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
-            return_value=mock_services["chunk_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.get_storage_service",
-            return_value=mock_services["storage_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.get_document_service",
-            return_value=mock_services["doc_service"],
+        with (
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
+                return_value=mock_services["chunk_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_storage_service",
+                return_value=mock_services["storage_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_document_service",
+                return_value=mock_services["doc_service"],
+            ),
         ):
             result = process_document_chunked(
                 document_id="doc-456",
@@ -126,7 +130,9 @@ class TestProcessDocumentChunked:
                     with patch(
                         "app.workers.tasks.chunked_document_tasks.group"
                     ) as mock_group:
-                        mock_group.return_value.apply_async.return_value = mock_group_result
+                        mock_group.return_value.apply_async.return_value = (
+                            mock_group_result
+                        )
 
                         with patch(
                             "app.workers.tasks.chunked_document_tasks._merge_and_store_results"
@@ -180,7 +186,9 @@ class TestProcessDocumentChunked:
                     with patch(
                         "app.workers.tasks.chunked_document_tasks.group"
                     ) as mock_group:
-                        mock_group.return_value.apply_async.return_value = mock_group_result
+                        mock_group.return_value.apply_async.return_value = (
+                            mock_group_result
+                        )
 
                         with patch(
                             "app.workers.tasks.chunked_document_tasks.get_chunk_progress_tracker"
@@ -363,18 +371,23 @@ class TestProcessSingleChunk:
             process_single_chunk,
         )
 
-        with patch(
-            "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
-            return_value=mock_services["chunk_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.get_storage_service",
-            return_value=mock_services["storage_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.get_document_service",
-            return_value=mock_services["doc_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.acquire_chunk_lock"
-        ) as mock_lock:
+        with (
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
+                return_value=mock_services["chunk_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_storage_service",
+                return_value=mock_services["storage_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_document_service",
+                return_value=mock_services["doc_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.acquire_chunk_lock"
+            ) as mock_lock,
+        ):
             # Lock returns False (not acquired)
             mock_lock.return_value.__enter__ = MagicMock(return_value=False)
             mock_lock.return_value.__exit__ = MagicMock(return_value=False)
@@ -425,12 +438,15 @@ class TestRetryFailedChunks:
         )
         mock_services["chunk_service"].reset_chunk_for_retry = AsyncMock()
 
-        with patch(
-            "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
-            return_value=mock_services["chunk_service"],
-        ), patch(
-            "app.workers.tasks.chunked_document_tasks.process_document_chunked"
-        ) as mock_process:
+        with (
+            patch(
+                "app.workers.tasks.chunked_document_tasks.get_ocr_chunk_service",
+                return_value=mock_services["chunk_service"],
+            ),
+            patch(
+                "app.workers.tasks.chunked_document_tasks.process_document_chunked"
+            ) as mock_process,
+        ):
             mock_process.delay = MagicMock()
 
             result = retry_failed_chunks(

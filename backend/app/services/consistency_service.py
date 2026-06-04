@@ -89,7 +89,9 @@ def normalize_date(date_str: str | None) -> datetime | None:
         return None
 
 
-def dates_match(date1: str | None, date2: str | None, tolerance_days: int = DATE_TOLERANCE_DAYS) -> bool:
+def dates_match(
+    date1: str | None, date2: str | None, tolerance_days: int = DATE_TOLERANCE_DAYS
+) -> bool:
     """Check if two dates match within tolerance.
 
     Args:
@@ -110,7 +112,9 @@ def dates_match(date1: str | None, date2: str | None, tolerance_days: int = DATE
     return diff <= tolerance_days
 
 
-def names_similar(name1: str, name2: str, threshold: float = FUZZY_NAME_THRESHOLD) -> bool:
+def names_similar(
+    name1: str, name2: str, threshold: float = FUZZY_NAME_THRESHOLD
+) -> bool:
     """Check if two names are similar using fuzzy matching.
 
     Story 5.4: Pre-mortem fix - Use fuzzy matching thresholds.
@@ -233,9 +237,13 @@ class ConsistencyService:
 
         try:
             # Get timeline events with entity links
-            events_result = self.client.table("timeline_events").select(
-                "id, event_date, description, linked_entities"
-            ).eq("matter_id", matter_id).not_.is_("linked_entities", "null").execute()
+            events_result = (
+                self.client.table("timeline_events")
+                .select("id, event_date, description, linked_entities")
+                .eq("matter_id", matter_id)
+                .not_.is_("linked_entities", "null")
+                .execute()
+            )
 
             if not events_result.data:
                 return 0, 0
@@ -247,9 +255,12 @@ class ConsistencyService:
 
                 for entity_id in linked_entities:
                     # Check if entity mention dates match event date
-                    mentions_result = self.client.table("entity_mentions").select(
-                        "id, context, chunk_id"
-                    ).eq("entity_id", entity_id).execute()
+                    mentions_result = (
+                        self.client.table("entity_mentions")
+                        .select("id, context, chunk_id")
+                        .eq("entity_id", entity_id)
+                        .execute()
+                    )
 
                     if mentions_result.data:
                         # Check for date inconsistencies in mention context
@@ -301,17 +312,23 @@ class ConsistencyService:
 
         try:
             # Get entities with their aliases
-            entities_result = self.client.table("entities").select(
-                "id, canonical_name, aliases"
-            ).eq("matter_id", matter_id).execute()
+            entities_result = (
+                self.client.table("entities")
+                .select("id, canonical_name, aliases")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             if not entities_result.data:
                 return 0, 0
 
             # Get citations that might reference entities
-            citations_result = self.client.table("citations").select(
-                "id, context, act_name"
-            ).eq("matter_id", matter_id).execute()
+            citations_result = (
+                self.client.table("citations")
+                .select("id, context, act_name")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             if not citations_result.data:
                 return 0, 0
@@ -411,35 +428,40 @@ class ConsistencyService:
         """
         try:
             # Check for existing similar issue
-            existing = self.client.table("consistency_issues").select("id").eq(
-                "matter_id", issue.matter_id
-            ).eq("issue_type", issue.issue_type.value).eq(
-                "source_engine", issue.source_engine.value
-            ).eq("source_id", issue.source_id).eq(
-                "conflicting_engine", issue.conflicting_engine.value
-            ).eq("conflicting_id", issue.conflicting_id).eq(
-                "status", "open"
-            ).execute()
+            existing = (
+                self.client.table("consistency_issues")
+                .select("id")
+                .eq("matter_id", issue.matter_id)
+                .eq("issue_type", issue.issue_type.value)
+                .eq("source_engine", issue.source_engine.value)
+                .eq("source_id", issue.source_id)
+                .eq("conflicting_engine", issue.conflicting_engine.value)
+                .eq("conflicting_id", issue.conflicting_id)
+                .eq("status", "open")
+                .execute()
+            )
 
             if existing.data:
                 return False
 
             # Create new issue
-            self.client.table("consistency_issues").insert({
-                "matter_id": issue.matter_id,
-                "issue_type": issue.issue_type.value,
-                "severity": issue.severity.value,
-                "source_engine": issue.source_engine.value,
-                "source_id": issue.source_id,
-                "source_value": issue.source_value,
-                "conflicting_engine": issue.conflicting_engine.value,
-                "conflicting_id": issue.conflicting_id,
-                "conflicting_value": issue.conflicting_value,
-                "description": issue.description,
-                "document_id": issue.document_id,
-                "document_name": issue.document_name,
-                "metadata": issue.metadata,
-            }).execute()
+            self.client.table("consistency_issues").insert(
+                {
+                    "matter_id": issue.matter_id,
+                    "issue_type": issue.issue_type.value,
+                    "severity": issue.severity.value,
+                    "source_engine": issue.source_engine.value,
+                    "source_id": issue.source_id,
+                    "source_value": issue.source_value,
+                    "conflicting_engine": issue.conflicting_engine.value,
+                    "conflicting_id": issue.conflicting_id,
+                    "conflicting_value": issue.conflicting_value,
+                    "description": issue.description,
+                    "document_id": issue.document_id,
+                    "document_name": issue.document_name,
+                    "metadata": issue.metadata,
+                }
+            ).execute()
 
             return True
 
@@ -471,11 +493,14 @@ class ConsistencyService:
         Returns:
             List of ConsistencyIssue.
         """
-        query = self.client.table("consistency_issues").select(
-            "*"
-        ).eq("matter_id", matter_id).order(
-            "detected_at", desc=True
-        ).limit(limit).offset(offset)
+        query = (
+            self.client.table("consistency_issues")
+            .select("*")
+            .eq("matter_id", matter_id)
+            .order("detected_at", desc=True)
+            .limit(limit)
+            .offset(offset)
+        )
 
         if status:
             query = query.eq("status", status)
@@ -548,8 +573,12 @@ class ConsistencyService:
         try:
             update_data = {
                 "status": status.value,
-                "resolved_by": user_id if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED) else None,
-                "resolved_at": datetime.now(UTC).isoformat() if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED) else None,
+                "resolved_by": user_id
+                if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED)
+                else None,
+                "resolved_at": datetime.now(UTC).isoformat()
+                if status in (IssueStatus.RESOLVED, IssueStatus.DISMISSED)
+                else None,
             }
             if resolution_notes:
                 update_data["resolution_notes"] = resolution_notes

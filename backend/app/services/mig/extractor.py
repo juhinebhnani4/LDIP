@@ -300,8 +300,14 @@ class MIGEntityExtractor:
                 entity_type_counts: dict[str, int] = {}
                 try:
                     for entity in result.entities:
-                        type_name = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
-                        entity_type_counts[type_name] = entity_type_counts.get(type_name, 0) + 1
+                        type_name = (
+                            entity.type.value
+                            if hasattr(entity.type, "value")
+                            else str(entity.type)
+                        )
+                        entity_type_counts[type_name] = (
+                            entity_type_counts.get(type_name, 0) + 1
+                        )
                 except Exception as count_err:
                     logger.warning(
                         "mig_extraction_type_count_failed",
@@ -487,8 +493,14 @@ class MIGEntityExtractor:
                 entity_type_counts: dict[str, int] = {}
                 try:
                     for entity in result.entities:
-                        type_name = entity.type.value if hasattr(entity.type, 'value') else str(entity.type)
-                        entity_type_counts[type_name] = entity_type_counts.get(type_name, 0) + 1
+                        type_name = (
+                            entity.type.value
+                            if hasattr(entity.type, "value")
+                            else str(entity.type)
+                        )
+                        entity_type_counts[type_name] = (
+                            entity_type_counts.get(type_name, 0) + 1
+                        )
                 except Exception as count_err:
                     logger.warning(
                         "mig_extraction_type_count_failed",
@@ -624,8 +636,12 @@ class MIGEntityExtractor:
                     response_type=type(parsed).__name__,
                 )
                 return self._empty_result(
-                    document_id, chunk_id, page_number, bbox_ids,
-                    is_error=True, error_message="Unexpected response format from extraction"
+                    document_id,
+                    chunk_id,
+                    page_number,
+                    bbox_ids,
+                    is_error=True,
+                    error_message="Unexpected response format from extraction",
                 )
 
             # Parse entities
@@ -713,8 +729,12 @@ class MIGEntityExtractor:
                 response_preview=response_text[:200] if response_text else "",
             )
             return self._empty_result(
-                document_id, chunk_id, page_number, bbox_ids,
-                is_error=True, error_message="Failed to parse extraction response"
+                document_id,
+                chunk_id,
+                page_number,
+                bbox_ids,
+                is_error=True,
+                error_message="Failed to parse extraction response",
             )
 
         except Exception as e:
@@ -723,8 +743,12 @@ class MIGEntityExtractor:
                 error=str(e),
             )
             return self._empty_result(
-                document_id, chunk_id, page_number, bbox_ids,
-                is_error=True, error_message="Failed to parse extraction response"
+                document_id,
+                chunk_id,
+                page_number,
+                bbox_ids,
+                is_error=True,
+                error_message="Failed to parse extraction response",
             )
 
     def _parse_entity_type(self, type_str: str) -> EntityType | None:
@@ -832,7 +856,9 @@ class MIGEntityExtractor:
                 content = content[:6000]
 
             # Check if adding this chunk would exceed limit
-            section_text = f"=== SECTION {chunk_id} (page: {page_number}) ===\n{content}\n"
+            section_text = (
+                f"=== SECTION {chunk_id} (page: {page_number}) ===\n{content}\n"
+            )
             if total_text_length + len(section_text) > max_batch_length:
                 break
 
@@ -850,7 +876,9 @@ class MIGEntityExtractor:
                     document_id,
                     c.get("id"),
                     c.get("page_number"),
-                    [str(b) for b in c.get("bbox_ids") or []] if c.get("bbox_ids") else [],
+                    [str(b) for b in c.get("bbox_ids") or []]
+                    if c.get("bbox_ids")
+                    else [],
                 )
                 for c in chunks
             ]
@@ -875,7 +903,7 @@ class MIGEntityExtractor:
                     ),
                 )
             # Track cost
-            usage = getattr(response, 'usage_metadata', None)
+            usage = getattr(response, "usage_metadata", None)
             cost_tracker = CostTracker(
                 provider=CostLLMProvider.GEMINI_FLASH,
                 operation="entity_extraction_batch",
@@ -883,12 +911,14 @@ class MIGEntityExtractor:
                 document_id=document_id,
             )
             if usage:
-                input_tokens = getattr(usage, 'prompt_token_count', 0) or 0
-                output_tokens = getattr(usage, 'candidates_token_count', 0) or 0
+                input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+                output_tokens = getattr(usage, "candidates_token_count", 0) or 0
             else:
                 input_tokens = estimate_tokens(prompt)
                 output_tokens = estimate_tokens(response.text) if response.text else 0
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)
 
@@ -905,13 +935,19 @@ class MIGEntityExtractor:
                     results.append(parsed_sections[chunk_id])
                 else:
                     # Chunk not in response (maybe filtered out or failed)
-                    chunk_bbox_ids = [str(b) for b in chunk.get("bbox_ids") or []] if chunk.get("bbox_ids") else []
-                    results.append(self._empty_result(
-                        document_id,
-                        chunk_id,
-                        chunk.get("page_number"),
-                        chunk_bbox_ids,
-                    ))
+                    chunk_bbox_ids = (
+                        [str(b) for b in chunk.get("bbox_ids") or []]
+                        if chunk.get("bbox_ids")
+                        else []
+                    )
+                    results.append(
+                        self._empty_result(
+                            document_id,
+                            chunk_id,
+                            chunk.get("page_number"),
+                            chunk_bbox_ids,
+                        )
+                    )
 
             processing_time = int((time.time() - start_time) * 1000)
             total_entities = sum(len(r.entities) for r in results)
@@ -940,7 +976,9 @@ class MIGEntityExtractor:
                     document_id,
                     c.get("id"),
                     c.get("page_number"),
-                    [str(b) for b in c.get("bbox_ids") or []] if c.get("bbox_ids") else [],
+                    [str(b) for b in c.get("bbox_ids") or []]
+                    if c.get("bbox_ids")
+                    else [],
                     is_error=True,
                     error_message="Batch extraction failed",
                 )

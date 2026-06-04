@@ -128,7 +128,7 @@ def find_matching_bboxes_fuzzy(
             continue
 
         for start_idx in range(len(page_bboxes) - window_size + 1):
-            window_text = " ".join(bbox_texts[start_idx:start_idx + window_size])
+            window_text = " ".join(bbox_texts[start_idx : start_idx + window_size])
             score = fuzz.partial_ratio(citation_normalized[:200], window_text[:500])
 
             if score > best_score:
@@ -160,9 +160,13 @@ def find_matching_bboxes_fuzzy(
 
 async def get_citations_missing_bboxes(matter_id: str | None = None) -> list[dict]:
     """Get citations that have empty source_bbox_ids."""
-    query = supabase.table("citations").select(
-        "id, source_document_id, source_page, raw_citation_text, source_bbox_ids"
-    ).or_("source_bbox_ids.is.null,source_bbox_ids.eq.{}")
+    query = (
+        supabase.table("citations")
+        .select(
+            "id, source_document_id, source_page, raw_citation_text, source_bbox_ids"
+        )
+        .or_("source_bbox_ids.is.null,source_bbox_ids.eq.{}")
+    )
 
     if matter_id:
         query = query.eq("matter_id", matter_id)
@@ -176,11 +180,16 @@ async def get_bboxes_for_document_page(
     page_number: int,
 ) -> list[dict]:
     """Get all bboxes for a document on a specific page."""
-    response = supabase.table("bounding_boxes").select(
-        "id, text, page_number, x, y, width, height"
-    ).eq("document_id", document_id).eq("page_number", page_number).order(
-        "y"
-    ).order("x").limit(500).execute()
+    response = (
+        supabase.table("bounding_boxes")
+        .select("id, text, page_number, x, y, width, height")
+        .eq("document_id", document_id)
+        .eq("page_number", page_number)
+        .order("y")
+        .order("x")
+        .limit(500)
+        .execute()
+    )
 
     return response.data or []
 
@@ -191,9 +200,12 @@ async def update_citation_source_bboxes(
 ) -> bool:
     """Update a citation with source_bbox_ids."""
     try:
-        response = supabase.table("citations").update({
-            "source_bbox_ids": bbox_ids
-        }).eq("id", citation_id).execute()
+        response = (
+            supabase.table("citations")
+            .update({"source_bbox_ids": bbox_ids})
+            .eq("id", citation_id)
+            .execute()
+        )
         return len(response.data) > 0
     except Exception as e:
         print(f"Error updating citation {citation_id}: {e}")
@@ -221,9 +233,9 @@ async def backfill_citations(
         "bboxes_linked": 0,
     }
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Citation Source BBox Backfill {'(DRY RUN)' if dry_run else ''}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Get citations missing source_bbox_ids
     print("Fetching citations with missing source_bbox_ids...")
@@ -246,7 +258,9 @@ async def backfill_citations(
 
     # Process each document-page group
     for (doc_id, page_num), page_citations in citations_by_doc_page.items():
-        print(f"Processing document {doc_id[:8]}... page {page_num} ({len(page_citations)} citations)")
+        print(
+            f"Processing document {doc_id[:8]}... page {page_num} ({len(page_citations)} citations)"
+        )
 
         # Load bboxes for this page
         page_bboxes = await get_bboxes_for_document_page(doc_id, page_num)
@@ -285,14 +299,18 @@ async def backfill_citations(
 
             if matched_ids:
                 if dry_run:
-                    print(f"    Would link citation {citation['id'][:8]}... to {len(matched_ids)} bboxes")
+                    print(
+                        f"    Would link citation {citation['id'][:8]}... to {len(matched_ids)} bboxes"
+                    )
                 else:
                     success = await update_citation_source_bboxes(
                         citation["id"],
                         matched_ids,
                     )
                     if success:
-                        print(f"    Linked citation {citation['id'][:8]}... to {len(matched_ids)} bboxes")
+                        print(
+                            f"    Linked citation {citation['id'][:8]}... to {len(matched_ids)} bboxes"
+                        )
                         stats["citations_updated"] += 1
                         stats["bboxes_linked"] += len(matched_ids)
                     else:
@@ -302,9 +320,9 @@ async def backfill_citations(
                 stats["citations_no_match"] += 1
 
     # Print summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Summary")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Total citations found:     {stats['total_citations']}")
     print(f"Citations processed:       {stats['citations_processed']}")
     print(f"Citations updated:         {stats['citations_updated']}")
@@ -338,10 +356,12 @@ def main():
 
     dry_run = not args.execute
 
-    asyncio.run(backfill_citations(
-        dry_run=dry_run,
-        matter_id=args.matter_id,
-    ))
+    asyncio.run(
+        backfill_citations(
+            dry_run=dry_run,
+            matter_id=args.matter_id,
+        )
+    )
 
 
 if __name__ == "__main__":

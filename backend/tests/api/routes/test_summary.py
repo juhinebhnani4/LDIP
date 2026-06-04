@@ -160,9 +160,7 @@ class TestGetSummaryAuthenticated:
     """Test get summary with authenticated user."""
 
     @pytest.mark.asyncio
-    async def test_returns_summary(
-        self, mock_matter_access, mock_summary
-    ) -> None:
+    async def test_returns_summary(self, mock_matter_access, mock_summary) -> None:
         """Should return summary data."""
         from app.api.routes.summary import get_matter_summary
         from app.services.summary_service import SummaryService
@@ -283,9 +281,7 @@ class TestSummaryResponseFormat:
         assert item.target_tab == "verification"
 
     @pytest.mark.asyncio
-    async def test_stats_structure(
-        self, mock_matter_access, mock_summary
-    ) -> None:
+    async def test_stats_structure(self, mock_matter_access, mock_summary) -> None:
         """Stats should have correct structure."""
         from app.api.routes.summary import get_matter_summary
         from app.services.summary_service import SummaryService
@@ -341,9 +337,7 @@ class TestSummaryErrorHandling:
         assert exc_info.value.detail["error"]["code"] == "GENERATION_FAILED"
 
     @pytest.mark.asyncio
-    async def test_openai_not_configured_returns_503(
-        self, mock_matter_access
-    ) -> None:
+    async def test_openai_not_configured_returns_503(self, mock_matter_access) -> None:
         """OpenAI not configured should return 503."""
         from fastapi import HTTPException
 
@@ -565,9 +559,7 @@ class TestVerifySummarySection:
         mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
 
     @pytest.mark.asyncio
-    async def test_flag_section_success(
-        self, mock_editor_access, mock_summary
-    ) -> None:
+    async def test_flag_section_success(self, mock_editor_access, mock_summary) -> None:
         """Should successfully flag a section."""
         from app.api.routes.summary import verify_summary_section
         from app.services.summary_service import SummaryService
@@ -612,9 +604,7 @@ class TestAddSummaryNote:
     """Test POST /summary/notes endpoint."""
 
     @pytest.mark.asyncio
-    async def test_add_note_success(
-        self, mock_editor_access, mock_note_record
-    ) -> None:
+    async def test_add_note_success(self, mock_editor_access, mock_note_record) -> None:
         """Should successfully add a note."""
         from app.api.routes.summary import add_summary_note
         from app.services.summary_verification_service import SummaryVerificationService
@@ -742,9 +732,7 @@ class TestVerificationRoleEnforcement:
 class TestVerificationModelSerialization:
     """Test verification model serialization."""
 
-    def test_verification_record_serialization(
-        self, mock_verification_record
-    ) -> None:
+    def test_verification_record_serialization(self, mock_verification_record) -> None:
         """SummaryVerificationRecord should serialize with camelCase."""
         json_data = mock_verification_record.model_dump(by_alias=True)
 
@@ -794,7 +782,9 @@ class TestSaveSectionEdit:
     """
 
     @pytest.mark.asyncio
-    async def test_save_edit_success(self, mock_editor_access, mock_edit_record) -> None:
+    async def test_save_edit_success(
+        self, mock_editor_access, mock_edit_record
+    ) -> None:
         """Should successfully save section edit."""
         from app.api.routes.summary import save_section_edit
         from app.models.summary import SummaryEditCreate
@@ -821,7 +811,9 @@ class TestSaveSectionEdit:
             summary_service=mock_summary_service,
         )
 
-        assert response.data.edited_content == "User-edited description with corrections."
+        assert (
+            response.data.edited_content == "User-edited description with corrections."
+        )
         assert response.data.section_type.value == "subject_matter"
         mock_edit_service.save_edit.assert_called_once()
         mock_summary_service.invalidate_cache.assert_called_once_with("matter-123")
@@ -858,7 +850,9 @@ class TestSaveSectionEdit:
         assert "INVALID_SECTION_TYPE" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    async def test_save_edit_all_section_types(self, mock_editor_access, mock_edit_record) -> None:
+    async def test_save_edit_all_section_types(
+        self, mock_editor_access, mock_edit_record
+    ) -> None:
         """Should accept all valid section types."""
         from app.api.routes.summary import save_section_edit
         from app.models.summary import SummaryEditCreate, SummarySectionTypeEnum

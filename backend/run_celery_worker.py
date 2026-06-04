@@ -1,4 +1,5 @@
 """Script to start Celery worker from Windows."""
+
 import os
 import sys
 
@@ -14,5 +15,14 @@ from celery.__main__ import main  # noqa: E402
 
 # Run as worker with gevent pool (supports concurrent tasks)
 # Use app.workers.celery instead of app.workers.celery_app
-sys.argv = ['celery', '-A', 'app.workers.celery', 'worker', '--loglevel=info', '--pool=gevent', '-c', '100']
+sys.argv = [
+    "celery",
+    "-A",
+    "app.workers.celery",
+    "worker",
+    "--loglevel=info",
+    "--pool=gevent",
+    "-c",
+    "100",
+]
 main()

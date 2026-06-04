@@ -138,9 +138,7 @@ class TestCleanupDocumentChunks:
             storage_service=mock_storage_service,
         )
 
-        result = await service.cleanup_document_chunks(
-            "doc-456", delete_storage=False
-        )
+        result = await service.cleanup_document_chunks("doc-456", delete_storage=False)
 
         # Verify storage NOT deleted
         mock_storage_service.delete_file.assert_not_called()

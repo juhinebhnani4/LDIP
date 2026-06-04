@@ -227,10 +227,13 @@ class EventClassifier(ReasoningCaptureMixin):
                         matter_id=matter_id,
                         engine_type=EngineType.TIMELINE,
                         model_used=self.model_name,
-                        reasoning_text=result.classification_reasoning or response.text or "",
+                        reasoning_text=result.classification_reasoning
+                        or response.text
+                        or "",
                         input_summary=f"Event classification for event {event_id}, date_text={date_text}",
                         confidence_score=result.classification_confidence,
-                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        tokens_used=estimate_tokens(prompt)
+                        + estimate_tokens(response.text or ""),
                         cost_usd=ec_tracker.total_cost_usd,
                     )
 
@@ -321,11 +324,15 @@ class EventClassifier(ReasoningCaptureMixin):
             results = []
             for i in range(0, len(events), MAX_BATCH_SIZE):
                 batch = events[i : i + MAX_BATCH_SIZE]
-                batch_results = await self._classify_batch(batch, document_id=document_id, matter_id=matter_id)
+                batch_results = await self._classify_batch(
+                    batch, document_id=document_id, matter_id=matter_id
+                )
                 results.extend(batch_results)
             return results
 
-        return await self._classify_batch(events, document_id=document_id, matter_id=matter_id)
+        return await self._classify_batch(
+            events, document_id=document_id, matter_id=matter_id
+        )
 
     async def _classify_batch(
         self,
@@ -400,7 +407,8 @@ class EventClassifier(ReasoningCaptureMixin):
                         model_used=self.model_name,
                         reasoning_text=response.text or "",
                         input_summary=f"Batch event classification for {len(events)} events",
-                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        tokens_used=estimate_tokens(prompt)
+                        + estimate_tokens(response.text or ""),
                         cost_usd=ec_tracker.total_cost_usd,
                     )
 
@@ -529,10 +537,13 @@ class EventClassifier(ReasoningCaptureMixin):
                         matter_id=matter_id,
                         engine_type=EngineType.TIMELINE,
                         model_used=self.model_name,
-                        reasoning_text=result.classification_reasoning or response.text or "",
+                        reasoning_text=result.classification_reasoning
+                        or response.text
+                        or "",
                         input_summary=f"Event classification (sync) for event {event_id}, date_text={date_text}",
                         confidence_score=result.classification_confidence,
-                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        tokens_used=estimate_tokens(prompt)
+                        + estimate_tokens(response.text or ""),
                         cost_usd=ec_tracker.total_cost_usd,
                     )
 
@@ -600,11 +611,15 @@ class EventClassifier(ReasoningCaptureMixin):
             results = []
             for i in range(0, len(events), MAX_BATCH_SIZE):
                 batch = events[i : i + MAX_BATCH_SIZE]
-                batch_results = self._classify_batch_sync(batch, document_id=document_id, matter_id=matter_id)
+                batch_results = self._classify_batch_sync(
+                    batch, document_id=document_id, matter_id=matter_id
+                )
                 results.extend(batch_results)
             return results
 
-        return self._classify_batch_sync(events, document_id=document_id, matter_id=matter_id)
+        return self._classify_batch_sync(
+            events, document_id=document_id, matter_id=matter_id
+        )
 
     def _classify_batch_sync(
         self,
@@ -662,7 +677,8 @@ class EventClassifier(ReasoningCaptureMixin):
                         model_used=self.model_name,
                         reasoning_text=response.text or "",
                         input_summary=f"Batch event classification (sync) for {len(events)} events",
-                        tokens_used=estimate_tokens(prompt) + estimate_tokens(response.text or ""),
+                        tokens_used=estimate_tokens(prompt)
+                        + estimate_tokens(response.text or ""),
                         cost_usd=ec_tracker.total_cost_usd,
                     )
 
@@ -830,7 +846,9 @@ class EventClassifier(ReasoningCaptureMixin):
                 error=str(e),
             )
             return [
-                self._unclassified_result(e_data.get("event_id", ""), f"Parse error: {e}")
+                self._unclassified_result(
+                    e_data.get("event_id", ""), f"Parse error: {e}"
+                )
                 for e_data in events
             ]
 
@@ -874,7 +892,9 @@ class EventClassifier(ReasoningCaptureMixin):
                         st_type = EventType(st.get("type", "").lower())
                         st_raw_conf = st.get("confidence")
                         st_conf = float(st_raw_conf) if st_raw_conf is not None else 0.5
-                        secondary_types.append(SecondaryTypeScore(type=st_type, confidence=st_conf))
+                        secondary_types.append(
+                            SecondaryTypeScore(type=st_type, confidence=st_conf)
+                        )
                     except (ValueError, TypeError):
                         continue
 

@@ -110,42 +110,48 @@ COMPARISON_RESPONSE_SCHEMA = {
     "properties": {
         "reasoning": {
             "type": "string",
-            "description": "Step-by-step chain-of-thought analysis"
+            "description": "Step-by-step chain-of-thought analysis",
         },
         "result": {
             "type": "string",
             "enum": ["contradiction", "consistent", "uncertain", "unrelated"],
-            "description": "Classification result"
+            "description": "Classification result",
         },
         "confidence": {
             "type": "number",
             "minimum": 0.0,
             "maximum": 1.0,
-            "description": "Confidence score"
+            "description": "Confidence score",
         },
         "evidence": {
             "type": "object",
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["date_mismatch", "amount_mismatch", "factual_conflict", "semantic_conflict", "none"],
-                    "description": "Type of evidence"
+                    "enum": [
+                        "date_mismatch",
+                        "amount_mismatch",
+                        "factual_conflict",
+                        "semantic_conflict",
+                        "none",
+                    ],
+                    "description": "Type of evidence",
                 },
                 "value_a": {
                     "type": ["string", "null"],
-                    "description": "Extracted value from statement A"
+                    "description": "Extracted value from statement A",
                 },
                 "value_b": {
                     "type": ["string", "null"],
-                    "description": "Extracted value from statement B"
-                }
+                    "description": "Extracted value from statement B",
+                },
             },
             "required": ["type"],
-            "additionalProperties": False
-        }
+            "additionalProperties": False,
+        },
     },
     "required": ["reasoning", "result", "confidence", "evidence"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 
@@ -249,9 +255,17 @@ def validate_comparison_response(parsed: dict) -> list[str]:
     evidence = parsed.get("evidence", {})
     if isinstance(evidence, dict):
         evidence_type = evidence.get("type", "").lower()
-        valid_types = {"date_mismatch", "amount_mismatch", "factual_conflict", "semantic_conflict", "none"}
+        valid_types = {
+            "date_mismatch",
+            "amount_mismatch",
+            "factual_conflict",
+            "semantic_conflict",
+            "none",
+        }
         if evidence_type and evidence_type not in valid_types:
-            errors.append(f"Invalid evidence type '{evidence_type}'. Must be one of: {valid_types}")
+            errors.append(
+                f"Invalid evidence type '{evidence_type}'. Must be one of: {valid_types}"
+            )
     else:
         errors.append("Evidence must be an object")
 

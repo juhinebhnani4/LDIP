@@ -206,7 +206,8 @@ class StreamingOrchestrator:
                 yield StreamEvent(
                     type=StreamEventType.ERROR,
                     data={
-                        "error": result.blocked_reason or "Query blocked by safety guard",
+                        "error": result.blocked_reason
+                        or "Query blocked by safety guard",
                         "code": "QUERY_BLOCKED",
                         "suggested_rewrite": result.suggested_rewrite,
                     },
@@ -259,7 +260,9 @@ class StreamingOrchestrator:
             search_mode, search_notice = self._extract_search_mode(result)
 
             # Extract completeness indicators
-            truncated, more_available, total_results_hint = self._extract_completeness(result)
+            truncated, more_available, total_results_hint = self._extract_completeness(
+                result
+            )
 
             # Task 3.7: Emit complete event with full trace summary
             # IMPORTANT: Yield COMPLETE before save/eval so failures there
@@ -278,17 +281,23 @@ class StreamingOrchestrator:
                 total_results_hint=total_results_hint,
                 # Query safety rewrite metadata
                 query_was_rewritten=result.query_was_rewritten,
-                original_query=result.original_query if result.query_was_rewritten else None,
-                rewritten_query=result.rewritten_query if result.query_was_rewritten else None,
+                original_query=result.original_query
+                if result.query_was_rewritten
+                else None,
+                rewritten_query=result.rewritten_query
+                if result.query_was_rewritten
+                else None,
                 # A/B testing provider metadata
                 # Read actual provider from RAG engine result (adapter may have overridden
                 # via percentage-based routing), falling back to request-level context
-                embedding_provider=self._extract_actual_provider(result, "embedding_provider")
-                    or (provider_context or {}).get("embedding_provider")
-                    or "openai",
+                embedding_provider=self._extract_actual_provider(
+                    result, "embedding_provider"
+                )
+                or (provider_context or {}).get("embedding_provider")
+                or "openai",
                 rerank_provider=self._extract_actual_provider(result, "rerank_provider")
-                    or (provider_context or {}).get("rerank_provider")
-                    or "cohere",
+                or (provider_context or {}).get("rerank_provider")
+                or "cohere",
             )
 
             yield StreamEvent(
@@ -558,7 +567,9 @@ class StreamingOrchestrator:
             contexts: list[str] = []
             for engine_result in result.engine_results:
                 if engine_result.data:
-                    chunks = engine_result.data.get("chunks", []) or engine_result.data.get("results", [])
+                    chunks = engine_result.data.get(
+                        "chunks", []
+                    ) or engine_result.data.get("results", [])
                     for chunk in chunks:
                         if isinstance(chunk, dict) and "content" in chunk:
                             contexts.append(chunk["content"])

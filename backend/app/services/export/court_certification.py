@@ -37,8 +37,12 @@ class ModelVersionInfo(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    engine_name: str = Field(..., alias="engineName", description="Engine that used this model")
-    model_id: str = Field(..., alias="modelId", description="Model identifier (e.g., gpt-4)")
+    engine_name: str = Field(
+        ..., alias="engineName", description="Engine that used this model"
+    )
+    model_id: str = Field(
+        ..., alias="modelId", description="Model identifier (e.g., gpt-4)"
+    )
     purpose: str = Field(..., description="What the model was used for")
 
 
@@ -47,11 +51,21 @@ class VerificationStatusSnapshot(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    total_findings: int = Field(0, alias="totalFindings", description="Total findings in matter")
-    verified_count: int = Field(0, alias="verifiedCount", description="Findings marked as verified")
-    pending_count: int = Field(0, alias="pendingCount", description="Findings pending verification")
-    rejected_count: int = Field(0, alias="rejectedCount", description="Findings rejected")
-    flagged_count: int = Field(0, alias="flaggedCount", description="Findings flagged for review")
+    total_findings: int = Field(
+        0, alias="totalFindings", description="Total findings in matter"
+    )
+    verified_count: int = Field(
+        0, alias="verifiedCount", description="Findings marked as verified"
+    )
+    pending_count: int = Field(
+        0, alias="pendingCount", description="Findings pending verification"
+    )
+    rejected_count: int = Field(
+        0, alias="rejectedCount", description="Findings rejected"
+    )
+    flagged_count: int = Field(
+        0, alias="flaggedCount", description="Findings flagged for review"
+    )
     verification_rate: float = Field(
         0.0,
         ge=0,
@@ -152,7 +166,9 @@ class FindingWithTrace(BaseModel):
 
     finding_id: str = Field(..., alias="findingId", description="Finding UUID")
     finding_type: str = Field(..., alias="findingType", description="Type of finding")
-    finding_summary: str = Field(..., alias="findingSummary", description="Summary of finding")
+    finding_summary: str = Field(
+        ..., alias="findingSummary", description="Summary of finding"
+    )
     reasoning_trace_id: str | None = Field(
         None,
         alias="reasoningTraceId",

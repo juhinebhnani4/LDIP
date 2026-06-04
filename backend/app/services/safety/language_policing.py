@@ -183,7 +183,9 @@ class LanguagePolicingService:
                     # Skip matches that overlap with protected regions
                     continue
 
-                all_matches.append((pattern, match.start(), match.end(), match.group(0)))
+                all_matches.append(
+                    (pattern, match.start(), match.end(), match.group(0))
+                )
 
         # Sort matches by position (descending) so we can replace from end to start
         # This avoids position shift issues

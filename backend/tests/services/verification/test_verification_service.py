@@ -48,7 +48,7 @@ def verification_service(mock_settings):
 
     with patch(
         "app.services.verification.verification_service.get_settings",
-        return_value=mock_settings
+        return_value=mock_settings,
     ):
         return VerificationService()
 
@@ -112,23 +112,27 @@ class TestCreateVerificationRecord:
     ) -> None:
         """Should create verification record with correct data."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "test-verification-id",
-            "matter_id": "test-matter-id",
-            "finding_id": "test-finding-id",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Test finding summary",
-            "confidence_before": 85.0,
-            "decision": "pending",
-            "verified_by": None,
-            "verified_at": None,
-            "confidence_after": None,
-            "notes": None,
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        mock_result.data = [
+            {
+                "id": "test-verification-id",
+                "matter_id": "test-matter-id",
+                "finding_id": "test-finding-id",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Test finding summary",
+                "confidence_before": 85.0,
+                "decision": "pending",
+                "verified_by": None,
+                "verified_at": None,
+                "confidence_after": None,
+                "notes": None,
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            mock_result
+        )
 
         create_data = FindingVerificationCreate(
             matter_id="test-matter-id",
@@ -171,23 +175,27 @@ class TestCreateVerificationRecord:
     ) -> None:
         """Should accept summary at max length (500 chars)."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "test-id",
-            "matter_id": "test-matter-id",
-            "finding_id": "test-finding-id",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "X" * 500,
-            "confidence_before": 85.0,
-            "decision": "pending",
-            "verified_by": None,
-            "verified_at": None,
-            "confidence_after": None,
-            "notes": None,
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        mock_result.data = [
+            {
+                "id": "test-id",
+                "matter_id": "test-matter-id",
+                "finding_id": "test-finding-id",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "X" * 500,
+                "confidence_before": 85.0,
+                "decision": "pending",
+                "verified_by": None,
+                "verified_at": None,
+                "confidence_after": None,
+                "notes": None,
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            mock_result
+        )
 
         # 500 chars should be accepted
         create_data = FindingVerificationCreate(
@@ -209,26 +217,26 @@ class TestRecordVerificationDecision:
     """Test recording attorney verification decisions."""
 
     @pytest.mark.asyncio
-    async def test_records_approval(
-        self, verification_service, mock_supabase
-    ) -> None:
+    async def test_records_approval(self, verification_service, mock_supabase) -> None:
         """Should record approval decision."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "test-id",
-            "matter_id": "test-matter-id",
-            "finding_id": "test-finding-id",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Test summary",
-            "confidence_before": 85.0,
-            "decision": "approved",
-            "verified_by": "test-user-id",
-            "verified_at": datetime.now(UTC).isoformat(),
-            "confidence_after": None,
-            "notes": "Looks correct",
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        mock_result.data = [
+            {
+                "id": "test-id",
+                "matter_id": "test-matter-id",
+                "finding_id": "test-finding-id",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Test summary",
+                "confidence_before": 85.0,
+                "decision": "approved",
+                "verified_by": "test-user-id",
+                "verified_at": datetime.now(UTC).isoformat(),
+                "confidence_after": None,
+                "notes": "Looks correct",
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
         mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_result
 
@@ -248,26 +256,26 @@ class TestRecordVerificationDecision:
         assert result.notes == "Looks correct"
 
     @pytest.mark.asyncio
-    async def test_records_rejection(
-        self, verification_service, mock_supabase
-    ) -> None:
+    async def test_records_rejection(self, verification_service, mock_supabase) -> None:
         """Should record rejection decision."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "test-id",
-            "matter_id": "test-matter-id",
-            "finding_id": "test-finding-id",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Test summary",
-            "confidence_before": 85.0,
-            "decision": "rejected",
-            "verified_by": "test-user-id",
-            "verified_at": datetime.now(UTC).isoformat(),
-            "confidence_after": None,
-            "notes": "False positive - citation is correct",
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        mock_result.data = [
+            {
+                "id": "test-id",
+                "matter_id": "test-matter-id",
+                "finding_id": "test-finding-id",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Test summary",
+                "confidence_before": 85.0,
+                "decision": "rejected",
+                "verified_by": "test-user-id",
+                "verified_at": datetime.now(UTC).isoformat(),
+                "confidence_after": None,
+                "notes": "False positive - citation is correct",
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
         mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_result
 
@@ -291,21 +299,23 @@ class TestRecordVerificationDecision:
     ) -> None:
         """Should record adjusted confidence."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "test-id",
-            "matter_id": "test-matter-id",
-            "finding_id": "test-finding-id",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Test summary",
-            "confidence_before": 85.0,
-            "decision": "approved",
-            "verified_by": "test-user-id",
-            "verified_at": datetime.now(UTC).isoformat(),
-            "confidence_after": 95.0,
-            "notes": None,
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        mock_result.data = [
+            {
+                "id": "test-id",
+                "matter_id": "test-matter-id",
+                "finding_id": "test-finding-id",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Test summary",
+                "confidence_before": 85.0,
+                "decision": "approved",
+                "verified_by": "test-user-id",
+                "verified_at": datetime.now(UTC).isoformat(),
+                "confidence_after": 95.0,
+                "notes": None,
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
 
         mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = mock_result
 
@@ -396,7 +406,10 @@ class TestGetVerificationStats:
         mock_result = MagicMock()
         mock_result.data = [
             {"decision": "pending", "confidence_before": 95.0},  # Optional
-            {"decision": "approved", "confidence_before": 65.0},  # Was required, now approved
+            {
+                "decision": "approved",
+                "confidence_before": 65.0,
+            },  # Was required, now approved
         ]
 
         mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_result
@@ -482,6 +495,7 @@ class TestBulkUpdateVerifications:
         self, verification_service, mock_supabase
     ) -> None:
         """Should report IDs that failed to update."""
+
         def side_effect(*args, **kwargs):
             result = MagicMock()
             # First call succeeds, second fails
@@ -528,7 +542,7 @@ class TestSingletonFactory:
 
         with patch(
             "app.services.verification.verification_service.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             service1 = get_verification_service()
             service2 = get_verification_service()
@@ -539,7 +553,7 @@ class TestSingletonFactory:
         """reset_verification_service should clear singleton."""
         with patch(
             "app.services.verification.verification_service.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             service1 = get_verification_service()
             reset_verification_service()

@@ -118,9 +118,7 @@ class TestGuiltPatterns:
 
         Story 8-3: Task 2.3
         """
-        result = policing_service.sanitize_text(
-            "The plaintiff is entitled to damages."
-        )
+        result = policing_service.sanitize_text("The plaintiff is entitled to damages.")
         assert "plaintiff's potential entitlement" in result.sanitized_text
         assert "plaintiff is entitled" not in result.sanitized_text
 
@@ -270,13 +268,13 @@ class TestDefinitivePatterns:
 
         Story 8-3: Task 2.6
         """
-        result = policing_service.sanitize_text("The party is responsible for the loss.")
+        result = policing_service.sanitize_text(
+            "The party is responsible for the loss."
+        )
         assert "regarding responsibility for" in result.sanitized_text
         assert "is responsible for" not in result.sanitized_text
 
-    def test_must_pay_replaced(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_must_pay_replaced(self, policing_service: LanguagePolicingService) -> None:
         """Should replace 'must pay' with 'may be required to pay'.
 
         Story 8-3: Task 2.6
@@ -436,13 +434,9 @@ class TestReplacementMetadata:
         assert record.position_end > record.position_start
         assert record.rule_id
 
-    def test_timing_metadata(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_timing_metadata(self, policing_service: LanguagePolicingService) -> None:
         """Result should include timing metadata."""
-        result = policing_service.sanitize_text(
-            "The defendant violated Section 138."
-        )
+        result = policing_service.sanitize_text("The defendant violated Section 138.")
 
         assert result.sanitization_time_ms >= 0
         assert result.llm_policing_applied is False  # Regex only
@@ -476,25 +470,19 @@ class TestReplacementMetadata:
 class TestEmptyAndEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_empty_string(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_empty_string(self, policing_service: LanguagePolicingService) -> None:
         """Empty string should return empty result."""
         result = policing_service.sanitize_text("")
         assert result.sanitized_text == ""
         assert len(result.replacements_made) == 0
 
-    def test_whitespace_only(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_whitespace_only(self, policing_service: LanguagePolicingService) -> None:
         """Whitespace-only string should return same string."""
         result = policing_service.sanitize_text("   ")
         assert result.sanitized_text == "   "
         assert len(result.replacements_made) == 0
 
-    def test_very_long_text(
-        self, policing_service: LanguagePolicingService
-    ) -> None:
+    def test_very_long_text(self, policing_service: LanguagePolicingService) -> None:
         """Long text should be processed successfully."""
         text = "The defendant violated Section 138. " * 100
         result = policing_service.sanitize_text(text)

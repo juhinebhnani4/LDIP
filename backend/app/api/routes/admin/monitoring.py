@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Thresholds for alerting — revisit quantization when exceeded
-MATTER_CHUNK_THRESHOLD = 50_000   # Per-matter: 50K chunks
+MATTER_CHUNK_THRESHOLD = 50_000  # Per-matter: 50K chunks
 GLOBAL_CHUNK_THRESHOLD = 500_000  # Global: 500K chunks
 
 
@@ -135,12 +135,8 @@ async def get_chunk_metrics(
 
         # Fetch per-matter and global metrics in parallel
         matter_result, global_result = await asyncio.gather(
-            asyncio.to_thread(
-                lambda: supabase.rpc("get_chunk_metrics").execute()
-            ),
-            asyncio.to_thread(
-                lambda: supabase.rpc("get_global_chunk_count").execute()
-            ),
+            asyncio.to_thread(lambda: supabase.rpc("get_chunk_metrics").execute()),
+            asyncio.to_thread(lambda: supabase.rpc("get_global_chunk_count").execute()),
         )
 
         # Parse per-matter metrics
@@ -152,16 +148,18 @@ async def get_chunk_metrics(
             if exceeds:
                 any_matter_alert = True
 
-            matters.append({
-                "matterId": row.get("matter_id"),
-                "matterTitle": row.get("matter_title", "Untitled"),
-                "totalChunks": total,
-                "parentChunks": int(row.get("parent_chunks") or 0),
-                "childChunks": int(row.get("child_chunks") or 0),
-                "tableChunks": int(row.get("table_chunks") or 0),
-                "hasVoyageEmbeddings": int(row.get("has_voyage_embeddings") or 0),
-                "exceedsThreshold": exceeds,
-            })
+            matters.append(
+                {
+                    "matterId": row.get("matter_id"),
+                    "matterTitle": row.get("matter_title", "Untitled"),
+                    "totalChunks": total,
+                    "parentChunks": int(row.get("parent_chunks") or 0),
+                    "childChunks": int(row.get("child_chunks") or 0),
+                    "tableChunks": int(row.get("table_chunks") or 0),
+                    "hasVoyageEmbeddings": int(row.get("has_voyage_embeddings") or 0),
+                    "exceedsThreshold": exceeds,
+                }
+            )
 
         # Parse global metrics
         global_row = (global_result.data or [{}])[0] if global_result.data else {}
@@ -343,30 +341,32 @@ async def get_quality_metrics(
             golden_count = int(row.get("golden_item_count") or 0)
             total_golden_items += golden_count
 
-            matters.append({
-                "matterId": row.get("matter_id"),
-                "matterTitle": row.get("matter_title", "Untitled"),
-                # Latest batch scores
-                "latestOverall": row.get("latest_overall"),
-                "latestFaithfulness": row.get("latest_faithfulness"),
-                "latestRelevancy": row.get("latest_relevancy"),
-                "latestRecall": row.get("latest_recall"),
-                "latestEvalDate": row.get("latest_eval_date"),
-                "latestJobId": row.get("latest_job_id"),
-                "latestEvalCount": int(row.get("latest_eval_count") or 0),
-                # Baseline comparison
-                "baselineOverall": row.get("baseline_overall"),
-                "baselineDate": row.get("baseline_date"),
-                "baselineItemCount": int(row.get("baseline_item_count") or 0),
-                # Delta and regression
-                "overallDelta": row.get("overall_delta"),
-                "hasRegression": has_regression,
-                # Coverage
-                "goldenItemCount": golden_count,
-                # Frequency
-                "totalEvals30d": int(row.get("total_evals_30d") or 0),
-                "lastEvalAgeHours": row.get("last_eval_age_hours"),
-            })
+            matters.append(
+                {
+                    "matterId": row.get("matter_id"),
+                    "matterTitle": row.get("matter_title", "Untitled"),
+                    # Latest batch scores
+                    "latestOverall": row.get("latest_overall"),
+                    "latestFaithfulness": row.get("latest_faithfulness"),
+                    "latestRelevancy": row.get("latest_relevancy"),
+                    "latestRecall": row.get("latest_recall"),
+                    "latestEvalDate": row.get("latest_eval_date"),
+                    "latestJobId": row.get("latest_job_id"),
+                    "latestEvalCount": int(row.get("latest_eval_count") or 0),
+                    # Baseline comparison
+                    "baselineOverall": row.get("baseline_overall"),
+                    "baselineDate": row.get("baseline_date"),
+                    "baselineItemCount": int(row.get("baseline_item_count") or 0),
+                    # Delta and regression
+                    "overallDelta": row.get("overall_delta"),
+                    "hasRegression": has_regression,
+                    # Coverage
+                    "goldenItemCount": golden_count,
+                    # Frequency
+                    "totalEvals30d": int(row.get("total_evals_30d") or 0),
+                    "lastEvalAgeHours": row.get("last_eval_age_hours"),
+                }
+            )
 
         return {
             "matters": matters,
@@ -378,7 +378,8 @@ async def get_quality_metrics(
                     1 for m in matters if m["baselineOverall"] is not None
                 ),
                 "mattersEvaluatedRecently": sum(
-                    1 for m in matters
+                    1
+                    for m in matters
                     if m.get("lastEvalAgeHours") is not None
                     and m["lastEvalAgeHours"] < 48
                 ),

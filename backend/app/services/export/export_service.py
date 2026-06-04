@@ -199,10 +199,19 @@ class ExportService:
     async def _get_matter_name(self, matter_id: str, supabase: Client) -> str:
         """Get matter name for filename generation."""
         try:
-            result = supabase.table("matters").select("name").eq("id", matter_id).single().execute()
+            result = (
+                supabase.table("matters")
+                .select("name")
+                .eq("id", matter_id)
+                .single()
+                .execute()
+            )
             name = result.data.get("name", "Matter")
             # Sanitize for filename
-            return "".join(c for c in name if c.isalnum() or c in " -_")[:50].strip() or "Matter"
+            return (
+                "".join(c for c in name if c.isalnum() or c in " -_")[:50].strip()
+                or "Matter"
+            )
         except Exception:
             return "Matter"
 
@@ -216,9 +225,12 @@ class ExportService:
     ) -> VerificationSummaryForExport:
         """Get verification summary for export footer."""
         try:
-            result = supabase.table("finding_verifications").select(
-                "decision"
-            ).eq("matter_id", matter_id).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select("decision")
+                .eq("matter_id", matter_id)
+                .execute()
+            )
 
             total = len(result.data)
             verified = sum(1 for r in result.data if r["decision"] == "approved")
@@ -292,15 +304,24 @@ class ExportService:
     ) -> dict:
         """Fetch executive summary content."""
         try:
-            result = supabase.table("matter_summaries").select(
-                "parties, subject_matter, current_status, key_issues, attention_items"
-            ).eq("matter_id", matter_id).single().execute()
+            result = (
+                supabase.table("matter_summaries")
+                .select(
+                    "parties, subject_matter, current_status, key_issues, attention_items"
+                )
+                .eq("matter_id", matter_id)
+                .single()
+                .execute()
+            )
 
             data = result.data or {}
 
             # Apply text edit if provided
             if edit and edit.text_content is not None:
-                return {"custom_content": edit.text_content, "title": "Executive Summary"}
+                return {
+                    "custom_content": edit.text_content,
+                    "title": "Executive Summary",
+                }
 
             return {
                 "title": "Executive Summary",
@@ -319,11 +340,13 @@ class ExportService:
         """Fetch timeline events."""
         try:
             # Issue #8 fix: Correct table name is "events", not "timeline_events"
-            result = supabase.table("events").select(
-                "id, event_date, event_type, description, confidence"
-            ).eq("matter_id", matter_id).order(
-                "event_date", desc=False
-            ).execute()
+            result = (
+                supabase.table("events")
+                .select("id, event_date, event_type, description, confidence")
+                .eq("matter_id", matter_id)
+                .order("event_date", desc=False)
+                .execute()
+            )
 
             events = result.data or []
 
@@ -340,11 +363,14 @@ class ExportService:
     ) -> dict:
         """Fetch entities/MIG data."""
         try:
-            result = supabase.table("entities").select(
-                "id, canonical_name, entity_type, aliases, mention_count"
-            ).eq("matter_id", matter_id).order(
-                "mention_count", desc=True
-            ).limit(100).execute()
+            result = (
+                supabase.table("entities")
+                .select("id, canonical_name, entity_type, aliases, mention_count")
+                .eq("matter_id", matter_id)
+                .order("mention_count", desc=True)
+                .limit(100)
+                .execute()
+            )
 
             entities = result.data or []
 
@@ -361,17 +387,23 @@ class ExportService:
     ) -> dict:
         """Fetch citations data."""
         try:
-            result = supabase.table("citations").select(
-                "id, act_name, section, quote_text, verification_status, confidence"
-            ).eq("matter_id", matter_id).order(
-                "act_name", desc=False
-            ).execute()
+            result = (
+                supabase.table("citations")
+                .select(
+                    "id, act_name, section, quote_text, verification_status, confidence"
+                )
+                .eq("matter_id", matter_id)
+                .order("act_name", desc=False)
+                .execute()
+            )
 
             citations = result.data or []
 
             # Filter out removed items
             if edit and edit.removed_item_ids:
-                citations = [c for c in citations if c["id"] not in edit.removed_item_ids]
+                citations = [
+                    c for c in citations if c["id"] not in edit.removed_item_ids
+                ]
 
             return {"title": "Citations", "citations": citations}
         except Exception:
@@ -382,11 +414,15 @@ class ExportService:
     ) -> dict:
         """Fetch key findings from verification records."""
         try:
-            result = supabase.table("finding_verifications").select(
-                "id, finding_type, finding_summary, decision, confidence_before"
-            ).eq("matter_id", matter_id).eq(
-                "decision", "approved"
-            ).execute()
+            result = (
+                supabase.table("finding_verifications")
+                .select(
+                    "id, finding_type, finding_summary, decision, confidence_before"
+                )
+                .eq("matter_id", matter_id)
+                .eq("decision", "approved")
+                .execute()
+            )
 
             findings = result.data or []
 
@@ -403,11 +439,15 @@ class ExportService:
     ) -> dict:
         """Fetch contradictions data."""
         try:
-            result = supabase.table("contradictions").select(
-                "id, statement_a, statement_b, contradiction_type, severity, confidence"
-            ).eq("matter_id", matter_id).order(
-                "severity", desc=True
-            ).execute()
+            result = (
+                supabase.table("contradictions")
+                .select(
+                    "id, statement_a, statement_b, contradiction_type, severity, confidence"
+                )
+                .eq("matter_id", matter_id)
+                .order("severity", desc=True)
+                .execute()
+            )
 
             contradictions = result.data or []
 
@@ -605,7 +645,9 @@ class ExportService:
                     message="Exports table not yet created. Export succeeds but history not recorded.",
                 )
             else:
-                logger.error("export_record_creation_failed", export_id=export_id, error=str(e))
+                logger.error(
+                    "export_record_creation_failed", export_id=export_id, error=str(e)
+                )
             # Don't fail the export if record creation fails
             return ExportRecord(
                 id=export_id,

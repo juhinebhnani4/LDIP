@@ -66,14 +66,18 @@ class TestTriggerDateExtraction:
         with patch("app.api.routes.timeline.require_matter_role") as mock_auth:
             mock_auth.return_value = lambda: mock_matter_membership
 
-            with patch("app.api.routes.timeline.get_job_tracking_service") as mock_job_tracker:
+            with patch(
+                "app.api.routes.timeline.get_job_tracking_service"
+            ) as mock_job_tracker:
                 mock_service = MagicMock()
                 mock_job = MagicMock()
                 mock_job.id = "job-123"
                 mock_service.create_job = AsyncMock(return_value=mock_job)
                 mock_job_tracker.return_value = mock_service
 
-                with patch("app.api.routes.timeline.extract_dates_from_matter") as mock_task:
+                with patch(
+                    "app.api.routes.timeline.extract_dates_from_matter"
+                ) as mock_task:
                     mock_result = MagicMock()
                     mock_result.id = "task-123"
                     mock_task.delay.return_value = mock_result
@@ -134,7 +138,9 @@ class TestGetRawDate:
 
     def test_get_raw_date_requires_auth(self, sync_client: TestClient) -> None:
         """Should require authentication."""
-        response = sync_client.get("/api/matters/matter-123/timeline/raw-dates/event-123")
+        response = sync_client.get(
+            "/api/matters/matter-123/timeline/raw-dates/event-123"
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_get_raw_date_not_found(
@@ -264,7 +270,9 @@ class TestTimelineModelSerialization:
 class TestTriggerClassification:
     """Tests for POST /matters/{matter_id}/timeline/classify endpoint."""
 
-    def test_trigger_classification_requires_auth(self, sync_client: TestClient) -> None:
+    def test_trigger_classification_requires_auth(
+        self, sync_client: TestClient
+    ) -> None:
         """Should require authentication."""
         response = sync_client.post("/api/matters/matter-123/timeline/classify")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -291,7 +299,9 @@ class TestTriggerClassification:
 class TestListClassifiedEvents:
     """Tests for GET /matters/{matter_id}/timeline/events endpoint."""
 
-    def test_list_classified_events_requires_auth(self, sync_client: TestClient) -> None:
+    def test_list_classified_events_requires_auth(
+        self, sync_client: TestClient
+    ) -> None:
         """Should require authentication."""
         response = sync_client.get("/api/matters/matter-123/timeline/events")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -333,7 +343,9 @@ class TestListClassifiedEvents:
 class TestListUnclassifiedEvents:
     """Tests for GET /matters/{matter_id}/timeline/unclassified endpoint."""
 
-    def test_list_unclassified_events_requires_auth(self, sync_client: TestClient) -> None:
+    def test_list_unclassified_events_requires_auth(
+        self, sync_client: TestClient
+    ) -> None:
         """Should require authentication."""
         response = sync_client.get("/api/matters/matter-123/timeline/unclassified")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED

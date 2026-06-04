@@ -130,8 +130,8 @@ class TestAppendQuery:
     ):
         """Should create record with generated UUID."""
         # Mock successful insert
-        history_store._db.table.return_value.insert.return_value.execute.return_value = (
-            MagicMock(data={})
+        history_store._db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data={}
         )
 
         record = await history_store.append_query(sample_audit_entry)
@@ -142,9 +142,7 @@ class TestAppendQuery:
         assert record.created_at  # Timestamp generated
 
     @pytest.mark.asyncio
-    async def test_append_persists_to_database(
-        self, history_store, sample_audit_entry
-    ):
+    async def test_append_persists_to_database(self, history_store, sample_audit_entry):
         """Should persist record to database."""
         mock_execute = MagicMock(return_value=MagicMock(data={}))
         history_store._db.table.return_value.insert.return_value.execute = mock_execute
@@ -191,7 +189,9 @@ class TestGetQueryHistory:
     """Tests for get_query_history method."""
 
     @pytest.mark.asyncio
-    async def test_retrieves_history_for_matter(self, history_store, sample_audit_entry):
+    async def test_retrieves_history_for_matter(
+        self, history_store, sample_audit_entry
+    ):
         """Should retrieve query history for specific matter."""
         # Mock database response
         mock_response = MagicMock()
@@ -204,9 +204,7 @@ class TestGetQueryHistory:
                 "created_at": "2026-01-14T10:30:00Z",
             }
         ]
-        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = mock_response
 
         records = await history_store.get_query_history(matter_id="matter-456")
 
@@ -226,9 +224,7 @@ class TestGetQueryHistory:
         """Should apply limit and offset parameters."""
         mock_response = MagicMock()
         mock_response.data = []
-        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = mock_response
 
         await history_store.get_query_history(
             matter_id="matter-456", limit=50, offset=10
@@ -236,14 +232,15 @@ class TestGetQueryHistory:
 
         # Verify range was called with correct parameters
         history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.assert_called_with(
-            10, 59  # offset to offset + limit - 1
+            10,
+            59,  # offset to offset + limit - 1
         )
 
     @pytest.mark.asyncio
     async def test_handles_db_error_returns_empty(self, history_store):
         """Should return empty list on database error."""
-        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.side_effect = (
-            Exception("Query failed")
+        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.side_effect = Exception(
+            "Query failed"
         )
 
         records = await history_store.get_query_history(matter_id="matter-456")
@@ -270,9 +267,7 @@ class TestGetQueryById:
             "audit_data": sample_audit_entry.model_dump(mode="json"),
             "created_at": "2026-01-14T10:30:00Z",
         }
-        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
 
         record = await history_store.get_query_by_id(
             matter_id="matter-456", query_id="query-123"
@@ -296,9 +291,7 @@ class TestGetQueryById:
         """Should return None when query not found."""
         mock_response = MagicMock()
         mock_response.data = None
-        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
 
         record = await history_store.get_query_by_id(
             matter_id="matter-456", query_id="nonexistent"
@@ -309,8 +302,8 @@ class TestGetQueryById:
     @pytest.mark.asyncio
     async def test_handles_error_returns_none(self, history_store):
         """Should return None on database error."""
-        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = (
-            Exception("Query failed")
+        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = Exception(
+            "Query failed"
         )
 
         record = await history_store.get_query_by_id(
@@ -333,9 +326,7 @@ class TestMatterIsolation:
         """Should only return records for requested matter."""
         mock_response = MagicMock()
         mock_response.data = []
-        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value = mock_response
 
         await history_store.get_query_history(matter_id="matter-specific")
 
@@ -349,16 +340,16 @@ class TestMatterIsolation:
         """Should require both matter_id and query_id for retrieval."""
         mock_response = MagicMock()
         mock_response.data = None
-        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = (
-            mock_response
-        )
+        history_store._db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
 
         await history_store.get_query_by_id(
             matter_id="matter-specific", query_id="query-123"
         )
 
         # Verify both filters were applied
-        calls = history_store._db.table.return_value.select.return_value.eq.call_args_list
+        calls = (
+            history_store._db.table.return_value.select.return_value.eq.call_args_list
+        )
         # First eq for matter_id, second eq for query_id
         assert len(calls) >= 1
 
@@ -434,8 +425,8 @@ class TestAuditFailureHandling:
     @pytest.mark.asyncio
     async def test_db_query_failure_does_not_raise(self, history_store):
         """Database query failure should not raise exception."""
-        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.side_effect = (
-            Exception("Timeout")
+        history_store._db.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.side_effect = Exception(
+            "Timeout"
         )
 
         # Should not raise, returns empty list

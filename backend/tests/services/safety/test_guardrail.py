@@ -107,7 +107,9 @@ class TestExplanationGeneration:
         """Legal advice blocks should have appropriate explanation."""
         check = guardrail_service.check_query("Should I file an appeal?")
 
-        assert "legal advice" in check.explanation.lower() or "LDIP" in check.explanation
+        assert (
+            "legal advice" in check.explanation.lower() or "LDIP" in check.explanation
+        )
         assert len(check.explanation) > 50  # Should be informative
 
     def test_outcome_prediction_explanation(
@@ -116,14 +118,20 @@ class TestExplanationGeneration:
         """Outcome prediction blocks should have appropriate explanation."""
         check = guardrail_service.check_query("Will the judge rule in my favor?")
 
-        assert "predict" in check.explanation.lower() or "court" in check.explanation.lower()
+        assert (
+            "predict" in check.explanation.lower()
+            or "court" in check.explanation.lower()
+        )
         assert len(check.explanation) > 50
 
     def test_liability_explanation(self, guardrail_service: GuardrailService) -> None:
         """Liability blocks should have appropriate explanation."""
         check = guardrail_service.check_query("Is the defendant guilty?")
 
-        assert "liabil" in check.explanation.lower() or "conclusion" in check.explanation.lower()
+        assert (
+            "liabil" in check.explanation.lower()
+            or "conclusion" in check.explanation.lower()
+        )
         assert len(check.explanation) > 50
 
     def test_explanation_mentions_alternative(
@@ -154,7 +162,11 @@ class TestRewriteSuggestion:
         assert len(check.suggested_rewrite) > 10
         # Should suggest document-based query
         rewrite_lower = check.suggested_rewrite.lower()
-        assert "document" in rewrite_lower or "fact" in rewrite_lower or "[topic]" in rewrite_lower
+        assert (
+            "document" in rewrite_lower
+            or "fact" in rewrite_lower
+            or "[topic]" in rewrite_lower
+        )
 
     def test_outcome_prediction_rewrite(
         self, guardrail_service: GuardrailService
@@ -165,7 +177,11 @@ class TestRewriteSuggestion:
         assert len(check.suggested_rewrite) > 10
         # Should suggest precedent-based query
         rewrite_lower = check.suggested_rewrite.lower()
-        assert "precedent" in rewrite_lower or "ruling" in rewrite_lower or "document" in rewrite_lower
+        assert (
+            "precedent" in rewrite_lower
+            or "ruling" in rewrite_lower
+            or "document" in rewrite_lower
+        )
 
     def test_liability_rewrite(self, guardrail_service: GuardrailService) -> None:
         """Liability blocks should suggest evidence query."""
@@ -174,7 +190,11 @@ class TestRewriteSuggestion:
         assert len(check.suggested_rewrite) > 10
         # Should suggest evidence-based query
         rewrite_lower = check.suggested_rewrite.lower()
-        assert "evidence" in rewrite_lower or "action" in rewrite_lower or "[party]" in rewrite_lower
+        assert (
+            "evidence" in rewrite_lower
+            or "action" in rewrite_lower
+            or "[party]" in rewrite_lower
+        )
 
 
 class TestPerformance:
@@ -191,19 +211,19 @@ class TestPerformance:
         check = guardrail_service.check_query("Should I file an appeal?")
 
         # check_time_ms is measured internally
-        assert check.check_time_ms < 5.0, f"Check took {check.check_time_ms}ms, expected < 5ms"
+        assert check.check_time_ms < 5.0, (
+            f"Check took {check.check_time_ms}ms, expected < 5ms"
+        )
 
-    def test_allowed_query_under_5ms(
-        self, guardrail_service: GuardrailService
-    ) -> None:
+    def test_allowed_query_under_5ms(self, guardrail_service: GuardrailService) -> None:
         """Allowed queries should also be fast."""
         check = guardrail_service.check_query("What does the document say?")
 
-        assert check.check_time_ms < 5.0, f"Check took {check.check_time_ms}ms, expected < 5ms"
+        assert check.check_time_ms < 5.0, (
+            f"Check took {check.check_time_ms}ms, expected < 5ms"
+        )
 
-    def test_bulk_checks_performance(
-        self, guardrail_service: GuardrailService
-    ) -> None:
+    def test_bulk_checks_performance(self, guardrail_service: GuardrailService) -> None:
         """100 queries should complete in < 500ms (avg < 5ms each).
 
         Story 8-1: Task 5.6 - Bulk performance test

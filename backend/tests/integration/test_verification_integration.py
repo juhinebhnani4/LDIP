@@ -47,7 +47,7 @@ def verification_service(mock_settings):
 
     with patch(
         "app.services.verification.verification_service.get_settings",
-        return_value=mock_settings
+        return_value=mock_settings,
     ):
         return VerificationService()
 
@@ -59,7 +59,7 @@ def export_service(mock_settings):
 
     with patch(
         "app.services.verification.export_eligibility.get_settings",
-        return_value=mock_settings
+        return_value=mock_settings,
     ):
         return ExportEligibilityService()
 
@@ -84,22 +84,26 @@ class TestVerificationWorkflowIntegration:
 
         # Step 1: Create verification record (simulates finding creation)
         create_result = MagicMock()
-        create_result.data = [{
-            "id": "verification-1",
-            "matter_id": "matter-1",
-            "finding_id": "finding-1",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Section 138 citation mismatch detected",
-            "confidence_before": 65.0,
-            "decision": "pending",
-            "verified_by": None,
-            "verified_at": None,
-            "confidence_after": None,
-            "notes": None,
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = create_result
+        create_result.data = [
+            {
+                "id": "verification-1",
+                "matter_id": "matter-1",
+                "finding_id": "finding-1",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Section 138 citation mismatch detected",
+                "confidence_before": 65.0,
+                "decision": "pending",
+                "verified_by": None,
+                "verified_at": None,
+                "confidence_after": None,
+                "notes": None,
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            create_result
+        )
 
         verification = await verification_service.create_verification_record(
             FindingVerificationCreate(
@@ -117,13 +121,15 @@ class TestVerificationWorkflowIntegration:
 
         # Step 2: Check export eligibility (should be blocked)
         blocking_result = MagicMock()
-        blocking_result.data = [{
-            "id": "verification-1",
-            "finding_id": "finding-1",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Section 138 citation mismatch detected",
-            "confidence_before": 65.0,
-        }]
+        blocking_result.data = [
+            {
+                "id": "verification-1",
+                "finding_id": "finding-1",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Section 138 citation mismatch detected",
+                "confidence_before": 65.0,
+            }
+        ]
         mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.lte.return_value.execute.return_value = blocking_result
 
         eligibility = await export_service.check_export_eligibility(
@@ -135,21 +141,23 @@ class TestVerificationWorkflowIntegration:
 
         # Step 3: Attorney approves the finding
         update_result = MagicMock()
-        update_result.data = [{
-            "id": "verification-1",
-            "matter_id": "matter-1",
-            "finding_id": "finding-1",
-            "finding_type": "citation_mismatch",
-            "finding_summary": "Section 138 citation mismatch detected",
-            "confidence_before": 65.0,
-            "decision": "approved",
-            "verified_by": "attorney-1",
-            "verified_at": datetime.now(UTC).isoformat(),
-            "confidence_after": None,
-            "notes": "Verified - citation is indeed incorrect",
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat(),
-        }]
+        update_result.data = [
+            {
+                "id": "verification-1",
+                "matter_id": "matter-1",
+                "finding_id": "finding-1",
+                "finding_type": "citation_mismatch",
+                "finding_summary": "Section 138 citation mismatch detected",
+                "confidence_before": 65.0,
+                "decision": "approved",
+                "verified_by": "attorney-1",
+                "verified_at": datetime.now(UTC).isoformat(),
+                "confidence_after": None,
+                "notes": "Verified - citation is indeed incorrect",
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ]
         mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_result
 
         updated = await verification_service.record_verification_decision(
@@ -181,9 +189,7 @@ class TestThresholdBoundaryIntegration:
     """Test ADR-004 threshold boundaries."""
 
     @pytest.mark.asyncio
-    async def test_threshold_boundaries_correct(
-        self, verification_service
-    ) -> None:
+    async def test_threshold_boundaries_correct(self, verification_service) -> None:
         """Test all threshold boundaries per ADR-004.
 
         Thresholds:
@@ -208,7 +214,9 @@ class TestThresholdBoundaryIntegration:
 
         for confidence, expected in test_cases:
             result = verification_service.get_verification_requirement(confidence)
-            assert result == expected, f"Failed for confidence {confidence}: got {result}, expected {expected}"
+            assert result == expected, (
+                f"Failed for confidence {confidence}: got {result}, expected {expected}"
+            )
 
 
 class TestVerificationQueueIntegration:
@@ -272,9 +280,7 @@ class TestBulkVerificationIntegration:
     """Test bulk verification operations."""
 
     @pytest.mark.asyncio
-    async def test_bulk_approve_updates_stats(
-        self, verification_service
-    ) -> None:
+    async def test_bulk_approve_updates_stats(self, verification_service) -> None:
         """Bulk approval should update verification stats correctly."""
         mock_supabase = MagicMock()
 

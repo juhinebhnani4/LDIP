@@ -135,9 +135,13 @@ async def _check_processing_status(matter_id: str) -> ProcessingStatus:
         return await asyncio.to_thread(_query)
 
     except Exception as e:
-        logger.warning("processing_status_check_failed", matter_id=matter_id, error=str(e))
+        logger.warning(
+            "processing_status_check_failed", matter_id=matter_id, error=str(e)
+        )
         # On failure, assume ready — don't block queries due to a check failure
-        return ProcessingStatus(processing_count=0, total_count=0, total_chunks=0, embedded_chunks=0)
+        return ProcessingStatus(
+            processing_count=0, total_count=0, total_chunks=0, embedded_chunks=0
+        )
 
 
 # =============================================================================
@@ -159,10 +163,16 @@ class SSEErrorReportRequest(BaseModel):
     """
 
     session_id: str = Field(..., max_length=100, description="SSE session ID")
-    matter_id: str | None = Field(None, max_length=100, description="Matter ID from stream URL")
-    error_type: str = Field(..., max_length=100, description="Type of error (sse_json_parse_failed, etc.)")
+    matter_id: str | None = Field(
+        None, max_length=100, description="Matter ID from stream URL"
+    )
+    error_type: str = Field(
+        ..., max_length=100, description="Type of error (sse_json_parse_failed, etc.)"
+    )
     error_message: str = Field(..., max_length=2000, description="Error message")
-    raw_chunk: str | None = Field(None, max_length=2000, description="Raw chunk content (truncated)")
+    raw_chunk: str | None = Field(
+        None, max_length=2000, description="Raw chunk content (truncated)"
+    )
     timestamp: str = Field(..., max_length=50, description="ISO timestamp of error")
 
 
@@ -241,6 +251,7 @@ async def stream_chat(
         HTTPException: 400 if request validation fails.
     """
     from app.core.correlation import bind_cost_user_id
+
     bind_cost_user_id(current_user.id)
 
     logger.info(
@@ -278,12 +289,14 @@ async def stream_chat(
             )
             yield {
                 "event": StreamEventType.ERROR.value,
-                "data": json.dumps({
-                    "error": msg,
-                    "code": "DOCUMENTS_PROCESSING",
-                    "retry_suggested": True,
-                    "retry_after_seconds": 30,
-                }),
+                "data": json.dumps(
+                    {
+                        "error": msg,
+                        "code": "DOCUMENTS_PROCESSING",
+                        "retry_suggested": True,
+                        "retry_after_seconds": 30,
+                    }
+                ),
             }
             return
 
@@ -346,12 +359,14 @@ async def stream_chat(
             )
             yield {
                 "event": StreamEventType.ERROR.value,
-                "data": json.dumps({
-                    "error": llm_error.message,
-                    "code": llm_error.code.value,
-                    "retry_suggested": llm_error.retry_suggested,
-                    "retry_after_seconds": llm_error.retry_after_seconds,
-                }),
+                "data": json.dumps(
+                    {
+                        "error": llm_error.message,
+                        "code": llm_error.code.value,
+                        "retry_suggested": llm_error.retry_suggested,
+                        "retry_after_seconds": llm_error.retry_after_seconds,
+                    }
+                ),
             }
 
     return EventSourceResponse(
@@ -399,6 +414,7 @@ async def send_message(
         HTTPException: 500 if processing fails.
     """
     from app.core.correlation import bind_cost_user_id
+
     bind_cost_user_id(current_user.id)
 
     logger.info(
@@ -571,9 +587,15 @@ async def report_sse_status(
 class CacheClearResponse(BaseModel):
     """Response model for cache clear operation."""
 
-    query_cache_cleared: int = Field(..., description="Number of query cache entries cleared")
-    summary_cache_cleared: bool = Field(..., description="Whether summary cache was cleared")
-    timeline_cache_cleared: bool = Field(..., description="Whether timeline cache was cleared")
+    query_cache_cleared: int = Field(
+        ..., description="Number of query cache entries cleared"
+    )
+    summary_cache_cleared: bool = Field(
+        ..., description="Whether summary cache was cleared"
+    )
+    timeline_cache_cleared: bool = Field(
+        ..., description="Whether timeline cache was cleared"
+    )
 
 
 @router.delete("/{matter_id}/cache")
@@ -610,7 +632,9 @@ async def clear_chat_cache(
     try:
         # Clear query cache
         query_cache_service = get_query_cache_service()
-        query_cleared = await query_cache_service.invalidate_on_document_upload(matter_id)
+        query_cleared = await query_cache_service.invalidate_on_document_upload(
+            matter_id
+        )
 
         # Clear summary cache
         summary_service = get_summary_service()

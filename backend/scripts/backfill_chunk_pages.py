@@ -73,7 +73,9 @@ def get_page_text_map(client, document_id: str) -> dict[int, str]:
     return {page: " ".join(texts) for page, texts in page_texts.items()}
 
 
-def find_best_page_match(chunk_content: str, page_texts: dict[int, str], threshold: float = 40.0) -> tuple[int | None, float]:
+def find_best_page_match(
+    chunk_content: str, page_texts: dict[int, str], threshold: float = 40.0
+) -> tuple[int | None, float]:
     """Find the page that best matches the chunk content.
 
     Args:
@@ -161,9 +163,9 @@ def backfill_document_chunks(document_id: str, client, dry_run: bool = False) ->
 
         if best_page and score >= 50:
             if not dry_run:
-                client.table("chunks").update({
-                    "page_number": best_page
-                }).eq("id", chunk["id"]).execute()
+                client.table("chunks").update({"page_number": best_page}).eq(
+                    "id", chunk["id"]
+                ).execute()
 
             updated += 1
 
@@ -190,11 +192,7 @@ def backfill_all(document_id: str | None = None, dry_run: bool = False):
         documents = [{"id": document_id}]
     else:
         # Get all documents
-        result = (
-            client.table("documents")
-            .select("id, filename")
-            .execute()
-        )
+        result = client.table("documents").select("id, filename").execute()
         documents = result.data or []
 
     if not documents:
@@ -233,7 +231,9 @@ def backfill_all(document_id: str | None = None, dry_run: bool = False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill chunk page numbers from bounding boxes")
+    parser = argparse.ArgumentParser(
+        description="Backfill chunk page numbers from bounding boxes"
+    )
     parser.add_argument("--document-id", help="Specific document ID to process")
     parser.add_argument("--dry-run", action="store_true", help="Don't make changes")
 

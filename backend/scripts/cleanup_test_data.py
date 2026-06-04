@@ -39,6 +39,7 @@ def get_supabase_client():
     # Try to load .env
     try:
         from dotenv import load_dotenv
+
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         if os.path.exists(env_path):
             load_dotenv(env_path)
@@ -67,7 +68,9 @@ def get_protected_user_ids(client) -> set:
     protected_ids = set()
 
     for pattern in protected_patterns:
-        result = client.table("users").select("id, email").ilike("email", pattern).execute()
+        result = (
+            client.table("users").select("id, email").ilike("email", pattern).execute()
+        )
         for user in result.data:
             protected_ids.add(user["id"])
             print(f"  Protected user: {user['email']} ({user['id']})")
@@ -86,9 +89,12 @@ def get_test_matters(client, protected_user_ids: set, days_old: int = 7) -> list
     cutoff_date = (datetime.now() - timedelta(days=days_old)).isoformat()
 
     # Get all matters with owner info
-    result = client.table("matters").select(
-        "id, title, created_at, matter_attorneys(user_id, role)"
-    ).lt("created_at", cutoff_date).execute()
+    result = (
+        client.table("matters")
+        .select("id, title, created_at, matter_attorneys(user_id, role)")
+        .lt("created_at", cutoff_date)
+        .execute()
+    )
 
     test_matters = []
     test_keywords = ["test", "demo", "temp", "sample", "example", "dummy", "trial"]
@@ -109,13 +115,15 @@ def get_test_matters(client, protected_user_ids: set, days_old: int = 7) -> list
         title_lower = matter["title"].lower()
         is_test = any(keyword in title_lower for keyword in test_keywords)
 
-        test_matters.append({
-            "id": matter["id"],
-            "title": matter["title"],
-            "created_at": matter["created_at"],
-            "owner_id": owner_id,
-            "is_test_name": is_test,
-        })
+        test_matters.append(
+            {
+                "id": matter["id"],
+                "title": matter["title"],
+                "created_at": matter["created_at"],
+                "owner_id": owner_id,
+                "is_test_name": is_test,
+            }
+        )
 
     return test_matters
 
@@ -143,7 +151,9 @@ def get_storage_usage(client, matter_ids: list) -> dict:
                                 for f in subfolder_files:
                                     if isinstance(f, dict):
                                         usage[bucket_name]["files"] += 1
-                                        usage[bucket_name]["size"] += f.get("metadata", {}).get("size", 0)
+                                        usage[bucket_name]["size"] += f.get(
+                                            "metadata", {}
+                                        ).get("size", 0)
         except Exception as e:
             print(f"  Warning: Could not check {bucket_name} bucket: {e}")
 
@@ -170,7 +180,12 @@ def get_database_row_counts(client, matter_ids: list) -> dict:
 
     for table in tables:
         try:
-            result = client.table(table).select("id", count="exact").in_("matter_id", matter_id_list).execute()
+            result = (
+                client.table(table)
+                .select("id", count="exact")
+                .in_("matter_id", matter_id_list)
+                .execute()
+            )
             counts[table] = result.count or 0
         except Exception as e:
             counts[table] = f"Error: {e}"
@@ -194,20 +209,28 @@ def delete_storage_files(client, matter_ids: list, dry_run: bool = True) -> int:
                         for folder in folders:
                             if isinstance(folder, dict) and folder.get("name"):
                                 subfolder_path = f"{matter_id}/{folder['name']}"
-                                subfolder_files = client.storage.from_(bucket_name).list(subfolder_path)
+                                subfolder_files = client.storage.from_(
+                                    bucket_name
+                                ).list(subfolder_path)
                                 if subfolder_files:
                                     for f in subfolder_files:
                                         if isinstance(f, dict) and f.get("name"):
-                                            files_to_delete.append(f"{subfolder_path}/{f['name']}")
+                                            files_to_delete.append(
+                                                f"{subfolder_path}/{f['name']}"
+                                            )
                 except Exception:
                     pass
 
                 if files_to_delete:
                     if dry_run:
-                        print(f"  Would delete {len(files_to_delete)} files from {bucket_name}/{matter_id}")
+                        print(
+                            f"  Would delete {len(files_to_delete)} files from {bucket_name}/{matter_id}"
+                        )
                     else:
                         client.storage.from_(bucket_name).remove(files_to_delete)
-                        print(f"  Deleted {len(files_to_delete)} files from {bucket_name}/{matter_id}")
+                        print(
+                            f"  Deleted {len(files_to_delete)} files from {bucket_name}/{matter_id}"
+                        )
                     deleted_count += len(files_to_delete)
 
         except Exception as e:
@@ -229,10 +252,17 @@ def delete_matter_data(client, matter_ids: list, dry_run: bool = True) -> dict:
     for table in manual_tables:
         try:
             if dry_run:
-                result = client.table(table).select("id", count="exact").in_("matter_id", matter_ids).execute()
+                result = (
+                    client.table(table)
+                    .select("id", count="exact")
+                    .in_("matter_id", matter_ids)
+                    .execute()
+                )
                 deleted[table] = result.count or 0
             else:
-                result = client.table(table).delete().in_("matter_id", matter_ids).execute()
+                result = (
+                    client.table(table).delete().in_("matter_id", matter_ids).execute()
+                )
                 deleted[table] = len(result.data) if result.data else 0
         except Exception as e:
             deleted[table] = f"Error: {e}"
@@ -267,29 +297,46 @@ def cleanup_orphaned_storage(client, dry_run: bool = True) -> int:
                     if isinstance(folder, dict) and folder.get("name"):
                         folder_name = folder["name"]
                         # Check if this looks like a UUID and doesn't exist in matters
-                        if len(folder_name) == 36 and folder_name not in existing_matter_ids:
+                        if (
+                            len(folder_name) == 36
+                            and folder_name not in existing_matter_ids
+                        ):
                             # This is an orphaned folder
                             files_to_delete = []
                             try:
-                                subfolders = client.storage.from_(bucket_name).list(folder_name)
+                                subfolders = client.storage.from_(bucket_name).list(
+                                    folder_name
+                                )
                                 if subfolders:
                                     for sf in subfolders:
                                         if isinstance(sf, dict) and sf.get("name"):
                                             sf_path = f"{folder_name}/{sf['name']}"
-                                            sf_files = client.storage.from_(bucket_name).list(sf_path)
+                                            sf_files = client.storage.from_(
+                                                bucket_name
+                                            ).list(sf_path)
                                             if sf_files:
                                                 for f in sf_files:
-                                                    if isinstance(f, dict) and f.get("name"):
-                                                        files_to_delete.append(f"{sf_path}/{f['name']}")
+                                                    if isinstance(f, dict) and f.get(
+                                                        "name"
+                                                    ):
+                                                        files_to_delete.append(
+                                                            f"{sf_path}/{f['name']}"
+                                                        )
                             except Exception:
                                 pass
 
                             if files_to_delete:
                                 if dry_run:
-                                    print(f"  Would delete {len(files_to_delete)} orphaned files from {bucket_name}/{folder_name}")
+                                    print(
+                                        f"  Would delete {len(files_to_delete)} orphaned files from {bucket_name}/{folder_name}"
+                                    )
                                 else:
-                                    client.storage.from_(bucket_name).remove(files_to_delete)
-                                    print(f"  Deleted {len(files_to_delete)} orphaned files from {bucket_name}/{folder_name}")
+                                    client.storage.from_(bucket_name).remove(
+                                        files_to_delete
+                                    )
+                                    print(
+                                        f"  Deleted {len(files_to_delete)} orphaned files from {bucket_name}/{folder_name}"
+                                    )
                                 deleted_count += len(files_to_delete)
 
         except Exception as e:
@@ -308,11 +355,24 @@ def format_size(bytes_size: int) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cleanup test data to reduce Supabase egress")
-    parser.add_argument("--execute", action="store_true", help="Actually delete (default is dry run)")
+    parser = argparse.ArgumentParser(
+        description="Cleanup test data to reduce Supabase egress"
+    )
+    parser.add_argument(
+        "--execute", action="store_true", help="Actually delete (default is dry run)"
+    )
     parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
-    parser.add_argument("--days", type=int, default=7, help="Only delete matters older than X days (default: 7)")
-    parser.add_argument("--include-non-test", action="store_true", help="Include matters without test/demo in name")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Only delete matters older than X days (default: 7)",
+    )
+    parser.add_argument(
+        "--include-non-test",
+        action="store_true",
+        help="Include matters without test/demo in name",
+    )
     args = parser.parse_args()
 
     dry_run = not args.execute
@@ -375,7 +435,9 @@ def main():
 
     # Step 5: Check for orphaned storage
     print("Step 5: Checking for orphaned storage files...")
-    orphan_count = cleanup_orphaned_storage(client, dry_run=True)  # Always dry run first
+    orphan_count = cleanup_orphaned_storage(
+        client, dry_run=True
+    )  # Always dry run first
     print(f"  Found {orphan_count} orphaned files")
     print()
 

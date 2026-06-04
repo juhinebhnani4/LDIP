@@ -354,7 +354,9 @@ class TestMarkActUploaded:
             assert result is True
             mock_storage.update_act_resolution.assert_called_once()
             call_args = mock_storage.update_act_resolution.call_args
-            assert call_args.kwargs["resolution_status"] == ActResolutionStatus.AVAILABLE
+            assert (
+                call_args.kwargs["resolution_status"] == ActResolutionStatus.AVAILABLE
+            )
             assert call_args.kwargs["user_action"] == UserAction.UPLOADED
 
     @pytest.mark.asyncio
@@ -840,15 +842,16 @@ class TestStatsDiscoveryConsistency:
 
             # Count from report should match stats
             report_missing = sum(
-                1 for r in report
-                if r.resolution_status == ActResolutionStatus.MISSING
+                1 for r in report if r.resolution_status == ActResolutionStatus.MISSING
             )
             report_available = sum(
-                1 for r in report
+                1
+                for r in report
                 if r.resolution_status == ActResolutionStatus.AVAILABLE
             )
             report_auto_fetched = sum(
-                1 for r in report
+                1
+                for r in report
                 if r.resolution_status == ActResolutionStatus.AUTO_FETCHED
             )
 

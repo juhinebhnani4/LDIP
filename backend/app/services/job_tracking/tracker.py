@@ -156,18 +156,21 @@ class JobTrackingService:
         Raises:
             JobTrackingError: If creation fails.
         """
+
         def _insert():
             return (
                 self.client.table("processing_jobs")
-                .insert({
-                    "matter_id": matter_id,
-                    "document_id": document_id,
-                    "job_type": job_type.value,
-                    "status": JobStatus.QUEUED.value,
-                    "celery_task_id": celery_task_id,
-                    "max_retries": max_retries,
-                    "metadata": metadata or {},
-                })
+                .insert(
+                    {
+                        "matter_id": matter_id,
+                        "document_id": document_id,
+                        "job_type": job_type.value,
+                        "status": JobStatus.QUEUED.value,
+                        "celery_task_id": celery_task_id,
+                        "max_retries": max_retries,
+                        "metadata": metadata or {},
+                    }
+                )
                 .execute()
             )
 
@@ -207,12 +210,9 @@ class JobTrackingService:
         Returns:
             ProcessingJob if found, None otherwise.
         """
+
         def _query():
-            query = (
-                self.client.table("processing_jobs")
-                .select("*")
-                .eq("id", job_id)
-            )
+            query = self.client.table("processing_jobs").select("*").eq("id", job_id)
             if matter_id:
                 query = query.eq("matter_id", matter_id)
             return query.limit(1).execute()
@@ -294,7 +294,12 @@ class JobTrackingService:
         # Set timestamps based on status
         if status == JobStatus.PROCESSING:
             update_data["started_at"] = datetime.now(UTC).isoformat()
-        elif status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.SKIPPED):
+        elif status in (
+            JobStatus.COMPLETED,
+            JobStatus.FAILED,
+            JobStatus.CANCELLED,
+            JobStatus.SKIPPED,
+        ):
             update_data["completed_at"] = datetime.now(UTC).isoformat()
 
         def _update():
@@ -385,10 +390,12 @@ class JobTrackingService:
         def _update():
             query = (
                 self.client.table("processing_jobs")
-                .update({
-                    "retry_count": new_retry_count,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "retry_count": new_retry_count,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
             )
             if matter_id:
@@ -398,7 +405,9 @@ class JobTrackingService:
         response = await asyncio.to_thread(_update)
 
         if response.data:
-            logger.info("job_retry_incremented", job_id=job_id, retry_count=new_retry_count)
+            logger.info(
+                "job_retry_incremented", job_id=job_id, retry_count=new_retry_count
+            )
             return self._db_row_to_processing_job(response.data[0])
         return None
 
@@ -429,10 +438,12 @@ class JobTrackingService:
         def _update():
             query = (
                 self.client.table("processing_jobs")
-                .update({
-                    "metadata": new_metadata,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "metadata": new_metadata,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
             )
             if matter_id:
@@ -461,13 +472,16 @@ class JobTrackingService:
         Returns:
             Updated ProcessingJob or None if not found.
         """
+
         def _update():
             query = (
                 self.client.table("processing_jobs")
-                .update({
-                    "estimated_completion": estimated_completion.isoformat(),
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "estimated_completion": estimated_completion.isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
             )
             if matter_id:
@@ -632,16 +646,19 @@ class JobTrackingService:
         Returns:
             Created JobStageHistory or None if failed.
         """
+
         def _insert():
             return (
                 self.client.table("job_stage_history")
-                .insert({
-                    "job_id": job_id,
-                    "stage_name": stage_name,
-                    "status": StageStatus.IN_PROGRESS.value,
-                    "started_at": datetime.now(UTC).isoformat(),
-                    "metadata": metadata or {},
-                })
+                .insert(
+                    {
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "status": StageStatus.IN_PROGRESS.value,
+                        "started_at": datetime.now(UTC).isoformat(),
+                        "metadata": metadata or {},
+                    }
+                )
                 .execute()
             )
 
@@ -653,7 +670,9 @@ class JobTrackingService:
                 return self._db_row_to_stage_history(response.data[0])
 
         except Exception as e:
-            logger.warning("stage_start_failed", job_id=job_id, stage_name=stage_name, error=str(e))
+            logger.warning(
+                "stage_start_failed", job_id=job_id, stage_name=stage_name, error=str(e)
+            )
 
         return None
 
@@ -673,6 +692,7 @@ class JobTrackingService:
         Returns:
             Updated JobStageHistory or None if not found.
         """
+
         # Find existing stage record
         def _find():
             return (
@@ -698,11 +718,13 @@ class JobTrackingService:
         def _update():
             return (
                 self.client.table("job_stage_history")
-                .update({
-                    "status": StageStatus.COMPLETED.value,
-                    "completed_at": datetime.now(UTC).isoformat(),
-                    "metadata": {**existing_metadata, **(metadata or {})},
-                })
+                .update(
+                    {
+                        "status": StageStatus.COMPLETED.value,
+                        "completed_at": datetime.now(UTC).isoformat(),
+                        "metadata": {**existing_metadata, **(metadata or {})},
+                    }
+                )
                 .eq("id", stage_id)
                 .execute()
             )
@@ -722,18 +744,21 @@ class JobTrackingService:
         metadata: dict | None = None,
     ) -> JobStageHistory | None:
         """Create a completed stage record (for cases where start wasn't recorded)."""
+
         def _insert():
             now = datetime.now(UTC).isoformat()
             return (
                 self.client.table("job_stage_history")
-                .insert({
-                    "job_id": job_id,
-                    "stage_name": stage_name,
-                    "status": StageStatus.COMPLETED.value,
-                    "started_at": now,
-                    "completed_at": now,
-                    "metadata": metadata or {},
-                })
+                .insert(
+                    {
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "status": StageStatus.COMPLETED.value,
+                        "started_at": now,
+                        "completed_at": now,
+                        "metadata": metadata or {},
+                    }
+                )
                 .execute()
             )
 
@@ -742,7 +767,12 @@ class JobTrackingService:
             if response.data:
                 return self._db_row_to_stage_history(response.data[0])
         except Exception as e:
-            logger.warning("stage_complete_create_failed", job_id=job_id, stage_name=stage_name, error=str(e))
+            logger.warning(
+                "stage_complete_create_failed",
+                job_id=job_id,
+                stage_name=stage_name,
+                error=str(e),
+            )
 
         return None
 
@@ -764,6 +794,7 @@ class JobTrackingService:
         Returns:
             Updated JobStageHistory or None if not found.
         """
+
         # Find existing stage record
         def _find():
             return (
@@ -781,7 +812,9 @@ class JobTrackingService:
 
         if not response.data:
             # Create failed stage if no in-progress found
-            return await self._create_failed_stage(job_id, stage_name, error_message, metadata)
+            return await self._create_failed_stage(
+                job_id, stage_name, error_message, metadata
+            )
 
         stage_id = response.data[0]["id"]
         existing_metadata = response.data[0].get("metadata", {}) or {}
@@ -789,12 +822,14 @@ class JobTrackingService:
         def _update():
             return (
                 self.client.table("job_stage_history")
-                .update({
-                    "status": StageStatus.FAILED.value,
-                    "completed_at": datetime.now(UTC).isoformat(),
-                    "error_message": error_message,
-                    "metadata": {**existing_metadata, **(metadata or {})},
-                })
+                .update(
+                    {
+                        "status": StageStatus.FAILED.value,
+                        "completed_at": datetime.now(UTC).isoformat(),
+                        "error_message": error_message,
+                        "metadata": {**existing_metadata, **(metadata or {})},
+                    }
+                )
                 .eq("id", stage_id)
                 .execute()
             )
@@ -802,7 +837,12 @@ class JobTrackingService:
         update_response = await asyncio.to_thread(_update)
 
         if update_response.data:
-            logger.warning("stage_failed", job_id=job_id, stage_name=stage_name, error=error_message)
+            logger.warning(
+                "stage_failed",
+                job_id=job_id,
+                stage_name=stage_name,
+                error=error_message,
+            )
             return self._db_row_to_stage_history(update_response.data[0])
 
         return None
@@ -815,19 +855,22 @@ class JobTrackingService:
         metadata: dict | None = None,
     ) -> JobStageHistory | None:
         """Create a failed stage record."""
+
         def _insert():
             now = datetime.now(UTC).isoformat()
             return (
                 self.client.table("job_stage_history")
-                .insert({
-                    "job_id": job_id,
-                    "stage_name": stage_name,
-                    "status": StageStatus.FAILED.value,
-                    "started_at": now,
-                    "completed_at": now,
-                    "error_message": error_message,
-                    "metadata": metadata or {},
-                })
+                .insert(
+                    {
+                        "job_id": job_id,
+                        "stage_name": stage_name,
+                        "status": StageStatus.FAILED.value,
+                        "started_at": now,
+                        "completed_at": now,
+                        "error_message": error_message,
+                        "metadata": metadata or {},
+                    }
+                )
                 .execute()
             )
 
@@ -836,7 +879,12 @@ class JobTrackingService:
             if response.data:
                 return self._db_row_to_stage_history(response.data[0])
         except Exception as e:
-            logger.warning("stage_failure_create_failed", job_id=job_id, stage_name=stage_name, error=str(e))
+            logger.warning(
+                "stage_failure_create_failed",
+                job_id=job_id,
+                stage_name=stage_name,
+                error=str(e),
+            )
 
         return None
 
@@ -852,6 +900,7 @@ class JobTrackingService:
         Returns:
             List of JobStageHistory records.
         """
+
         def _query():
             return (
                 self.client.table("job_stage_history")
@@ -895,6 +944,7 @@ class JobTrackingService:
         Returns:
             List of ProcessingJob records.
         """
+
         def _query():
             # EGRESS OPTIMIZATION: Select only columns needed for listing
             query = (
@@ -935,13 +985,16 @@ class JobTrackingService:
         Returns:
             Updated ProcessingJob or None if not found.
         """
+
         def _update():
             query = (
                 self.client.table("processing_jobs")
-                .update({
-                    "retry_count": 0,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "retry_count": 0,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
             )
             if matter_id:
@@ -978,6 +1031,7 @@ class JobTrackingService:
         Returns:
             Tuple of (job list, total count).
         """
+
         def _query():
             # EGRESS OPTIMIZATION: Select only columns needed for JobListItem
             query = (
@@ -1025,6 +1079,7 @@ class JobTrackingService:
         Returns:
             List of ProcessingJob records.
         """
+
         def _query():
             # EGRESS OPTIMIZATION: Select only columns needed for listing
             query = (
@@ -1059,6 +1114,7 @@ class JobTrackingService:
         Returns:
             Active ProcessingJob or None.
         """
+
         def _query():
             # EGRESS OPTIMIZATION: Select only columns needed
             query = (
@@ -1089,6 +1145,7 @@ class JobTrackingService:
         Returns:
             JobQueueStats with counts and averages.
         """
+
         # Use the database function for efficiency
         def _query():
             return self.client.rpc(
@@ -1111,7 +1168,9 @@ class JobTrackingService:
                     avg_processing_time_ms=row.get("avg_processing_time_ms", 0) or 0,
                 )
         except Exception as e:
-            logger.warning("get_queue_stats_rpc_failed", error=str(e), matter_id=matter_id)
+            logger.warning(
+                "get_queue_stats_rpc_failed", error=str(e), matter_id=matter_id
+            )
 
         # Fallback: Calculate manually
         return await self._calculate_queue_stats_manually(matter_id)
@@ -1121,6 +1180,7 @@ class JobTrackingService:
         matter_id: str,
     ) -> JobQueueStats:
         """Calculate queue stats manually (fallback if RPC fails)."""
+
         def _query():
             return (
                 self.client.table("processing_jobs")
@@ -1142,21 +1202,35 @@ class JobTrackingService:
 
         processing_times = []
 
-        for row in (response.data or []):
+        for row in response.data or []:
             status = row.get("status", "").lower()
             if status in stats:
                 stats[status] += 1
 
             # Calculate processing time for completed jobs
-            if status == "COMPLETED" and row.get("started_at") and row.get("completed_at"):
+            if (
+                status == "COMPLETED"
+                and row.get("started_at")
+                and row.get("completed_at")
+            ):
                 try:
-                    started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
-                    completed = datetime.fromisoformat(row["completed_at"].replace("Z", "+00:00"))
-                    processing_times.append((completed - started).total_seconds() * 1000)
+                    started = datetime.fromisoformat(
+                        row["started_at"].replace("Z", "+00:00")
+                    )
+                    completed = datetime.fromisoformat(
+                        row["completed_at"].replace("Z", "+00:00")
+                    )
+                    processing_times.append(
+                        (completed - started).total_seconds() * 1000
+                    )
                 except (ValueError, TypeError):
                     pass
 
-        avg_time = int(sum(processing_times) / len(processing_times)) if processing_times else 0
+        avg_time = (
+            int(sum(processing_times) / len(processing_times))
+            if processing_times
+            else 0
+        )
 
         return JobQueueStats(
             queued=stats["queued"],
@@ -1194,21 +1268,25 @@ class JobTrackingService:
             return None
 
         if job.status != JobStatus.FAILED:
-            logger.warning("retry_invalid_status", job_id=job_id, status=job.status.value)
+            logger.warning(
+                "retry_invalid_status", job_id=job_id, status=job.status.value
+            )
             return None
 
         def _update():
             return (
                 self.client.table("processing_jobs")
-                .update({
-                    "status": JobStatus.QUEUED.value,
-                    "retry_count": job.retry_count + 1,
-                    "error_message": None,
-                    "error_code": None,
-                    "started_at": None,
-                    "completed_at": None,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "status": JobStatus.QUEUED.value,
+                        "retry_count": job.retry_count + 1,
+                        "error_message": None,
+                        "error_code": None,
+                        "started_at": None,
+                        "completed_at": None,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -1217,7 +1295,9 @@ class JobTrackingService:
         response = await asyncio.to_thread(_update)
 
         if response.data:
-            logger.info("job_retry_initiated", job_id=job_id, retry_count=job.retry_count + 1)
+            logger.info(
+                "job_retry_initiated", job_id=job_id, retry_count=job.retry_count + 1
+            )
             return self._db_row_to_processing_job(response.data[0])
 
         return None
@@ -1241,17 +1321,21 @@ class JobTrackingService:
             return None
 
         if job.status not in (JobStatus.QUEUED, JobStatus.PROCESSING):
-            logger.warning("cancel_invalid_status", job_id=job_id, status=job.status.value)
+            logger.warning(
+                "cancel_invalid_status", job_id=job_id, status=job.status.value
+            )
             return None
 
         def _update():
             return (
                 self.client.table("processing_jobs")
-                .update({
-                    "status": JobStatus.CANCELLED.value,
-                    "completed_at": datetime.now(UTC).isoformat(),
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "status": JobStatus.CANCELLED.value,
+                        "completed_at": datetime.now(UTC).isoformat(),
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)
                 .execute()
@@ -1284,16 +1368,20 @@ class JobTrackingService:
             return None
 
         if job.status != JobStatus.FAILED:
-            logger.warning("skip_invalid_status", job_id=job_id, status=job.status.value)
+            logger.warning(
+                "skip_invalid_status", job_id=job_id, status=job.status.value
+            )
             return None
 
         def _update():
             return (
                 self.client.table("processing_jobs")
-                .update({
-                    "status": JobStatus.SKIPPED.value,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                })
+                .update(
+                    {
+                        "status": JobStatus.SKIPPED.value,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }
+                )
                 .eq("id", job_id)
                 .eq("matter_id", matter_id)
                 .execute()

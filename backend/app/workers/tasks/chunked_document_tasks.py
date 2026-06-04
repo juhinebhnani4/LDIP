@@ -63,7 +63,9 @@ CHUNK_GROUP_TIMEOUT = 600  # 10 minute timeout for entire group
 CHUNK_LOCK_TIMEOUT = 120  # 2 minute lock expiry
 
 # Story 17.3: Per-Chunk Timeout and Rate Limiting
-CHUNK_OCR_TIMEOUT = 300  # 5 minutes per chunk OCR (legal docs with images can take 2-3 min)
+CHUNK_OCR_TIMEOUT = (
+    300  # 5 minutes per chunk OCR (legal docs with images can take 2-3 min)
+)
 RATE_LIMIT_WINDOW_SECONDS = 60  # Rate limit window
 MAX_CHUNKS_PER_WINDOW = 30  # Max chunks per minute (Document AI limit)
 
@@ -443,6 +445,7 @@ def process_document_chunked(
         if job_id:
             try:
                 from app.services.job_tracking import get_job_tracking_service
+
                 job_svc = get_job_tracking_service()
                 job_svc.fail_job(
                     job_id=job_id,
@@ -663,11 +666,13 @@ def process_single_chunk(
             )
 
             # Calculate checksum of results for idempotency
-            result_json = json.dumps({
-                "full_text": ocr_result.full_text,
-                "overall_confidence": ocr_result.overall_confidence,
-                "page_count": ocr_result.page_count,
-            })
+            result_json = json.dumps(
+                {
+                    "full_text": ocr_result.full_text,
+                    "overall_confidence": ocr_result.overall_confidence,
+                    "page_count": ocr_result.page_count,
+                }
+            )
             result_checksum = hashlib.sha256(result_json.encode()).hexdigest()
 
             # Update chunk record with completion info (no storage path needed)
@@ -943,10 +948,14 @@ def _adjust_bbox_offsets_to_document_relative(
                 )
                 if read_resp.data:
                     for row in read_resp.data:
-                        client.table("bounding_boxes").update({
-                            "text_start_offset": row["text_start_offset"] + offset_delta,
-                            "text_end_offset": row["text_end_offset"] + offset_delta,
-                        }).eq("id", row["id"]).execute()
+                        client.table("bounding_boxes").update(
+                            {
+                                "text_start_offset": row["text_start_offset"]
+                                + offset_delta,
+                                "text_end_offset": row["text_end_offset"]
+                                + offset_delta,
+                            }
+                        ).eq("id", row["id"]).execute()
                     total_adjusted += len(read_resp.data)
             except Exception as e2:
                 logger.error(
@@ -1230,18 +1239,20 @@ def _trigger_parallel_processing(
         # Explicit queue routing - task_routes don't apply to chains dispatched from workers
         unified_chain.apply_async(queue="default")
 
-        triggered_tasks.extend([
-            "validate_ocr",
-            "calculate_confidence",
-            "chunk_document",
-            "embed_chunks",
-            "extract_entities",
-            # These are dispatched by extract_entities:
-            "extract_citations",
-            "extract_dates_from_document",
-            "resolve_aliases",
-            "detect_contradictions",
-        ])
+        triggered_tasks.extend(
+            [
+                "validate_ocr",
+                "calculate_confidence",
+                "chunk_document",
+                "embed_chunks",
+                "extract_entities",
+                # These are dispatched by extract_entities:
+                "extract_citations",
+                "extract_dates_from_document",
+                "resolve_aliases",
+                "detect_contradictions",
+            ]
+        )
 
         logger.info(
             "unified_chain_dispatched",
@@ -1250,14 +1261,16 @@ def _trigger_parallel_processing(
         )
 
     except Exception as e:
-        failed_tasks.extend([
-            "validate_ocr",
-            "calculate_confidence",
-            "chunk_document",
-            "embed_chunks",
-            "extract_entities",
-            "resolve_aliases",
-        ])
+        failed_tasks.extend(
+            [
+                "validate_ocr",
+                "calculate_confidence",
+                "chunk_document",
+                "embed_chunks",
+                "extract_entities",
+                "resolve_aliases",
+            ]
+        )
         logger.error(
             "unified_chain_dispatch_failed",
             document_id=document_id,
@@ -1367,9 +1380,7 @@ def retry_failed_chunks(
         # Reset failed chunks to pending and track retry count
         for chunk in failed_chunks:
             retry_count = _get_retry_count(chunk) + 1
-            _run_async(
-                chunks_svc.reset_chunk_for_retry(chunk.id)
-            )
+            _run_async(chunks_svc.reset_chunk_for_retry(chunk.id))
             # Update with new retry count (reset clears error_message, so we set it after)
             _run_async(
                 chunks_svc.update_status(
@@ -1480,10 +1491,13 @@ def finalize_chunked_document(
     # =========================================================================
     try:
         from app.services.distributed_lock import get_sync_redis_client
+
         redis_client = get_sync_redis_client()
         if redis_client:
             lock_key = f"finalize_lock:{document_id}"
-            acquired = redis_client.set(lock_key, self.request.id or "1", nx=True, ex=600)
+            acquired = redis_client.set(
+                lock_key, self.request.id or "1", nx=True, ex=600
+            )
             if not acquired:
                 existing = redis_client.get(lock_key)
                 logger.info(
@@ -1522,6 +1536,7 @@ def finalize_chunked_document(
         # and we cannot recover. If OCR chunks exist but RAG chunks don't,
         # downstream processing failed and we should re-trigger it.
         from app.services.supabase.client import get_service_client
+
         client = get_service_client()
 
         # Check RAG chunks (populated by chunk_document task downstream)
@@ -1549,10 +1564,14 @@ def finalize_chunked_document(
                     "finalize_skipping_no_text",
                     document_id=document_id,
                     status=document.status.value,
-                    document_type=getattr(document.document_type, 'value', None),
+                    document_type=getattr(document.document_type, "value", None),
                     reason="No extracted_text and no OCR chunks — cannot chunk or embed",
                 )
-                return {"status": "skipped", "document_id": document_id, "reason": "no_extracted_text"}
+                return {
+                    "status": "skipped",
+                    "document_id": document_id,
+                    "reason": "no_extracted_text",
+                }
 
             # OCR chunks exist (or extracted_text exists) but 0 RAG chunks — downstream failed
             logger.warning(
@@ -1599,10 +1618,12 @@ def finalize_chunked_document(
     if chunk_results:
         for i, result in enumerate(chunk_results):
             if isinstance(result, Exception):
-                failed_chunks.append({
-                    "chunk_index": i,
-                    "error": str(result),
-                })
+                failed_chunks.append(
+                    {
+                        "chunk_index": i,
+                        "error": str(result),
+                    }
+                )
                 logger.error(
                     "chunk_failed_in_finalize",
                     document_id=document_id,
@@ -1612,10 +1633,12 @@ def finalize_chunked_document(
             elif isinstance(result, dict) and result.get("status") == "success":
                 successful_results.append(result)
             else:
-                failed_chunks.append({
-                    "chunk_index": i,
-                    "error": f"Unexpected result: {result}",
-                })
+                failed_chunks.append(
+                    {
+                        "chunk_index": i,
+                        "error": f"Unexpected result: {result}",
+                    }
+                )
 
         if failed_chunks:
             logger.warning(
@@ -1669,12 +1692,16 @@ def finalize_chunked_document(
                 for prefix in ["auto_retry_", "recovery_"]:
                     if prefix in chunk.error_message:
                         try:
-                            return int(chunk.error_message.split(prefix)[-1].split("_")[0])
+                            return int(
+                                chunk.error_message.split(prefix)[-1].split("_")[0]
+                            )
                         except (ValueError, IndexError):
                             pass
                 return 0
 
-            max_chunk_retries = max(_get_retry_count(c) for c in failed_chunks) if failed_chunks else 0
+            max_chunk_retries = (
+                max(_get_retry_count(c) for c in failed_chunks) if failed_chunks else 0
+            )
 
             if max_chunk_retries >= max_retries:
                 # Exceeded max retries - give up and mark as permanently failed
@@ -1726,10 +1753,11 @@ def finalize_chunked_document(
     # Calculate aggregate stats from chunks
     total_page_count = 0
     for chunk in chunks:
-        total_page_count += (chunk.page_end - chunk.page_start + 1)
+        total_page_count += chunk.page_end - chunk.page_start + 1
 
     # Count bounding boxes from database
     from app.services.bounding_box_service import get_bounding_box_service
+
     bbox_service = get_bounding_box_service()
     bboxes, bbox_count = bbox_service.get_bounding_boxes_for_document(document_id)
 
@@ -1745,24 +1773,35 @@ def finalize_chunked_document(
     # If neither available: bbox text fallback WITHOUT offset adjustment.
     # =========================================================================
     overall_confidence = None
-    per_chunk_texts = None  # list[(chunk_index, text)] - used for coupled offset adjustment
+    per_chunk_texts = (
+        None  # list[(chunk_index, text)] - used for coupled offset adjustment
+    )
 
     if successful_results:
         # Sort by chunk_index and merge full_text
-        sorted_results = sorted(successful_results, key=lambda x: x.get("chunk_index", 0))
+        sorted_results = sorted(
+            successful_results, key=lambda x: x.get("chunk_index", 0)
+        )
         per_chunk_texts = [
             (r.get("chunk_index", i), r.get("full_text", ""))
-            for i, r in enumerate(sorted_results) if r.get("full_text")
+            for i, r in enumerate(sorted_results)
+            if r.get("full_text")
         ]
         full_text = "\n\n".join(text for _, text in per_chunk_texts)
         # Calculate confidence as weighted average
         total_pages = sum(r.get("page_count", 0) for r in sorted_results)
         if total_pages > 0:
-            overall_confidence = sum(
-                r.get("confidence", 0) * r.get("page_count", 0) for r in sorted_results
-            ) / total_pages
+            overall_confidence = (
+                sum(
+                    r.get("confidence", 0) * r.get("page_count", 0)
+                    for r in sorted_results
+                )
+                / total_pages
+            )
         else:
-            overall_confidence = sum(r.get("confidence", 0) for r in sorted_results) / len(sorted_results)
+            overall_confidence = sum(
+                r.get("confidence", 0) for r in sorted_results
+            ) / len(sorted_results)
 
         logger.info(
             "merged_chunk_text",
@@ -1800,7 +1839,9 @@ def finalize_chunked_document(
                 source="bbox_fallback",
                 bbox_count=len(bboxes),
                 text_length=len(full_text),
-                chunks_with_text=len([c for c in sorted_chunks if getattr(c, "ocr_full_text", None)]),
+                chunks_with_text=len(
+                    [c for c in sorted_chunks if getattr(c, "ocr_full_text", None)]
+                ),
                 total_chunks=len(sorted_chunks),
             )
 
@@ -1875,6 +1916,7 @@ def finalize_chunked_document(
         if job_id:
             from app.models.job import ProcessingJobUpdate
             from app.services.job_tracking import get_job_tracking_service
+
             job_tracker = get_job_tracking_service()
             update = ProcessingJobUpdate(
                 status=JobStatus.PROCESSING,

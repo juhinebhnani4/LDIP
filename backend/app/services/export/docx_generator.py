@@ -63,7 +63,9 @@ class DocxGenerator:
         logger.info("docx_generation_started", matter_name=matter_name)
 
         # Build document content
-        body_content = self._build_body(matter_name, section_content, verification_summary)
+        body_content = self._build_body(
+            matter_name, section_content, verification_summary
+        )
 
         # Create DOCX package
         docx_bytes = self._create_docx_package(body_content)
@@ -123,7 +125,9 @@ class DocxGenerator:
                 )
             )
             paragraphs.append(
-                self._make_paragraph(f"Total Findings: {verification_summary.total_findings}")
+                self._make_paragraph(
+                    f"Total Findings: {verification_summary.total_findings}"
+                )
             )
             paragraphs.append(
                 self._make_paragraph(f"Verified: {verification_summary.verified_count}")
@@ -198,9 +202,13 @@ class DocxGenerator:
             description = event.get("description", "")
             confidence = event.get("confidence", 0)
 
-            paras.append(self._make_paragraph(f"[{date}] {event_type.upper()}", bold=True))
+            paras.append(
+                self._make_paragraph(f"[{date}] {event_type.upper()}", bold=True)
+            )
             paras.append(self._make_paragraph(description))
-            paras.append(self._make_paragraph(f"Confidence: {confidence:.0f}%", italic=True))
+            paras.append(
+                self._make_paragraph(f"Confidence: {confidence:.0f}%", italic=True)
+            )
 
         return paras
 
@@ -222,7 +230,11 @@ class DocxGenerator:
             paras.append(self._make_bullet(f"{name} ({entity_type})"))
             paras.append(self._make_paragraph(f"  Mentions: {mentions}", italic=True))
             if aliases:
-                paras.append(self._make_paragraph(f"  Aliases: {', '.join(aliases)}", italic=True))
+                paras.append(
+                    self._make_paragraph(
+                        f"  Aliases: {', '.join(aliases)}", italic=True
+                    )
+                )
 
         return paras
 
@@ -266,7 +278,9 @@ class DocxGenerator:
 
             paras.append(self._make_bullet(f"[{finding_type.upper()}] {summary}"))
             paras.append(
-                self._make_paragraph(f"  Original Confidence: {confidence:.0f}%", italic=True)
+                self._make_paragraph(
+                    f"  Original Confidence: {confidence:.0f}%", italic=True
+                )
             )
 
         return paras
@@ -286,10 +300,16 @@ class DocxGenerator:
             statement_a = contradiction.get("statement_a", "")
             statement_b = contradiction.get("statement_b", "")
 
-            paras.append(self._make_paragraph(f"[{severity.upper()}] {con_type}", bold=True))
+            paras.append(
+                self._make_paragraph(f"[{severity.upper()}] {con_type}", bold=True)
+            )
             # Issue #5 fix: Use word-boundary truncation
-            paras.append(self._make_paragraph(f"Statement A: {truncate_text(statement_a, 200)}"))
-            paras.append(self._make_paragraph(f"Statement B: {truncate_text(statement_b, 200)}"))
+            paras.append(
+                self._make_paragraph(f"Statement A: {truncate_text(statement_a, 200)}")
+            )
+            paras.append(
+                self._make_paragraph(f"Statement B: {truncate_text(statement_b, 200)}")
+            )
 
         return paras
 
@@ -315,7 +335,7 @@ class DocxGenerator:
         style = f"Heading{level}"
         return (
             f'<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr>'
-            f'<w:r><w:rPr><w:b/></w:rPr><w:t>{escaped}</w:t></w:r></w:p>'
+            f"<w:r><w:rPr><w:b/></w:rPr><w:t>{escaped}</w:t></w:r></w:p>"
         )
 
     def _make_bullet(self, text: str) -> str:
@@ -323,7 +343,7 @@ class DocxGenerator:
         escaped = xml_escape(text)
         return (
             '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>'
-            f'<w:r><w:t>{escaped}</w:t></w:r></w:p>'
+            f"<w:r><w:t>{escaped}</w:t></w:r></w:p>"
         )
 
     def _create_docx_package(self, body_content: str) -> bytes:
@@ -351,33 +371,33 @@ class DocxGenerator:
 
     def _content_types_xml(self) -> str:
         """Generate [Content_Types].xml."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
-</Types>'''
+</Types>"""
 
     def _rels_xml(self) -> str:
         """Generate _rels/.rels."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _document_rels_xml(self) -> str:
         """Generate word/_rels/document.xml.rels."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
-</Relationships>'''
+</Relationships>"""
 
     def _document_xml(self, body_content: str) -> str:
         """Generate word/document.xml."""
-        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     {body_content}
@@ -386,11 +406,11 @@ class DocxGenerator:
       <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
     </w:sectPr>
   </w:body>
-</w:document>'''
+</w:document>"""
 
     def _styles_xml(self) -> str:
         """Generate word/styles.xml with heading styles."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:docDefaults>
     <w:rPrDefault>
@@ -420,11 +440,11 @@ class DocxGenerator:
     <w:pPr><w:spacing w:before="240" w:after="60"/></w:pPr>
     <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
   </w:style>
-</w:styles>'''
+</w:styles>"""
 
     def _numbering_xml(self) -> str:
         """Generate word/numbering.xml for bullet lists."""
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:abstractNum w:abstractNumId="0">
     <w:lvl w:ilvl="0">
@@ -443,4 +463,4 @@ class DocxGenerator:
   <w:num w:numId="1">
     <w:abstractNumId w:val="0"/>
   </w:num>
-</w:numbering>'''
+</w:numbering>"""

@@ -58,12 +58,15 @@ class TestRedisClient:
         mock_upstash_asyncio = MagicMock()
         mock_upstash_asyncio.Redis.return_value = mock_client
 
-        with patch.dict(os.environ, env, clear=True), patch.dict(
-            "sys.modules",
-            {
-                "upstash_redis": MagicMock(),
-                "upstash_redis.asyncio": mock_upstash_asyncio,
-            },
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch.dict(
+                "sys.modules",
+                {
+                    "upstash_redis": MagicMock(),
+                    "upstash_redis.asyncio": mock_upstash_asyncio,
+                },
+            ),
         ):
             reset_redis_client()
             client = await get_redis_client()

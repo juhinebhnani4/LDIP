@@ -45,13 +45,15 @@ class TestEventClassifierParsing:
     def test_parse_valid_single_response(self) -> None:
         """Should parse valid single classification response."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.95,
-            "secondary_types": [],
-            "keywords_matched": ["filed", "petition"],
-            "classification_reasoning": "Clear filing with 'filed' keyword",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.95,
+                "secondary_types": [],
+                "keywords_matched": ["filed", "petition"],
+                "classification_reasoning": "Clear filing with 'filed' keyword",
+            }
+        )
 
         result = classifier._parse_single_response(
             response_text=response_text,
@@ -67,16 +69,18 @@ class TestEventClassifierParsing:
     def test_parse_unclassified_response(self) -> None:
         """Should parse unclassified event response."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "unclassified",
-            "classification_confidence": 0.4,
-            "secondary_types": [
-                {"type": "hearing", "confidence": 0.3},
-                {"type": "order", "confidence": 0.3},
-            ],
-            "keywords_matched": [],
-            "classification_reasoning": "Insufficient context to classify",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "unclassified",
+                "classification_confidence": 0.4,
+                "secondary_types": [
+                    {"type": "hearing", "confidence": 0.3},
+                    {"type": "order", "confidence": 0.3},
+                ],
+                "keywords_matched": [],
+                "classification_reasoning": "Insufficient context to classify",
+            }
+        )
 
         result = classifier._parse_single_response(
             response_text=response_text,
@@ -90,13 +94,15 @@ class TestEventClassifierParsing:
     def test_parse_low_confidence_becomes_unclassified(self) -> None:
         """Should set type to unclassified when confidence is below threshold."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "hearing",
-            "classification_confidence": 0.5,  # Below 0.7 threshold
-            "secondary_types": [],
-            "keywords_matched": [],
-            "classification_reasoning": "Low confidence classification",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "hearing",
+                "classification_confidence": 0.5,  # Below 0.7 threshold
+                "secondary_types": [],
+                "keywords_matched": [],
+                "classification_reasoning": "Low confidence classification",
+            }
+        )
 
         result = classifier._parse_single_response(
             response_text=response_text,
@@ -143,24 +149,26 @@ class TestEventClassifierParsing:
     def test_parse_batch_response(self) -> None:
         """Should parse valid batch classification response."""
         classifier = EventClassifier()
-        response_text = json.dumps([
-            {
-                "event_id": "event-1",
-                "event_type": "filing",
-                "classification_confidence": 0.95,
-                "secondary_types": [],
-                "keywords_matched": ["filed"],
-                "classification_reasoning": "Clear filing",
-            },
-            {
-                "event_id": "event-2",
-                "event_type": "hearing",
-                "classification_confidence": 0.88,
-                "secondary_types": [],
-                "keywords_matched": ["hearing"],
-                "classification_reasoning": "Court hearing",
-            },
-        ])
+        response_text = json.dumps(
+            [
+                {
+                    "event_id": "event-1",
+                    "event_type": "filing",
+                    "classification_confidence": 0.95,
+                    "secondary_types": [],
+                    "keywords_matched": ["filed"],
+                    "classification_reasoning": "Clear filing",
+                },
+                {
+                    "event_id": "event-2",
+                    "event_type": "hearing",
+                    "classification_confidence": 0.88,
+                    "secondary_types": [],
+                    "keywords_matched": ["hearing"],
+                    "classification_reasoning": "Court hearing",
+                },
+            ]
+        )
 
         events = [
             {"event_id": "event-1"},
@@ -183,13 +191,15 @@ class TestEventTypeClassification:
     def test_classify_filing_event(self) -> None:
         """Should classify filing events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.95,
-            "secondary_types": [],
-            "keywords_matched": ["filed", "petition", "submitted"],
-            "classification_reasoning": "Document filed with court",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.95,
+                "secondary_types": [],
+                "keywords_matched": ["filed", "petition", "submitted"],
+                "classification_reasoning": "Document filed with court",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.FILING
@@ -197,13 +207,15 @@ class TestEventTypeClassification:
     def test_classify_notice_event(self) -> None:
         """Should classify notice events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "notice",
-            "classification_confidence": 0.90,
-            "secondary_types": [],
-            "keywords_matched": ["notice", "served", "issued"],
-            "classification_reasoning": "Legal notice was served",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "notice",
+                "classification_confidence": 0.90,
+                "secondary_types": [],
+                "keywords_matched": ["notice", "served", "issued"],
+                "classification_reasoning": "Legal notice was served",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.NOTICE
@@ -211,13 +223,15 @@ class TestEventTypeClassification:
     def test_classify_hearing_event(self) -> None:
         """Should classify hearing events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "hearing",
-            "classification_confidence": 0.88,
-            "secondary_types": [],
-            "keywords_matched": ["hearing", "arguments", "court"],
-            "classification_reasoning": "Court hearing scheduled",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "hearing",
+                "classification_confidence": 0.88,
+                "secondary_types": [],
+                "keywords_matched": ["hearing", "arguments", "court"],
+                "classification_reasoning": "Court hearing scheduled",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.HEARING
@@ -225,13 +239,15 @@ class TestEventTypeClassification:
     def test_classify_order_event(self) -> None:
         """Should classify order events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "order",
-            "classification_confidence": 0.92,
-            "secondary_types": [],
-            "keywords_matched": ["order", "judgment", "decree"],
-            "classification_reasoning": "Court order passed",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "order",
+                "classification_confidence": 0.92,
+                "secondary_types": [],
+                "keywords_matched": ["order", "judgment", "decree"],
+                "classification_reasoning": "Court order passed",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.ORDER
@@ -239,13 +255,15 @@ class TestEventTypeClassification:
     def test_classify_transaction_event(self) -> None:
         """Should classify transaction events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "transaction",
-            "classification_confidence": 0.85,
-            "secondary_types": [],
-            "keywords_matched": ["paid", "payment", "Rs."],
-            "classification_reasoning": "Financial transaction",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "transaction",
+                "classification_confidence": 0.85,
+                "secondary_types": [],
+                "keywords_matched": ["paid", "payment", "Rs."],
+                "classification_reasoning": "Financial transaction",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.TRANSACTION
@@ -253,13 +271,15 @@ class TestEventTypeClassification:
     def test_classify_document_event(self) -> None:
         """Should classify document events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "document",
-            "classification_confidence": 0.80,
-            "secondary_types": [],
-            "keywords_matched": ["executed", "signed", "agreement"],
-            "classification_reasoning": "Document execution",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "document",
+                "classification_confidence": 0.80,
+                "secondary_types": [],
+                "keywords_matched": ["executed", "signed", "agreement"],
+                "classification_reasoning": "Document execution",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.DOCUMENT
@@ -267,13 +287,15 @@ class TestEventTypeClassification:
     def test_classify_deadline_event(self) -> None:
         """Should classify deadline events correctly."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "deadline",
-            "classification_confidence": 0.82,
-            "secondary_types": [],
-            "keywords_matched": ["limitation", "due date", "deadline"],
-            "classification_reasoning": "Limitation period deadline",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "deadline",
+                "classification_confidence": 0.82,
+                "secondary_types": [],
+                "keywords_matched": ["limitation", "due date", "deadline"],
+                "classification_reasoning": "Limitation period deadline",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.DEADLINE
@@ -285,16 +307,18 @@ class TestSecondaryTypes:
     def test_parse_secondary_types(self) -> None:
         """Should parse secondary types with confidence scores."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "hearing",
-            "classification_confidence": 0.75,
-            "secondary_types": [
-                {"type": "order", "confidence": 0.6},
-                {"type": "filing", "confidence": 0.4},
-            ],
-            "keywords_matched": ["hearing", "order"],
-            "classification_reasoning": "Hearing with possible order",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "hearing",
+                "classification_confidence": 0.75,
+                "secondary_types": [
+                    {"type": "order", "confidence": 0.6},
+                    {"type": "filing", "confidence": 0.4},
+                ],
+                "keywords_matched": ["hearing", "order"],
+                "classification_reasoning": "Hearing with possible order",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -306,16 +330,18 @@ class TestSecondaryTypes:
     def test_invalid_secondary_type_ignored(self) -> None:
         """Should ignore invalid secondary types."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.85,
-            "secondary_types": [
-                {"type": "invalid_type", "confidence": 0.5},
-                {"type": "notice", "confidence": 0.4},
-            ],
-            "keywords_matched": [],
-            "classification_reasoning": "Filing event",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.85,
+                "secondary_types": [
+                    {"type": "invalid_type", "confidence": 0.5},
+                    {"type": "notice", "confidence": 0.4},
+                ],
+                "keywords_matched": [],
+                "classification_reasoning": "Filing event",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -377,13 +403,15 @@ class TestClassificationWithMockedGemini:
         classifier = EventClassifier()
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.95,
-            "secondary_types": [],
-            "keywords_matched": ["filed", "petition"],
-            "classification_reasoning": "Clear filing event",
-        })
+        mock_response.text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.95,
+                "secondary_types": [],
+                "keywords_matched": ["filed", "petition"],
+                "classification_reasoning": "Clear filing event",
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
@@ -403,13 +431,15 @@ class TestClassificationWithMockedGemini:
         classifier = EventClassifier()
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "event_type": "notice",
-            "classification_confidence": 0.88,
-            "secondary_types": [],
-            "keywords_matched": ["notice", "served"],
-            "classification_reasoning": "Notice was served",
-        })
+        mock_response.text = json.dumps(
+            {
+                "event_type": "notice",
+                "classification_confidence": 0.88,
+                "secondary_types": [],
+                "keywords_matched": ["notice", "served"],
+                "classification_reasoning": "Notice was served",
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content = MagicMock(return_value=mock_response)
@@ -429,32 +459,42 @@ class TestClassificationWithMockedGemini:
         classifier = EventClassifier()
 
         mock_response = MagicMock()
-        mock_response.text = json.dumps([
-            {
-                "event_id": "event-1",
-                "event_type": "filing",
-                "classification_confidence": 0.95,
-                "secondary_types": [],
-                "keywords_matched": ["filed"],
-                "classification_reasoning": "Filing event",
-            },
-            {
-                "event_id": "event-2",
-                "event_type": "hearing",
-                "classification_confidence": 0.88,
-                "secondary_types": [],
-                "keywords_matched": ["hearing"],
-                "classification_reasoning": "Hearing event",
-            },
-        ])
+        mock_response.text = json.dumps(
+            [
+                {
+                    "event_id": "event-1",
+                    "event_type": "filing",
+                    "classification_confidence": 0.95,
+                    "secondary_types": [],
+                    "keywords_matched": ["filed"],
+                    "classification_reasoning": "Filing event",
+                },
+                {
+                    "event_id": "event-2",
+                    "event_type": "hearing",
+                    "classification_confidence": 0.88,
+                    "secondary_types": [],
+                    "keywords_matched": ["hearing"],
+                    "classification_reasoning": "Hearing event",
+                },
+            ]
+        )
 
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
         classifier._model = mock_model
 
         events = [
-            {"event_id": "event-1", "date_text": "15/01/2024", "context": "filed petition"},
-            {"event_id": "event-2", "date_text": "20/01/2024", "context": "hearing scheduled"},
+            {
+                "event_id": "event-1",
+                "date_text": "15/01/2024",
+                "context": "filed petition",
+            },
+            {
+                "event_id": "event-2",
+                "date_text": "20/01/2024",
+                "context": "hearing scheduled",
+            },
         ]
 
         results = await classifier.classify_events_batch(events)
@@ -478,13 +518,15 @@ class TestErrorHandling:
     def test_invalid_event_type_fallback(self) -> None:
         """Should fall back to unclassified for invalid types."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "invalid_type",
-            "classification_confidence": 0.85,
-            "secondary_types": [],
-            "keywords_matched": [],
-            "classification_reasoning": "Unknown type",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "invalid_type",
+                "classification_confidence": 0.85,
+                "secondary_types": [],
+                "keywords_matched": [],
+                "classification_reasoning": "Unknown type",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.UNCLASSIFIED
@@ -506,13 +548,15 @@ class TestRetryLogic:
             if call_count == 1:
                 raise Exception("429 Resource Exhausted")
             mock_response = MagicMock()
-            mock_response.text = json.dumps({
-                "event_type": "filing",
-                "classification_confidence": 0.90,
-                "secondary_types": [],
-                "keywords_matched": ["filed"],
-                "classification_reasoning": "Filing",
-            })
+            mock_response.text = json.dumps(
+                {
+                    "event_type": "filing",
+                    "classification_confidence": 0.90,
+                    "secondary_types": [],
+                    "keywords_matched": ["filed"],
+                    "classification_reasoning": "Filing",
+                }
+            )
             return mock_response
 
         mock_model = MagicMock()
@@ -615,18 +659,22 @@ class TestBatchClassification:
 
             # Return results for the batch
             mock_response = MagicMock()
-            mock_response.text = json.dumps([
-                {
-                    "event_id": f"event-{batch_start + i}",
-                    "event_type": "filing",
-                    "classification_confidence": 0.90,
-                    "secondary_types": [],
-                    "keywords_matched": [],
-                    "classification_reasoning": "Filing",
-                }
-                for i in range(batch_size)
-            ])
-            processed_events.extend([f"event-{batch_start + i}" for i in range(batch_size)])
+            mock_response.text = json.dumps(
+                [
+                    {
+                        "event_id": f"event-{batch_start + i}",
+                        "event_type": "filing",
+                        "classification_confidence": 0.90,
+                        "secondary_types": [],
+                        "keywords_matched": [],
+                        "classification_reasoning": "Filing",
+                    }
+                    for i in range(batch_size)
+                ]
+            )
+            processed_events.extend(
+                [f"event-{batch_start + i}" for i in range(batch_size)]
+            )
             return mock_response
 
         mock_model = MagicMock()
@@ -651,13 +699,15 @@ class TestIndianLegalTerminology:
     def test_vakalatnama_classification(self) -> None:
         """Should recognize vakalatnama as filing."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.92,
-            "secondary_types": [],
-            "keywords_matched": ["vakalatnama", "filed"],
-            "classification_reasoning": "Vakalatnama (power of attorney for lawyer) filed",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.92,
+                "secondary_types": [],
+                "keywords_matched": ["vakalatnama", "filed"],
+                "classification_reasoning": "Vakalatnama (power of attorney for lawyer) filed",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.FILING
@@ -665,13 +715,15 @@ class TestIndianLegalTerminology:
     def test_lok_adalat_classification(self) -> None:
         """Should recognize Lok Adalat proceedings."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "hearing",
-            "classification_confidence": 0.88,
-            "secondary_types": [{"type": "order", "confidence": 0.6}],
-            "keywords_matched": ["Lok Adalat"],
-            "classification_reasoning": "Lok Adalat (people's court) proceedings",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "hearing",
+                "classification_confidence": 0.88,
+                "secondary_types": [{"type": "order", "confidence": 0.6}],
+                "keywords_matched": ["Lok Adalat"],
+                "classification_reasoning": "Lok Adalat (people's court) proceedings",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.HEARING
@@ -679,13 +731,15 @@ class TestIndianLegalTerminology:
     def test_sarfaesi_notice_classification(self) -> None:
         """Should recognize SARFAESI notices."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "notice",
-            "classification_confidence": 0.90,
-            "secondary_types": [],
-            "keywords_matched": ["SARFAESI", "notice"],
-            "classification_reasoning": "SARFAESI Act recovery notice",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "notice",
+                "classification_confidence": 0.90,
+                "secondary_types": [],
+                "keywords_matched": ["SARFAESI", "notice"],
+                "classification_reasoning": "SARFAESI Act recovery notice",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.NOTICE
@@ -693,13 +747,15 @@ class TestIndianLegalTerminology:
     def test_section_138_classification(self) -> None:
         """Should recognize Section 138 (cheque bounce) cases."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.85,
-            "secondary_types": [{"type": "notice", "confidence": 0.7}],
-            "keywords_matched": ["Section 138", "filed"],
-            "classification_reasoning": "Section 138 (cheque bounce) case filed",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.85,
+                "secondary_types": [{"type": "notice", "confidence": 0.7}],
+                "keywords_matched": ["Section 138", "filed"],
+                "classification_reasoning": "Section 138 (cheque bounce) case filed",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
         assert result.event_type == EventType.FILING
@@ -731,13 +787,15 @@ class TestErrorPaths:
     def test_null_response_fields(self) -> None:
         """Should handle null fields in response."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": None,
-            "secondary_types": None,
-            "keywords_matched": None,
-            "classification_reasoning": None,
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": None,
+                "secondary_types": None,
+                "keywords_matched": None,
+                "classification_reasoning": None,
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -748,10 +806,12 @@ class TestErrorPaths:
     def test_missing_required_fields(self) -> None:
         """Should handle missing required fields."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "notice",
-            # Missing other fields
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "notice",
+                # Missing other fields
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -761,21 +821,23 @@ class TestErrorPaths:
     def test_batch_with_malformed_element(self) -> None:
         """Should handle batch with some malformed elements."""
         classifier = EventClassifier()
-        response_text = json.dumps([
-            {
-                "event_id": "event-1",
-                "event_type": "filing",
-                "classification_confidence": 0.95,
-                "secondary_types": [],
-                "keywords_matched": ["filed"],
-                "classification_reasoning": "Good result",
-            },
-            {
-                # Malformed - missing event_type
-                "event_id": "event-2",
-                "classification_confidence": 0.8,
-            },
-        ])
+        response_text = json.dumps(
+            [
+                {
+                    "event_id": "event-1",
+                    "event_type": "filing",
+                    "classification_confidence": 0.95,
+                    "secondary_types": [],
+                    "keywords_matched": ["filed"],
+                    "classification_reasoning": "Good result",
+                },
+                {
+                    # Malformed - missing event_type
+                    "event_id": "event-2",
+                    "classification_confidence": 0.8,
+                },
+            ]
+        )
 
         events = [
             {"event_id": "event-1"},
@@ -792,13 +854,15 @@ class TestErrorPaths:
     def test_unicode_in_response(self) -> None:
         """Should handle unicode characters in response."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "filing",
-            "classification_confidence": 0.9,
-            "secondary_types": [],
-            "keywords_matched": ["याचिका", "दायर"],  # Hindi: petition, filed
-            "classification_reasoning": "Hindi legal terms detected",
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "filing",
+                "classification_confidence": 0.9,
+                "secondary_types": [],
+                "keywords_matched": ["याचिका", "दायर"],  # Hindi: petition, filed
+                "classification_reasoning": "Hindi legal terms detected",
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -808,15 +872,17 @@ class TestErrorPaths:
     def test_extra_unknown_fields_ignored(self) -> None:
         """Should ignore unknown fields in response."""
         classifier = EventClassifier()
-        response_text = json.dumps({
-            "event_type": "hearing",
-            "classification_confidence": 0.85,
-            "secondary_types": [],
-            "keywords_matched": [],
-            "classification_reasoning": "Hearing",
-            "unknown_field": "should be ignored",
-            "another_unknown": 12345,
-        })
+        response_text = json.dumps(
+            {
+                "event_type": "hearing",
+                "classification_confidence": 0.85,
+                "secondary_types": [],
+                "keywords_matched": [],
+                "classification_reasoning": "Hearing",
+                "unknown_field": "should be ignored",
+                "another_unknown": 12345,
+            }
+        )
 
         result = classifier._parse_single_response(response_text, "event-1")
 
@@ -849,16 +915,18 @@ class TestErrorPaths:
         """Should handle when LLM returns fewer results than events."""
         classifier = EventClassifier()
         # Only 1 result for 3 events
-        response_text = json.dumps([
-            {
-                "event_id": "event-1",
-                "event_type": "filing",
-                "classification_confidence": 0.95,
-                "secondary_types": [],
-                "keywords_matched": ["filed"],
-                "classification_reasoning": "Filing event",
-            },
-        ])
+        response_text = json.dumps(
+            [
+                {
+                    "event_id": "event-1",
+                    "event_type": "filing",
+                    "classification_confidence": 0.95,
+                    "secondary_types": [],
+                    "keywords_matched": ["filed"],
+                    "classification_reasoning": "Filing event",
+                },
+            ]
+        )
 
         events = [
             {"event_id": "event-1"},

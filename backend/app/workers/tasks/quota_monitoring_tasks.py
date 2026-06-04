@@ -135,8 +135,9 @@ def _sanitize_provider_name(provider: str) -> str:
         Sanitized provider name safe for SQL queries.
     """
     import re
+
     # Only allow alphanumeric and underscore
-    return re.sub(r'[^a-zA-Z0-9_]', '', provider)
+    return re.sub(r"[^a-zA-Z0-9_]", "", provider)
 
 
 async def _create_admin_notification(pq, supabase) -> None:
@@ -188,7 +189,11 @@ async def _create_admin_notification(pq, supabase) -> None:
         # Determine severity
         usage_pct = max(pq.token_usage_pct, pq.cost_usage_pct)
         is_critical = usage_pct >= 95
-        priority = NotificationPriorityEnum.HIGH if is_critical else NotificationPriorityEnum.MEDIUM
+        priority = (
+            NotificationPriorityEnum.HIGH
+            if is_critical
+            else NotificationPriorityEnum.MEDIUM
+        )
 
         # F8 fix: Sanitize provider name for safe use in queries
         safe_provider = _sanitize_provider_name(pq.provider)

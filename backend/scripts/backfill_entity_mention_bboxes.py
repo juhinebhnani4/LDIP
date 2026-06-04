@@ -43,7 +43,9 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-async def get_mentions_to_fix(matter_id: str | None = None, limit: int = 5000) -> list[dict]:
+async def get_mentions_to_fix(
+    matter_id: str | None = None, limit: int = 5000
+) -> list[dict]:
     """Get entity mentions with empty bbox_ids.
 
     Args:
@@ -54,9 +56,11 @@ async def get_mentions_to_fix(matter_id: str | None = None, limit: int = 5000) -
         List of mention dicts
     """
     # Get mentions with empty bbox_ids
-    query = supabase.table("entity_mentions").select(
-        "id, entity_id, chunk_id, mention_text, context, page_number, bbox_ids"
-    ).or_("bbox_ids.is.null,bbox_ids.eq.{}")
+    query = (
+        supabase.table("entity_mentions")
+        .select("id, entity_id, chunk_id, mention_text, context, page_number, bbox_ids")
+        .or_("bbox_ids.is.null,bbox_ids.eq.{}")
+    )
 
     response = query.limit(limit).execute()
     mentions = response.data or []
@@ -65,9 +69,13 @@ async def get_mentions_to_fix(matter_id: str | None = None, limit: int = 5000) -
         # Filter by matter_id via entity lookup
         entity_ids = list(set(m["entity_id"] for m in mentions if m.get("entity_id")))
         if entity_ids:
-            entities = supabase.table("identity_nodes").select(
-                "id"
-            ).eq("matter_id", matter_id).in_("id", entity_ids[:500]).execute()
+            entities = (
+                supabase.table("identity_nodes")
+                .select("id")
+                .eq("matter_id", matter_id)
+                .in_("id", entity_ids[:500])
+                .execute()
+            )
             valid_entity_ids = set(e["id"] for e in entities.data or [])
             mentions = [m for m in mentions if m.get("entity_id") in valid_entity_ids]
 
@@ -83,9 +91,13 @@ async def get_chunk_with_bboxes(chunk_id: str) -> dict | None:
     Returns:
         Chunk dict or None
     """
-    response = supabase.table("chunks").select(
-        "id, document_id, page_number, bbox_ids"
-    ).eq("id", chunk_id).single().execute()
+    response = (
+        supabase.table("chunks")
+        .select("id, document_id, page_number, bbox_ids")
+        .eq("id", chunk_id)
+        .single()
+        .execute()
+    )
 
     return response.data
 
@@ -104,9 +116,12 @@ async def get_bboxes_by_ids(bbox_ids: list[str], document_id: str) -> list[dict]
         return []
 
     # Batch fetch (limit to 100 for safety)
-    response = supabase.table("bounding_boxes").select(
-        "id, text, page_number"
-    ).in_("id", bbox_ids[:100]).execute()
+    response = (
+        supabase.table("bounding_boxes")
+        .select("id, text, page_number")
+        .in_("id", bbox_ids[:100])
+        .execute()
+    )
 
     return response.data or []
 
@@ -131,9 +146,12 @@ async def update_mention(
         if page_number is not None:
             update_data["page_number"] = page_number
 
-        response = supabase.table("entity_mentions").update(
-            update_data
-        ).eq("id", mention_id).execute()
+        response = (
+            supabase.table("entity_mentions")
+            .update(update_data)
+            .eq("id", mention_id)
+            .execute()
+        )
 
         return len(response.data or []) > 0
     except Exception as e:
@@ -162,9 +180,9 @@ async def backfill_mentions(
         "mentions_no_match": 0,
     }
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Entity Mention BBox Backfill {'(DRY RUN)' if dry_run else ''}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     # Get mentions to fix
     print("Fetching mentions with empty bbox_ids...")
@@ -238,8 +256,10 @@ async def backfill_mentions(
                 page = matched_page if matched_page is not None else chunk_page
 
                 if dry_run:
-                    mention_preview = mention_text[:30].replace('\n', ' ')
-                    print(f"  Would fix: \"{mention_preview}...\" -> {len(matched_ids)} bboxes, page {page}")
+                    mention_preview = mention_text[:30].replace("\n", " ")
+                    print(
+                        f'  Would fix: "{mention_preview}..." -> {len(matched_ids)} bboxes, page {page}'
+                    )
                 else:
                     success = await update_mention(
                         mention_id=mention_id,
@@ -253,8 +273,10 @@ async def backfill_mentions(
             else:
                 # No match - use chunk's bbox_ids as fallback
                 if dry_run:
-                    mention_preview = mention_text[:30].replace('\n', ' ')
-                    print(f"  Would use chunk bboxes for: \"{mention_preview}...\" -> {len(chunk_bbox_ids)} bboxes")
+                    mention_preview = mention_text[:30].replace("\n", " ")
+                    print(
+                        f'  Would use chunk bboxes for: "{mention_preview}..." -> {len(chunk_bbox_ids)} bboxes'
+                    )
                 else:
                     success = await update_mention(
                         mention_id=mention_id,
@@ -267,9 +289,9 @@ async def backfill_mentions(
                         stats["mentions_no_match"] += 1
 
     # Print summary
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("Summary")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Total mentions:          {stats['total_mentions']}")
     print(f"Mentions checked:        {stats['mentions_checked']}")
     print(f"Mentions fixed:          {stats['mentions_fixed']}")
@@ -303,10 +325,12 @@ def main():
 
     dry_run = not args.execute
 
-    asyncio.run(backfill_mentions(
-        dry_run=dry_run,
-        matter_id=args.matter_id,
-    ))
+    asyncio.run(
+        backfill_mentions(
+            dry_run=dry_run,
+            matter_id=args.matter_id,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -81,7 +81,9 @@ class TestSearchPipelineIntegration:
     ) -> None:
         """Test complete hybrid search from query to ranked results."""
         mock_get_client.return_value = mock_supabase_client
-        mock_validate_results.return_value = mock_supabase_client.rpc.return_value.execute.return_value.data
+        mock_validate_results.return_value = (
+            mock_supabase_client.rpc.return_value.execute.return_value.data
+        )
 
         service = HybridSearchService(embedder=mock_embedder)
 
@@ -94,7 +96,9 @@ class TestSearchPipelineIntegration:
         )
 
         # Verify pipeline execution
-        mock_embedder.embed_text.assert_called_once_with("contract termination remedies")
+        mock_embedder.embed_text.assert_called_once_with(
+            "contract termination remedies"
+        )
         mock_supabase_client.rpc.assert_called_once()
 
         # Verify results structure
@@ -119,7 +123,9 @@ class TestSearchPipelineIntegration:
     ) -> None:
         """Test search with boosted BM25 weight for exact term matching."""
         mock_get_client.return_value = mock_supabase_client
-        mock_validate_results.return_value = mock_supabase_client.rpc.return_value.execute.return_value.data
+        mock_validate_results.return_value = (
+            mock_supabase_client.rpc.return_value.execute.return_value.data
+        )
 
         service = HybridSearchService(embedder=mock_embedder)
 
@@ -155,7 +161,9 @@ class TestSearchPipelineIntegration:
     ) -> None:
         """Verify search results contain all required fields for frontend."""
         mock_get_client.return_value = mock_supabase_client
-        mock_validate_results.return_value = mock_supabase_client.rpc.return_value.execute.return_value.data
+        mock_validate_results.return_value = (
+            mock_supabase_client.rpc.return_value.execute.return_value.data
+        )
 
         service = HybridSearchService(embedder=mock_embedder)
         result = await service.search(
@@ -418,12 +426,14 @@ class TestRerankPipelineIntegration:
         # Mock reranker - returns results reordered by relevance
         # Note: Index 2 (material breach) is most relevant to "termination" query
         mock_reranker = MagicMock()
-        mock_reranker.rerank = AsyncMock(return_value=MagicMock(
-            results=[
-                MagicMock(index=2, relevance_score=0.95),  # material breach
-                MagicMock(index=0, relevance_score=0.87),  # termination clause
-            ],
-        ))
+        mock_reranker.rerank = AsyncMock(
+            return_value=MagicMock(
+                results=[
+                    MagicMock(index=2, relevance_score=0.95),  # material breach
+                    MagicMock(index=0, relevance_score=0.87),  # termination clause
+                ],
+            )
+        )
         mock_get_rerank.return_value = mock_reranker
 
         service = HybridSearchService(embedder=mock_embedder)
@@ -470,10 +480,12 @@ class TestRerankPipelineIntegration:
 
         # Mock reranker to fail
         mock_reranker = MagicMock()
-        mock_reranker.rerank = AsyncMock(side_effect=CohereRerankServiceError(
-            message="Cohere API rate limit exceeded",
-            code="COHERE_API_ERROR",
-        ))
+        mock_reranker.rerank = AsyncMock(
+            side_effect=CohereRerankServiceError(
+                message="Cohere API rate limit exceeded",
+                code="COHERE_API_ERROR",
+            )
+        )
         mock_get_rerank.return_value = mock_reranker
 
         service = HybridSearchService(embedder=mock_embedder)
@@ -549,9 +561,11 @@ class TestRerankPipelineIntegration:
 
         # Mock reranker
         mock_reranker = MagicMock()
-        mock_reranker.rerank = AsyncMock(return_value=MagicMock(
-            results=[MagicMock(index=0, relevance_score=0.9)],
-        ))
+        mock_reranker.rerank = AsyncMock(
+            return_value=MagicMock(
+                results=[MagicMock(index=0, relevance_score=0.9)],
+            )
+        )
         mock_get_rerank.return_value = mock_reranker
 
         service = HybridSearchService(embedder=mock_embedder)

@@ -107,23 +107,32 @@ class ExportEligibilityService:
 
         try:
             # Story 3.2: First, fetch matter's verification_mode
-            matter_result = supabase.table("matters").select(
-                "verification_mode"
-            ).eq("id", matter_id).execute()
+            matter_result = (
+                supabase.table("matters")
+                .select("verification_mode")
+                .eq("id", matter_id)
+                .execute()
+            )
 
             verification_mode = "advisory"  # Default
             if matter_result.data and len(matter_result.data) > 0:
-                verification_mode = matter_result.data[0].get("verification_mode", "advisory")
+                verification_mode = matter_result.data[0].get(
+                    "verification_mode", "advisory"
+                )
 
             is_court_ready = verification_mode == "required"
 
             if is_court_ready:
                 # Story 3.2: Court-ready mode - ALL pending findings block export
-                blocking_result = supabase.table("finding_verifications").select(
-                    "id, finding_id, finding_type, finding_summary, confidence_before"
-                ).eq("matter_id", matter_id).eq(
-                    "decision", VerificationDecision.PENDING.value
-                ).execute()
+                blocking_result = (
+                    supabase.table("finding_verifications")
+                    .select(
+                        "id, finding_id, finding_type, finding_summary, confidence_before"
+                    )
+                    .eq("matter_id", matter_id)
+                    .eq("decision", VerificationDecision.PENDING.value)
+                    .execute()
+                )
 
                 blocking_findings = [
                     ExportBlockingFinding(
@@ -157,25 +166,26 @@ class ExportEligibilityService:
                 blocking_result, warning_result = await asyncio.gather(
                     # Query for pending verifications at or below blocking threshold
                     asyncio.to_thread(
-                        lambda: supabase.table("finding_verifications").select(
+                        lambda: supabase.table("finding_verifications")
+                        .select(
                             "id, finding_id, finding_type, finding_summary, confidence_before"
-                        ).eq("matter_id", matter_id).eq(
-                            "decision", VerificationDecision.PENDING.value
-                        ).lte(
-                            "confidence_before", self._export_block_threshold
-                        ).execute()
+                        )
+                        .eq("matter_id", matter_id)
+                        .eq("decision", VerificationDecision.PENDING.value)
+                        .lte("confidence_before", self._export_block_threshold)
+                        .execute()
                     ),
                     # Story 12-3: Query for warning findings (70-90% confidence, pending)
                     asyncio.to_thread(
-                        lambda: supabase.table("finding_verifications").select(
+                        lambda: supabase.table("finding_verifications")
+                        .select(
                             "id, finding_id, finding_type, finding_summary, confidence_before"
-                        ).eq("matter_id", matter_id).eq(
-                            "decision", VerificationDecision.PENDING.value
-                        ).gt(
-                            "confidence_before", self._export_block_threshold
-                        ).lte(
-                            "confidence_before", self._warning_upper_threshold
-                        ).execute()
+                        )
+                        .eq("matter_id", matter_id)
+                        .eq("decision", VerificationDecision.PENDING.value)
+                        .gt("confidence_before", self._export_block_threshold)
+                        .lte("confidence_before", self._warning_upper_threshold)
+                        .execute()
                     ),
                 )
 
@@ -213,7 +223,9 @@ class ExportEligibilityService:
                             f"Some findings (70-90% confidence) are suggested for verification."
                         )
                     else:
-                        message = "All required verifications complete. Export is allowed."
+                        message = (
+                            "All required verifications complete. Export is allowed."
+                        )
                 else:
                     message = (
                         f"Export blocked: {blocking_count} finding(s) with confidence "

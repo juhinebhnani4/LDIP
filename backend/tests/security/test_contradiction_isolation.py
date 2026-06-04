@@ -34,7 +34,9 @@ class TestContradictionMatterIsolation:
         return MagicMock()
 
     @pytest.fixture
-    def service(self, mock_mig_service: MagicMock, mock_engine: MagicMock) -> StatementQueryService:
+    def service(
+        self, mock_mig_service: MagicMock, mock_engine: MagicMock
+    ) -> StatementQueryService:
         """Create service instance with mocked dependencies."""
         svc = StatementQueryService()
         svc._mig_service = mock_mig_service
@@ -136,7 +138,9 @@ class TestContradictionCrossEntityIsolation:
         return MagicMock()
 
     @pytest.fixture
-    def service(self, mock_mig_service: MagicMock, mock_engine: MagicMock) -> StatementQueryService:
+    def service(
+        self, mock_mig_service: MagicMock, mock_engine: MagicMock
+    ) -> StatementQueryService:
         """Create service instance with mocked dependencies."""
         svc = StatementQueryService()
         svc._mig_service = mock_mig_service

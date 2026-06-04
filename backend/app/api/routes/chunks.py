@@ -185,7 +185,9 @@ async def get_document_chunks(
     User must have access to the document's matter.
     """
     # Verify access to document
-    _verify_document_access(document_id, current_user.id, document_service, matter_service)
+    _verify_document_access(
+        document_id, current_user.id, document_service, matter_service
+    )
 
     try:
         chunks, parent_count, child_count = chunk_service.get_chunks_for_document(
@@ -243,7 +245,9 @@ async def get_chunk(
 
     User must have access to the chunk's matter.
     """
-    chunk = _verify_chunk_access(chunk_id, current_user.id, chunk_service, matter_service)
+    chunk = _verify_chunk_access(
+        chunk_id, current_user.id, chunk_service, matter_service
+    )
 
     return ChunkResponse(data=chunk)
 

@@ -260,7 +260,9 @@ class DateExtractor(ReasoningCaptureMixin):
             # Track costs (Gemini doesn't expose token counts, so estimate)
             input_tokens = estimate_tokens(prompt)
             output_tokens = estimate_tokens(response_text) if response_text else 0
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             cost_tracker.log_cost()
             await persist_cost(cost_tracker)
 
@@ -418,13 +420,9 @@ class DateExtractor(ReasoningCaptureMixin):
 
         # Pre-compute sentence boundaries for smarter splitting
         # Match sentence endings: period/question/exclamation followed by space or newline
-        sentence_boundaries = [
-            m.end() for m in re.finditer(r'[.!?]\s+', text)
-        ]
+        sentence_boundaries = [m.end() for m in re.finditer(r"[.!?]\s+", text)]
         # Also consider paragraph breaks as boundaries
-        paragraph_boundaries = [
-            m.end() for m in re.finditer(r'\n\s*\n', text)
-        ]
+        paragraph_boundaries = [m.end() for m in re.finditer(r"\n\s*\n", text)]
         # Combine and sort all boundaries
         all_boundaries = sorted(set(sentence_boundaries + paragraph_boundaries))
 
@@ -448,7 +446,7 @@ class DateExtractor(ReasoningCaptureMixin):
                     end = best_boundary
                 else:
                     # Fallback: try simple sentence ending patterns
-                    for pattern in ['. ', '.\n', '? ', '!\n', '; ', ';\n']:
+                    for pattern in [". ", ".\n", "? ", "!\n", "; ", ";\n"]:
                         last_match = text.rfind(pattern, search_start, end)
                         if last_match > search_start:
                             end = last_match + len(pattern)
@@ -463,7 +461,7 @@ class DateExtractor(ReasoningCaptureMixin):
                 # Find the start of the sentence containing the boundary
                 # Look back for sentence start to preserve context
                 overlap_start = max(end - overlap, start)
-                for pattern in ['. ', '.\n', '? ', '!\n']:
+                for pattern in [". ", ".\n", "? ", "!\n"]:
                     sentence_start = text.rfind(pattern, overlap_start, end)
                     if sentence_start > overlap_start:
                         overlap = end - sentence_start - 2
@@ -624,7 +622,9 @@ class DateExtractor(ReasoningCaptureMixin):
             response_text = response.text if response.text else ""
             input_tokens = estimate_tokens(prompt)
             output_tokens = estimate_tokens(response_text)
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             cost_tracker.log_cost()
             persist_cost_sync(cost_tracker)
 
@@ -795,19 +795,19 @@ class DateExtractor(ReasoningCaptureMixin):
 
         repaired = text.strip()
         # Remove trailing incomplete key-value pairs (e.g., truncated mid-string)
-        repaired = re.sub(r',\s*"[^"]*"?\s*:\s*"?[^"]*$', '', repaired)
+        repaired = re.sub(r',\s*"[^"]*"?\s*:\s*"?[^"]*$', "", repaired)
         # Remove trailing comma
-        repaired = re.sub(r',\s*$', '', repaired)
+        repaired = re.sub(r",\s*$", "", repaired)
 
         # Close any open brackets/braces
-        open_braces = repaired.count('{') - repaired.count('}')
-        open_brackets = repaired.count('[') - repaired.count(']')
+        open_braces = repaired.count("{") - repaired.count("}")
+        open_brackets = repaired.count("[") - repaired.count("]")
 
         # Close open strings — if odd number of unescaped quotes, add one
         # (simplified: just try parsing and if it fails, skip)
 
-        repaired += ']' * max(0, open_brackets)
-        repaired += '}' * max(0, open_braces)
+        repaired += "]" * max(0, open_brackets)
+        repaired += "}" * max(0, open_braces)
 
         try:
             result = json.loads(repaired)
@@ -845,7 +845,7 @@ class DateExtractor(ReasoningCaptureMixin):
 
         # Reject bracket numbers misidentified as dates (e.g., [993], [994])
         # These are paragraph references in legal documents, not years
-        if re.match(r'^\[?\d{3,4}\]?$', date_text):
+        if re.match(r"^\[?\d{3,4}\]?$", date_text):
             logger.debug(
                 "date_rejected_bracket_number",
                 date_text=date_text,
@@ -859,7 +859,7 @@ class DateExtractor(ReasoningCaptureMixin):
 
         # Sanitize date_text: fix OCR artifacts like extra digits in years (e.g., "8/10/20214" → "8/10/2021")
         # Match year-like sequences of 5+ digits and truncate to 4
-        date_text = re.sub(r'(\d{4})\d+', r'\1', date_text)
+        date_text = re.sub(r"(\d{4})\d+", r"\1", date_text)
 
         # Parse date string
         try:
@@ -917,14 +917,28 @@ class DateExtractor(ReasoningCaptureMixin):
 
         # Parse event type and description
         event_type = raw_date.get("event_type", "unclassified")
-        valid_event_types = ["filing", "hearing", "order", "notice", "transaction", "document", "deadline", "incident", "unclassified"]
+        valid_event_types = [
+            "filing",
+            "hearing",
+            "order",
+            "notice",
+            "transaction",
+            "document",
+            "deadline",
+            "incident",
+            "unclassified",
+        ]
         if event_type not in valid_event_types:
             event_type = "unclassified"
 
         event_description = raw_date.get("event_description", "")
         if not event_description:
             # Fallback: use truncated context as description
-            context = raw_date.get("context_before", "") + " " + raw_date.get("context_after", "")
+            context = (
+                raw_date.get("context_before", "")
+                + " "
+                + raw_date.get("context_after", "")
+            )
             event_description = context.strip()[:100] if context.strip() else ""
 
         # Parse event_source (primary vs referenced) from LLM response
@@ -989,11 +1003,11 @@ class DateExtractor(ReasoningCaptureMixin):
             if not content or not content.strip():
                 continue
             # Cap each chunk at MAX_TEXT_LENGTH (same as single-chunk mode)
-            truncated = content[:MAX_TEXT_LENGTH] if len(content) > MAX_TEXT_LENGTH else content
-            page_num = chunk.get("page_number", "unknown")
-            marked_sections.append(
-                f"[CHUNK:{chunk_id}] (page {page_num})\n{truncated}"
+            truncated = (
+                content[:MAX_TEXT_LENGTH] if len(content) > MAX_TEXT_LENGTH else content
             )
+            page_num = chunk.get("page_number", "unknown")
+            marked_sections.append(f"[CHUNK:{chunk_id}] (page {page_num})\n{truncated}")
 
         # If no valid content, return empty results for all chunks
         if not marked_sections:
@@ -1046,7 +1060,9 @@ class DateExtractor(ReasoningCaptureMixin):
             response_text = response.text if response.text else ""
             input_tokens = estimate_tokens(prompt)
             output_tokens = estimate_tokens(response_text)
-            cost_tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens)
+            cost_tracker.add_tokens(
+                input_tokens=input_tokens, output_tokens=output_tokens
+            )
             cost_tracker.log_cost()
             persist_cost_sync(cost_tracker)
 

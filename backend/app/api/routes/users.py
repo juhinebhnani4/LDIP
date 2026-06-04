@@ -50,7 +50,8 @@ class UserPreferences(BaseModel):
     """User preferences for notifications and appearance."""
 
     email_notifications_processing: bool = Field(
-        default=True, description="Email notifications for document processing completion"
+        default=True,
+        description="Email notifications for document processing completion",
     )
     email_notifications_verification: bool = Field(
         default=True, description="Email notifications for verification reminders"
@@ -119,8 +120,14 @@ class UpdateProfileRequest(BaseModel):
 
 async def ensure_preferences_exist(supabase: Client, user_id: str) -> None:
     """Create default preferences if they don't exist."""
+
     def _ensure():
-        result = supabase.table("user_preferences").select("user_id").eq("user_id", user_id).execute()
+        result = (
+            supabase.table("user_preferences")
+            .select("user_id")
+            .eq("user_id", user_id)
+            .execute()
+        )
         if not result.data:
             supabase.table("user_preferences").insert({"user_id": user_id}).execute()
 
@@ -149,7 +156,11 @@ async def get_user_preferences(
 
     # Fetch preferences (in thread to avoid blocking event loop)
     result = await asyncio.to_thread(
-        lambda: supabase.table("user_preferences").select("*").eq("user_id", user_id).single().execute()
+        lambda: supabase.table("user_preferences")
+        .select("*")
+        .eq("user_id", user_id)
+        .single()
+        .execute()
     )
 
     if not result.data:
@@ -160,7 +171,9 @@ async def get_user_preferences(
 
     return UserPreferencesResponse(
         email_notifications_processing=result.data["email_notifications_processing"],
-        email_notifications_verification=result.data["email_notifications_verification"],
+        email_notifications_verification=result.data[
+            "email_notifications_verification"
+        ],
         browser_notifications=result.data["browser_notifications"],
         theme=result.data["theme"],
         power_user_mode=result.data.get("power_user_mode", False),
@@ -267,7 +280,9 @@ async def sign_out_all_devices(
 
     try:
         # Sign out user from all sessions via Supabase Admin API (in thread)
-        await asyncio.to_thread(lambda: supabase.auth.admin.sign_out(user_id, scope="global"))
+        await asyncio.to_thread(
+            lambda: supabase.auth.admin.sign_out(user_id, scope="global")
+        )
         return {"message": "Successfully signed out from all devices"}
     except Exception as e:
         raise HTTPException(
@@ -332,15 +347,20 @@ async def update_user_profile(
     try:
         result = await asyncio.to_thread(
             supabase.auth.admin.update_user_by_id,
-            user_id, {"user_metadata": metadata_update},
+            user_id,
+            {"user_metadata": metadata_update},
         )
 
         if result.user:
             return UserProfile(
                 id=result.user.id,
                 email=result.user.email or "",
-                full_name=result.user.user_metadata.get("full_name") if result.user.user_metadata else None,
-                avatar_url=result.user.user_metadata.get("avatar_url") if result.user.user_metadata else None,
+                full_name=result.user.user_metadata.get("full_name")
+                if result.user.user_metadata
+                else None,
+                avatar_url=result.user.user_metadata.get("avatar_url")
+                if result.user.user_metadata
+                else None,
             )
     except Exception as e:
         raise HTTPException(

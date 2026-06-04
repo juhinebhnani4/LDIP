@@ -39,17 +39,19 @@ def mock_bounding_boxes():
     bboxes = []
     for page in range(1, 201):
         for roi in range(20):  # 20 bboxes per page
-            bboxes.append({
-                "id": str(uuid4()),
-                "document_id": "doc-123",
-                "page_number": page,
-                "reading_order_index": roi,
-                "text": f"Page {page}, block {roi}",
-                "x": 72 + (roi % 5) * 100,
-                "y": 72 + (roi // 5) * 100,
-                "width": 90,
-                "height": 20,
-            })
+            bboxes.append(
+                {
+                    "id": str(uuid4()),
+                    "document_id": "doc-123",
+                    "page_number": page,
+                    "reading_order_index": roi,
+                    "text": f"Page {page}, block {roi}",
+                    "x": 72 + (roi % 5) * 100,
+                    "y": 72 + (roi // 5) * 100,
+                    "width": 90,
+                    "height": 20,
+                }
+            )
     return bboxes
 
 
@@ -88,16 +90,19 @@ class TestChunkBboxIdValidation:
 
             # Get bboxes for this page range
             chunk_bboxes = [
-                b for b in mock_bounding_boxes
+                b
+                for b in mock_bounding_boxes
                 if page_start <= b["page_number"] <= page_end
             ]
             bbox_ids = [b["id"] for b in chunk_bboxes]
 
-            chunks.append({
-                "page_start": page_start,
-                "page_end": page_end,
-                "bbox_ids": bbox_ids,
-            })
+            chunks.append(
+                {
+                    "page_start": page_start,
+                    "page_end": page_end,
+                    "bbox_ids": bbox_ids,
+                }
+            )
 
         # Verify each chunk has bbox_ids
         for i, chunk in enumerate(chunks):
@@ -113,7 +118,8 @@ class TestChunkBboxIdValidation:
             page_end = min(page_start + 9, 200)
 
             chunk_bboxes = [
-                b for b in mock_bounding_boxes
+                b
+                for b in mock_bounding_boxes
                 if page_start <= b["page_number"] <= page_end
             ]
             bbox_ids = [b["id"] for b in chunk_bboxes]
@@ -134,13 +140,15 @@ class TestChunkBboxIdValidation:
 
         # Simulate chunk with mixed page bboxes
         chunk_bbox_ids = [
-            b["id"] for b in mock_bounding_boxes
+            b["id"]
+            for b in mock_bounding_boxes
             if b["page_number"] in [150, 150, 150, 151, 152]  # Majority on 150
         ]
 
         # Count page occurrences
         page_counts = Counter(
-            bbox_lookup[bid]["page_number"] for bid in chunk_bbox_ids
+            bbox_lookup[bid]["page_number"]
+            for bid in chunk_bbox_ids
             if bid in bbox_lookup
         )
 
@@ -216,9 +224,7 @@ class TestHighlightingIntegration:
 
     def test_page_150_highlighting(self, mock_bounding_boxes):
         """Highlighting on page 150 uses correct coordinates."""
-        page_150_bboxes = [
-            b for b in mock_bounding_boxes if b["page_number"] == 150
-        ]
+        page_150_bboxes = [b for b in mock_bounding_boxes if b["page_number"] == 150]
 
         assert len(page_150_bboxes) == 20  # 20 bboxes per page
 
@@ -244,8 +250,7 @@ class TestEntityMentionBboxValidation:
             "document_id": "doc-123",
             "page_number": 75,
             "bbox_ids": [
-                b["id"] for b in mock_bounding_boxes
-                if b["page_number"] == 75
+                b["id"] for b in mock_bounding_boxes if b["page_number"] == 75
             ][:3],  # First 3 bboxes on page 75
         }
 
@@ -290,15 +295,17 @@ class TestOCRChunkingPipelineIntegration:
             bboxes = []
             for rel_page in range(1, page_count + 1):
                 for roi in range(20):
-                    bboxes.append({
-                        "page": rel_page,
-                        "reading_order_index": roi,
-                        "text": f"Chunk {i}, page {rel_page}, block {roi}",
-                        "x": 72,
-                        "y": 72 + roi * 30,
-                        "width": 468,
-                        "height": 20,
-                    })
+                    bboxes.append(
+                        {
+                            "page": rel_page,
+                            "reading_order_index": roi,
+                            "text": f"Chunk {i}, page {rel_page}, block {roi}",
+                            "x": 72,
+                            "y": 72 + roi * 30,
+                            "width": 468,
+                            "height": 20,
+                        }
+                    )
 
             ocr_chunks.append(
                 ChunkOCRResult(
@@ -372,7 +379,11 @@ class TestDownstreamProcessing:
                 page_start=1,
                 page_end=25,
                 bounding_boxes=[
-                    {"page": 1, "text": "Legal contract terms", "reading_order_index": i}
+                    {
+                        "page": 1,
+                        "text": "Legal contract terms",
+                        "reading_order_index": i,
+                    }
                     for i in range(10)
                 ],
                 full_text="Legal contract terms " * 100,
@@ -402,9 +413,21 @@ class TestDownstreamProcessing:
                 page_start=1,
                 page_end=25,
                 bounding_boxes=[
-                    {"page": 1, "text": "John Smith signed the agreement", "reading_order_index": 0},
-                    {"page": 1, "text": "on January 15, 2024", "reading_order_index": 1},
-                    {"page": 1, "text": "at Acme Corporation", "reading_order_index": 2},
+                    {
+                        "page": 1,
+                        "text": "John Smith signed the agreement",
+                        "reading_order_index": 0,
+                    },
+                    {
+                        "page": 1,
+                        "text": "on January 15, 2024",
+                        "reading_order_index": 1,
+                    },
+                    {
+                        "page": 1,
+                        "text": "at Acme Corporation",
+                        "reading_order_index": 2,
+                    },
                 ],
                 full_text="John Smith signed the agreement on January 15, 2024 at Acme Corporation",
                 overall_confidence=0.95,

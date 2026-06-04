@@ -278,11 +278,11 @@ class TestProcessDocumentTask:
         mock_services: dict,
     ) -> None:
         """Should handle DocumentServiceError without retry."""
-        mock_services["document_service"].get_document_for_processing.side_effect = (
-            DocumentServiceError(
-                message="Document not found",
-                code="NOT_FOUND",
-            )
+        mock_services[
+            "document_service"
+        ].get_document_for_processing.side_effect = DocumentServiceError(
+            message="Document not found",
+            code="NOT_FOUND",
         )
 
         mock_get_doc.return_value = mock_services["document_service"]
@@ -473,19 +473,21 @@ class TestExtractEntitiesTask:
 
         # Mock graph service
         graph_service = MagicMock()
-        graph_service.save_entities = MagicMock(return_value=[
-            EntityNode(
-                id="entity-123",
-                matter_id="matter-123",
-                canonical_name="Test Person",
-                entity_type=EntityType.PERSON,
-                metadata={},
-                mention_count=1,
-                aliases=[],
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            )
-        ])
+        graph_service.save_entities = MagicMock(
+            return_value=[
+                EntityNode(
+                    id="entity-123",
+                    matter_id="matter-123",
+                    canonical_name="Test Person",
+                    entity_type=EntityType.PERSON,
+                    metadata={},
+                    mention_count=1,
+                    aliases=[],
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            ]
+        )
 
         return {
             "document_service": doc_service,
@@ -509,7 +511,12 @@ class TestExtractEntitiesTask:
         # Mock chunks query
         mock_response = MagicMock()
         mock_response.data = [
-            {"id": "chunk-1", "content": "Test content", "chunk_type": "child", "page_number": 1},
+            {
+                "id": "chunk-1",
+                "content": "Test content",
+                "chunk_type": "child",
+                "page_number": 1,
+            },
         ]
         mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
 
@@ -519,19 +526,21 @@ class TestExtractEntitiesTask:
         from app.models.entity import EntityNode, EntityType
 
         # Make graph_service.save_entities an async mock with proper return value
-        mock_mig_services["mig_graph_service"].save_entities = AsyncMock(return_value=[
-            EntityNode(
-                id="entity-123",
-                matter_id="matter-123",
-                canonical_name="Test Person",
-                entity_type=EntityType.PERSON,
-                metadata={},
-                mention_count=1,
-                aliases=[],
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            )
-        ])
+        mock_mig_services["mig_graph_service"].save_entities = AsyncMock(
+            return_value=[
+                EntityNode(
+                    id="entity-123",
+                    matter_id="matter-123",
+                    canonical_name="Test Person",
+                    entity_type=EntityType.PERSON,
+                    metadata={},
+                    mention_count=1,
+                    aliases=[],
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            ]
+        )
 
         # Execute task with prev_result indicating successful embedding
         result = extract_entities.run(
@@ -641,11 +650,9 @@ class TestContradictionTimeoutConstants:
         # Typical case: 80% finish in 10s, 20% take full timeout
         fast_entities = int(CONTRADICTION_MAX_ENTITIES_PER_RUN * 0.8)
         slow_entities = CONTRADICTION_MAX_ENTITIES_PER_RUN - fast_entities
-        typical_time = (
-            (fast_entities / CONTRADICTION_CONCURRENCY_LIMIT) * 10
-            + (slow_entities / CONTRADICTION_CONCURRENCY_LIMIT)
-            * CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS
-        )
+        typical_time = (fast_entities / CONTRADICTION_CONCURRENCY_LIMIT) * 10 + (
+            slow_entities / CONTRADICTION_CONCURRENCY_LIMIT
+        ) * CONTRADICTION_PER_ENTITY_TIMEOUT_SECONDS
         # Typical case should fit in 1200s (20 min soft limit)
         assert typical_time < 1200, (
             f"Typical processing time {typical_time:.0f}s exceeds 1200s soft limit"

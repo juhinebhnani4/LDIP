@@ -153,12 +153,24 @@ async def generate_export(
 
     # Get user info for verification summary
     try:
-        user_result = db.table("profiles").select(
-            "email, full_name"
-        ).eq("id", membership.user_id).single().execute()
+        user_result = (
+            db.table("profiles")
+            .select("email, full_name")
+            .eq("id", membership.user_id)
+            .single()
+            .execute()
+        )
 
-        user_email = user_result.data.get("email", "unknown@example.com") if user_result.data else "unknown@example.com"
-        user_name = user_result.data.get("full_name", "Unknown User") if user_result.data else "Unknown User"
+        user_email = (
+            user_result.data.get("email", "unknown@example.com")
+            if user_result.data
+            else "unknown@example.com"
+        )
+        user_name = (
+            user_result.data.get("full_name", "Unknown User")
+            if user_result.data
+            else "Unknown User"
+        )
     except Exception:
         user_email = "unknown@example.com"
         user_name = "Unknown User"
@@ -238,9 +250,14 @@ async def get_export(
         ExportResponse with export record.
     """
     try:
-        result = db.table("exports").select(
-            "*"
-        ).eq("id", export_id).eq("matter_id", matter_id).single().execute()
+        result = (
+            db.table("exports")
+            .select("*")
+            .eq("id", export_id)
+            .eq("matter_id", matter_id)
+            .single()
+            .execute()
+        )
 
         if not result.data:
             raise HTTPException(
@@ -261,7 +278,9 @@ async def get_export(
                     result.data["file_path"],
                     expires_in=3600,
                 )
-                result.data["download_url"] = signed_url.get("signedURL", signed_url.get("signedUrl", ""))
+                result.data["download_url"] = signed_url.get(
+                    "signedURL", signed_url.get("signedUrl", "")
+                )
             except Exception:
                 pass
 
@@ -324,11 +343,14 @@ async def list_exports(
         List of export records.
     """
     try:
-        result = db.table("exports").select(
-            "id, format, status, file_name, created_at, completed_at"
-        ).eq("matter_id", matter_id).order(
-            "created_at", desc=True
-        ).limit(limit).execute()
+        result = (
+            db.table("exports")
+            .select("id, format, status, file_name, created_at, completed_at")
+            .eq("matter_id", matter_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
 
         return {"data": result.data or []}
 
@@ -415,9 +437,12 @@ async def generate_executive_summary(
 
         # Generate filename
         date_str = now.strftime("%Y-%m-%d")
-        safe_name = "".join(
-            c for c in content.matter_name if c.isalnum() or c in " -_"
-        )[:50].strip() or "Matter"
+        safe_name = (
+            "".join(c for c in content.matter_name if c.isalnum() or c in " -_")[
+                :50
+            ].strip()
+            or "Matter"
+        )
         file_name = f"{safe_name}-Executive-Summary-{date_str}.pdf"
 
         # Upload to storage
@@ -436,7 +461,9 @@ async def generate_executive_summary(
                 file_path,
                 expires_in=3600,
             )
-            download_url = signed_result.get("signedURL", signed_result.get("signedUrl", ""))
+            download_url = signed_result.get(
+                "signedURL", signed_result.get("signedUrl", "")
+            )
 
         except Exception as upload_error:
             logger.error(

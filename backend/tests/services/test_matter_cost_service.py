@@ -93,7 +93,9 @@ class TestMatterCostService:
         assert len(summary.by_provider) == 2  # Gemini, GPT-4
 
         # Check by_operation breakdown
-        citation_cost = next((op for op in summary.by_operation if op.operation == "Citations"), None)
+        citation_cost = next(
+            (op for op in summary.by_operation if op.operation == "Citations"), None
+        )
         assert citation_cost is not None
         assert citation_cost.cost_inr == 19.00  # 10.50 + 8.50
         assert citation_cost.operation_count == 2
@@ -155,4 +157,7 @@ class TestMatterCostService:
 
     def test_normalize_operation_unknown(self, cost_service):
         """Test operation normalization for unknown operations."""
-        assert cost_service._normalize_operation("some_new_operation") == "Some New Operation"
+        assert (
+            cost_service._normalize_operation("some_new_operation")
+            == "Some New Operation"
+        )

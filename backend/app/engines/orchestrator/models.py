@@ -156,11 +156,7 @@ class MultiIntentClassification:
     @property
     def required_engines(self) -> set[EngineType]:
         """All engines meeting inclusion threshold."""
-        return {
-            s.engine
-            for s in self.signals
-            if s.confidence >= INCLUSION_THRESHOLD
-        }
+        return {s.engine for s in self.signals if s.confidence >= INCLUSION_THRESHOLD}
 
     @property
     def primary_engine(self) -> EngineType:
@@ -220,9 +216,13 @@ class MultiIntentClassification:
             "compound_intent": {
                 "name": self.compound_intent.name,
                 "primary_engine": self.compound_intent.primary_engine.value,
-                "supporting_engines": [e.value for e in self.compound_intent.supporting_engines],
+                "supporting_engines": [
+                    e.value for e in self.compound_intent.supporting_engines
+                ],
                 "aggregation_strategy": self.compound_intent.aggregation_strategy,
-            } if self.compound_intent else None,
+            }
+            if self.compound_intent
+            else None,
             "reasoning": self.reasoning,
             "llm_was_used": self.llm_was_used,
         }
@@ -245,7 +245,9 @@ class MultiIntentClassification:
             compound = CompoundIntent(
                 name=compound_data["name"],
                 primary_engine=EngineType(compound_data["primary_engine"]),
-                supporting_engines=[EngineType(e) for e in compound_data["supporting_engines"]],
+                supporting_engines=[
+                    EngineType(e) for e in compound_data["supporting_engines"]
+                ],
                 aggregation_strategy=compound_data["aggregation_strategy"],
             )
 

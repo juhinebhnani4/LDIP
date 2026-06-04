@@ -25,7 +25,9 @@ from app.services.matter_service import MatterService
 from app.services.supabase.client import get_supabase_client as get_supabase
 
 router = APIRouter(prefix="/matters/{matter_id}/tables", tags=["tables"])
-document_tables_router = APIRouter(prefix="/documents/{document_id}/tables", tags=["tables"])
+document_tables_router = APIRouter(
+    prefix="/documents/{document_id}/tables", tags=["tables"]
+)
 logger = structlog.get_logger(__name__)
 
 
@@ -125,7 +127,9 @@ async def get_matter_tables(
     document_id: str | None = Query(None, description="Filter by document"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
-    min_confidence: float = Query(0.0, ge=0.0, le=1.0, description="Minimum confidence"),
+    min_confidence: float = Query(
+        0.0, ge=0.0, le=1.0, description="Minimum confidence"
+    ),
     current_user: AuthenticatedUser = Depends(get_current_user),
     matter_service: MatterService = Depends(get_matter_service),
 ) -> TableListResponse:

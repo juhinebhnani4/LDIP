@@ -81,7 +81,9 @@ class SafetyGuard:
             llm_enabled=self._llm_enabled,
         )
 
-    async def check_query(self, query: str, matter_id: str | None = None) -> SafetyCheckResult:
+    async def check_query(
+        self, query: str, matter_id: str | None = None
+    ) -> SafetyCheckResult:
         """Check query against both regex and LLM guardrails.
 
         Story 8-1 + 8-2: Combined safety pipeline.

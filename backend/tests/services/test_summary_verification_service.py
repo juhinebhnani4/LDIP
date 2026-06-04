@@ -53,18 +53,22 @@ class TestRecordVerification:
     ) -> None:
         """Should record verification successfully."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "verification-123",
-            "matter_id": "matter-123",
-            "section_type": "subject_matter",
-            "section_id": "main",
-            "decision": "verified",
-            "notes": "Approved",
-            "verified_by": "user-123",
-            "verified_at": "2026-01-16T10:00:00Z",
-        }]
+        mock_result.data = [
+            {
+                "id": "verification-123",
+                "matter_id": "matter-123",
+                "section_type": "subject_matter",
+                "section_id": "main",
+                "decision": "verified",
+                "notes": "Approved",
+                "verified_by": "user-123",
+                "verified_at": "2026-01-16T10:00:00Z",
+            }
+        ]
 
-        mock_supabase.table.return_value.upsert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.upsert.return_value.execute.return_value = (
+            mock_result
+        )
 
         result = await verification_service_with_mock.record_verification(
             matter_id="matter-123",
@@ -85,18 +89,22 @@ class TestRecordVerification:
     ) -> None:
         """Should update existing verification via upsert."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "verification-123",
-            "matter_id": "matter-123",
-            "section_type": "subject_matter",
-            "section_id": "main",
-            "decision": "flagged",
-            "notes": "Needs review",
-            "verified_by": "user-456",
-            "verified_at": "2026-01-16T11:00:00Z",
-        }]
+        mock_result.data = [
+            {
+                "id": "verification-123",
+                "matter_id": "matter-123",
+                "section_type": "subject_matter",
+                "section_id": "main",
+                "decision": "flagged",
+                "notes": "Needs review",
+                "verified_by": "user-456",
+                "verified_at": "2026-01-16T11:00:00Z",
+            }
+        ]
 
-        mock_supabase.table.return_value.upsert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.upsert.return_value.execute.return_value = (
+            mock_result
+        )
 
         result = await verification_service_with_mock.record_verification(
             matter_id="matter-123",
@@ -116,8 +124,8 @@ class TestRecordVerification:
         self, verification_service_with_mock, mock_supabase
     ) -> None:
         """Should handle database errors gracefully."""
-        mock_supabase.table.return_value.upsert.return_value.execute.side_effect = Exception(
-            "Database error"
+        mock_supabase.table.return_value.upsert.return_value.execute.side_effect = (
+            Exception("Database error")
         )
 
         with pytest.raises(SummaryVerificationServiceError) as exc_info:
@@ -146,17 +154,21 @@ class TestAddNote:
     ) -> None:
         """Should add note successfully."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "note-123",
-            "matter_id": "matter-123",
-            "section_type": "parties",
-            "section_id": "entity-123",
-            "text": "Need to verify this party",
-            "created_by": "user-123",
-            "created_at": "2026-01-16T10:00:00Z",
-        }]
+        mock_result.data = [
+            {
+                "id": "note-123",
+                "matter_id": "matter-123",
+                "section_type": "parties",
+                "section_id": "entity-123",
+                "text": "Need to verify this party",
+                "created_by": "user-123",
+                "created_at": "2026-01-16T10:00:00Z",
+            }
+        ]
 
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            mock_result
+        )
 
         result = await verification_service_with_mock.add_note(
             matter_id="matter-123",
@@ -175,17 +187,21 @@ class TestAddNote:
     ) -> None:
         """Should strip whitespace from note text."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "note-123",
-            "matter_id": "matter-123",
-            "section_type": "parties",
-            "section_id": "entity-123",
-            "text": "Trimmed note",
-            "created_by": "user-123",
-            "created_at": "2026-01-16T10:00:00Z",
-        }]
+        mock_result.data = [
+            {
+                "id": "note-123",
+                "matter_id": "matter-123",
+                "section_type": "parties",
+                "section_id": "entity-123",
+                "text": "Trimmed note",
+                "created_by": "user-123",
+                "created_at": "2026-01-16T10:00:00Z",
+            }
+        ]
 
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.insert.return_value.execute.return_value = (
+            mock_result
+        )
 
         await verification_service_with_mock.add_note(
             matter_id="matter-123",
@@ -253,16 +269,18 @@ class TestGetVerifications:
     ) -> None:
         """Should filter verifications by section type."""
         mock_result = MagicMock()
-        mock_result.data = [{
-            "id": "v1",
-            "matter_id": "matter-123",
-            "section_type": "subject_matter",
-            "section_id": "main",
-            "decision": "verified",
-            "notes": None,
-            "verified_by": "user-1",
-            "verified_at": "2026-01-16T10:00:00Z",
-        }]
+        mock_result.data = [
+            {
+                "id": "v1",
+                "matter_id": "matter-123",
+                "section_type": "subject_matter",
+                "section_id": "main",
+                "decision": "verified",
+                "notes": None,
+                "verified_by": "user-1",
+                "verified_at": "2026-01-16T10:00:00Z",
+            }
+        ]
 
         # Mock the chain properly for filtered query
         mock_query = MagicMock()
@@ -387,9 +405,7 @@ class TestGetNotes:
         mock_query.execute.return_value = mock_result
         mock_supabase.table.return_value.select.return_value = mock_query
 
-        results = await verification_service_with_mock.get_notes(
-            matter_id="matter-123"
-        )
+        results = await verification_service_with_mock.get_notes(matter_id="matter-123")
 
         assert len(results) == 2
         assert results[0].id == "n1"

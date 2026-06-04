@@ -93,7 +93,10 @@ def _get_contradiction_list_service() -> ContradictionListService:
     response_model=ContradictionsListResponse,
     response_model_by_alias=True,
     responses={
-        404: {"model": ContradictionListErrorResponse, "description": "Matter not found"},
+        404: {
+            "model": ContradictionListErrorResponse,
+            "description": "Matter not found",
+        },
         500: {"model": ContradictionListErrorResponse, "description": "Internal error"},
     },
 )
@@ -442,7 +445,10 @@ async def get_entity_statements(
     response_model_by_alias=True,
     responses={
         404: {"model": ContradictionErrorResponse, "description": "Entity not found"},
-        422: {"model": ContradictionErrorResponse, "description": "Too many statements for sync processing"},
+        422: {
+            "model": ContradictionErrorResponse,
+            "description": "Too many statements for sync processing",
+        },
         500: {"model": ContradictionErrorResponse, "description": "Internal error"},
     },
 )

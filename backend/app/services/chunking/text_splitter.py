@@ -162,7 +162,11 @@ class RecursiveTextSplitter:
                 # Apply overlap: keep last segments that fit within overlap
                 overlap_splits = self._get_overlap_splits(current_chunk, separator)
                 current_chunk = overlap_splits
-                current_length = self.length_function(separator.join(current_chunk)) if current_chunk else 0
+                current_length = (
+                    self.length_function(separator.join(current_chunk))
+                    if current_chunk
+                    else 0
+                )
 
             current_chunk.append(split)
             current_length = self.length_function(separator.join(current_chunk))
@@ -237,7 +241,9 @@ class RecursiveTextSplitter:
             chunks.append(text[start:end])
 
             # Calculate overlap in characters (approximate)
-            overlap_chars = max(0, int(self.chunk_overlap * 4))  # 4 chars per token estimate
+            overlap_chars = max(
+                0, int(self.chunk_overlap * 4)
+            )  # 4 chars per token estimate
             start = max(start + 1, end - overlap_chars)
 
         return chunks

@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from re import Pattern
 
 
-
 # =============================================================================
 # Story 8-1: Compiled Pattern Dataclass
 # =============================================================================
@@ -123,7 +122,7 @@ class CompiledPattern:
         cleaned = re.sub(
             r"^(should\s+(?:i|we)\s+|do\s+you\s+|is\s+|did\s+|will\s+|what\s+)",
             "",
-            cleaned
+            cleaned,
         )
         cleaned = cleaned.strip()
 

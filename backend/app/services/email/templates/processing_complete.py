@@ -160,7 +160,7 @@ def _render_html_template(
                                 You received this email because you uploaded documents to Jaanch.
                             </p>
                             <p style="margin: 0; font-size: 14px; color: #6b7280; text-align: center;">
-                                <a href="{workspace_url.rsplit('/', 2)[0]}/settings" style="color: #2563eb; text-decoration: none;">
+                                <a href="{workspace_url.rsplit("/", 2)[0]}/settings" style="color: #2563eb; text-decoration: none;">
                                     Manage notification preferences
                                 </a>
                             </p>

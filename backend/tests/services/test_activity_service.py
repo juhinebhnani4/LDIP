@@ -83,9 +83,7 @@ class TestActivityCreation:
             mock_result
         )
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             result = await activity_service.create_activity(
                 user_id=user_id,
                 type=ActivityTypeEnum.PROCESSING_COMPLETE,
@@ -122,9 +120,7 @@ class TestActivityCreation:
             mock_result
         )
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             result = await activity_service.create_activity(
                 user_id=user_id,
                 type=ActivityTypeEnum.MATTER_OPENED,
@@ -148,9 +144,10 @@ class TestActivityCreation:
             mock_result
         )
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ), pytest.raises(ActivityServiceError) as exc_info:
+        with (
+            patch.object(activity_service, "_supabase_client", mock_supabase),
+            pytest.raises(ActivityServiceError) as exc_info,
+        ):
             await activity_service.create_activity(
                 user_id=user_id,
                 type=ActivityTypeEnum.PROCESSING_COMPLETE,
@@ -186,16 +183,10 @@ class TestActivityRetrieval:
         mock_count_result = MagicMock()
         mock_count_result.count = 1
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
-            mock_result
-        )
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = (
-            mock_count_result
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_result
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_count_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             activities, total = await activity_service.get_activities(
                 user_id=user_id, limit=10
             )
@@ -217,18 +208,12 @@ class TestActivityRetrieval:
         mock_count_result.count = 0
 
         mock_query = MagicMock()
-        mock_query.eq.return_value.order.return_value.limit.return_value.execute.return_value = (
-            mock_result
-        )
+        mock_query.eq.return_value.order.return_value.limit.return_value.execute.return_value = mock_result
 
         mock_supabase.table.return_value.select.return_value = mock_query
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = (
-            mock_count_result
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_count_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             await activity_service.get_activities(user_id=user_id, limit=100)
 
         # Verify limit was clamped to 50
@@ -260,13 +245,9 @@ class TestMarkAsRead:
             }
         ]
 
-        mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = (
-            mock_result
-        )
+        mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = mock_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             result = await activity_service.mark_as_read(
                 activity_id=activity_id, user_id=user_id
             )
@@ -285,13 +266,9 @@ class TestMarkAsRead:
         mock_result = MagicMock()
         mock_result.data = []
 
-        mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = (
-            mock_result
-        )
+        mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.select.return_value.execute.return_value = mock_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             result = await activity_service.mark_as_read(
                 activity_id=activity_id, user_id=user_id
             )
@@ -303,22 +280,16 @@ class TestUnreadCount:
     """Test unread count retrieval."""
 
     @pytest.mark.asyncio
-    async def test_gets_unread_count(
-        self, activity_service, mock_supabase
-    ) -> None:
+    async def test_gets_unread_count(self, activity_service, mock_supabase) -> None:
         """Should return count of unread activities."""
         user_id = str(uuid4())
 
         mock_result = MagicMock()
         mock_result.count = 5
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
-            mock_result
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             count = await activity_service.get_unread_count(user_id=user_id)
 
         assert count == 5
@@ -346,16 +317,12 @@ class TestCreateActivityForMatterMembers:
             for uid in user_ids
         ]
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = (
-            mock_members_result
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_members_result
         mock_supabase.table.return_value.insert.return_value.execute.return_value = (
             mock_insert_result
         )
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             count = await activity_service.create_activity_for_matter_members(
                 matter_id=matter_id,
                 type=ActivityTypeEnum.PROCESSING_COMPLETE,
@@ -374,13 +341,9 @@ class TestCreateActivityForMatterMembers:
         mock_members_result = MagicMock()
         mock_members_result.data = []
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = (
-            mock_members_result
-        )
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_members_result
 
-        with patch.object(
-            activity_service, "_supabase_client", mock_supabase
-        ):
+        with patch.object(activity_service, "_supabase_client", mock_supabase):
             count = await activity_service.create_activity_for_matter_members(
                 matter_id=matter_id,
                 type=ActivityTypeEnum.PROCESSING_COMPLETE,

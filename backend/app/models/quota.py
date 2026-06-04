@@ -15,9 +15,13 @@ class ProviderQuota(BaseModel):
 
     provider: str = Field(..., description="Provider identifier (gemini, openai)")
     current_rpm: int = Field(
-        default=0, description="Current requests per minute (session)", alias="currentRpm"
+        default=0,
+        description="Current requests per minute (session)",
+        alias="currentRpm",
     )
-    rpm_limit: int = Field(default=0, description="Configured RPM limit", alias="rpmLimit")
+    rpm_limit: int = Field(
+        default=0, description="Configured RPM limit", alias="rpmLimit"
+    )
     rpm_usage_pct: float = Field(
         default=0.0, description="RPM usage percentage", alias="rpmUsagePct"
     )
@@ -25,7 +29,9 @@ class ProviderQuota(BaseModel):
         default=0, description="Tokens used today", alias="dailyTokensUsed"
     )
     daily_token_limit: int | None = Field(
-        default=None, description="Daily token limit (null = unlimited)", alias="dailyTokenLimit"
+        default=None,
+        description="Daily token limit (null = unlimited)",
+        alias="dailyTokenLimit",
     )
     daily_cost_inr: float = Field(
         default=0.0, description="Cost today in INR", alias="dailyCostInr"
@@ -34,7 +40,9 @@ class ProviderQuota(BaseModel):
         default=None, description="Daily cost limit in INR", alias="dailyCostLimitInr"
     )
     rate_limited_count: int = Field(
-        default=0, description="Times rate limited this session", alias="rateLimitedCount"
+        default=0,
+        description="Times rate limited this session",
+        alias="rateLimitedCount",
     )
     projected_exhaustion: str | None = Field(
         default=None,
@@ -45,7 +53,9 @@ class ProviderQuota(BaseModel):
         default="stable", description="Usage trend direction"
     )
     alert_triggered: bool = Field(
-        default=False, description="True if usage >= alert threshold", alias="alertTriggered"
+        default=False,
+        description="True if usage >= alert threshold",
+        alias="alertTriggered",
     )
 
     model_config = {
@@ -79,10 +89,14 @@ class LLMQuotaData(BaseModel):
         ..., description="ISO timestamp of data collection", alias="lastUpdated"
     )
     alert_threshold_pct: int = Field(
-        default=80, description="Default alert threshold percentage", alias="alertThresholdPct"
+        default=80,
+        description="Default alert threshold percentage",
+        alias="alertThresholdPct",
     )
     usd_to_inr_rate: float = Field(
-        default=83.50, description="Current USD to INR exchange rate", alias="usdToInrRate"
+        default=83.50,
+        description="Current USD to INR exchange rate",
+        alias="usdToInrRate",
     )
 
     model_config = {

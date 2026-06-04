@@ -217,9 +217,13 @@ class TestTotalDocumentTimeEstimate:
         # Calculate expected total
         expected = timedelta(0)
         expected += timedelta(milliseconds=10 * DEFAULT_OCR_MS_PER_PAGE)  # OCR
-        expected += timedelta(milliseconds=10 * DEFAULT_VALIDATION_MS_PER_PAGE)  # Validation
+        expected += timedelta(
+            milliseconds=10 * DEFAULT_VALIDATION_MS_PER_PAGE
+        )  # Validation
         expected += timedelta(milliseconds=DEFAULT_CONFIDENCE_MS_FIXED)  # Confidence
-        expected += timedelta(milliseconds=20 * DEFAULT_CHUNK_MS_PER_1K_CHARS)  # Chunking
+        expected += timedelta(
+            milliseconds=20 * DEFAULT_CHUNK_MS_PER_1K_CHARS
+        )  # Chunking
         expected += timedelta(milliseconds=40 * DEFAULT_EMBED_MS_PER_CHUNK)  # Embedding
         expected += timedelta(milliseconds=40 * DEFAULT_ENTITY_MS_PER_CHUNK)  # Entity
         expected += timedelta(milliseconds=DEFAULT_ALIAS_MS_FIXED)  # Alias
@@ -238,9 +242,13 @@ class TestTotalDocumentTimeEstimate:
         expected += timedelta(milliseconds=5 * DEFAULT_OCR_MS_PER_PAGE)
         expected += timedelta(milliseconds=5 * DEFAULT_VALIDATION_MS_PER_PAGE)
         expected += timedelta(milliseconds=DEFAULT_CONFIDENCE_MS_FIXED)
-        expected += timedelta(milliseconds=10 * DEFAULT_CHUNK_MS_PER_1K_CHARS)  # 10K chars
+        expected += timedelta(
+            milliseconds=10 * DEFAULT_CHUNK_MS_PER_1K_CHARS
+        )  # 10K chars
         expected += timedelta(milliseconds=20 * DEFAULT_EMBED_MS_PER_CHUNK)  # 20 chunks
-        expected += timedelta(milliseconds=20 * DEFAULT_ENTITY_MS_PER_CHUNK)  # 20 chunks
+        expected += timedelta(
+            milliseconds=20 * DEFAULT_ENTITY_MS_PER_CHUNK
+        )  # 20 chunks
         expected += timedelta(milliseconds=DEFAULT_ALIAS_MS_FIXED)
 
         assert result == expected
@@ -325,9 +333,7 @@ class TestQueueWaitTimeEstimate:
         result = estimator.estimate_queue_wait_time(queue_position=0)
         assert result == timedelta(0)
 
-    def test_returns_zero_for_negative_position(
-        self, estimator: TimeEstimator
-    ) -> None:
+    def test_returns_zero_for_negative_position(self, estimator: TimeEstimator) -> None:
         """Should return zero for negative position."""
         result = estimator.estimate_queue_wait_time(queue_position=-1)
         assert result == timedelta(0)
@@ -416,9 +422,7 @@ class TestStageProgressEstimate:
         # 37% completed (30 + 5 + 2)
         assert result == 37
 
-    def test_calculates_progress_for_last_stage(
-        self, estimator: TimeEstimator
-    ) -> None:
+    def test_calculates_progress_for_last_stage(self, estimator: TimeEstimator) -> None:
         """Should calculate progress near end."""
         # Contradiction detection is last stage, after 85% complete
         result = estimator.estimate_stage_progress(

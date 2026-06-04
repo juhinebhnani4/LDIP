@@ -87,7 +87,9 @@ class DuplicateCheckResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    has_duplicates: bool = Field(..., alias="hasDuplicates", description="Whether duplicates exist")
+    has_duplicates: bool = Field(
+        ..., alias="hasDuplicates", description="Whether duplicates exist"
+    )
     duplicates: list[LibraryDuplicate] = Field(
         default_factory=list,
         description="List of potential duplicates",
@@ -109,7 +111,9 @@ class UnlinkSuccessResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     success: bool = Field(default=True, description="Operation success")
-    message: str = Field(default="Document unlinked from matter", description="Success message")
+    message: str = Field(
+        default="Document unlinked from matter", description="Success message"
+    )
 
 
 class UploadSuccessResponse(BaseModel):
@@ -126,15 +130,27 @@ class UploadSuccessResponse(BaseModel):
 # =============================================================================
 
 
-@router.get("/documents", response_model=LibraryDocumentListResponse, response_model_by_alias=True)
+@router.get(
+    "/documents",
+    response_model=LibraryDocumentListResponse,
+    response_model_by_alias=True,
+)
 async def list_library_documents(
-    document_type: LibraryDocumentType | None = Query(None, description="Filter by document type"),
+    document_type: LibraryDocumentType | None = Query(
+        None, description="Filter by document type"
+    ),
     year: int | None = Query(None, ge=1800, le=2100, description="Filter by year"),
     jurisdiction: str | None = Query(None, description="Filter by jurisdiction"),
-    doc_status: LibraryDocumentStatus | None = Query(None, alias="status", description="Filter by processing status"),
-    search: str | None = Query(None, min_length=2, max_length=200, description="Search in title"),
+    doc_status: LibraryDocumentStatus | None = Query(
+        None, alias="status", description="Filter by processing status"
+    ),
+    search: str | None = Query(
+        None, min_length=2, max_length=200, description="Search in title"
+    ),
     page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, alias="perPage", description="Items per page"),
+    per_page: int = Query(
+        20, ge=1, le=100, alias="perPage", description="Items per page"
+    ),
     current_user=Depends(get_current_user),
     library_service=Depends(get_library_service),
 ):
@@ -166,7 +182,11 @@ async def list_library_documents(
         ) from e
 
 
-@router.get("/documents/{document_id}", response_model=LibraryDocument, response_model_by_alias=True)
+@router.get(
+    "/documents/{document_id}",
+    response_model=LibraryDocument,
+    response_model_by_alias=True,
+)
 async def get_library_document(
     document_id: str = Path(..., description="Library document UUID"),
     current_user=Depends(get_current_user),
@@ -182,17 +202,25 @@ async def get_library_document(
     except LibraryDocumentNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": {"code": "NOT_FOUND", "message": "Library document not found"}},
+            detail={
+                "error": {"code": "NOT_FOUND", "message": "Library document not found"}
+            },
         ) from None
     except LibraryServiceError as e:
-        logger.error("get_library_document_failed", document_id=document_id, error=str(e))
+        logger.error(
+            "get_library_document_failed", document_id=document_id, error=str(e)
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": {"code": "LIBRARY_ERROR", "message": str(e)}},
         ) from e
 
 
-@router.post("/documents/check-duplicates", response_model=DuplicateCheckResponse, response_model_by_alias=True)
+@router.post(
+    "/documents/check-duplicates",
+    response_model=DuplicateCheckResponse,
+    response_model_by_alias=True,
+)
 async def check_duplicates(
     request: DuplicateCheckRequest,
     current_user=Depends(get_current_user),
@@ -226,7 +254,11 @@ async def check_duplicates(
 # =============================================================================
 
 
-@matters_router.get("/documents", response_model=LinkedLibraryDocumentsResponse, response_model_by_alias=True)
+@matters_router.get(
+    "/documents",
+    response_model=LinkedLibraryDocumentsResponse,
+    response_model_by_alias=True,
+)
 async def get_linked_library_documents(
     matter_id: str = Path(..., description="Matter UUID"),
     membership: MatterMembership = Depends(
@@ -254,7 +286,12 @@ async def get_linked_library_documents(
         ) from e
 
 
-@matters_router.post("/documents", response_model=LinkSuccessResponse, response_model_by_alias=True, status_code=status.HTTP_201_CREATED)
+@matters_router.post(
+    "/documents",
+    response_model=LinkSuccessResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+)
 async def link_library_document(
     matter_id: str = Path(..., description="Matter UUID"),
     request: LibraryLinkRequest = ...,
@@ -286,12 +323,19 @@ async def link_library_document(
     except LibraryDocumentNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": {"code": "NOT_FOUND", "message": "Library document not found"}},
+            detail={
+                "error": {"code": "NOT_FOUND", "message": "Library document not found"}
+            },
         ) from None
     except LibraryLinkExistsError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": {"code": "ALREADY_LINKED", "message": "Document is already linked to this matter"}},
+            detail={
+                "error": {
+                    "code": "ALREADY_LINKED",
+                    "message": "Document is already linked to this matter",
+                }
+            },
         ) from None
     except LibraryServiceError as e:
         logger.error(
@@ -306,7 +350,11 @@ async def link_library_document(
         ) from e
 
 
-@matters_router.delete("/documents/{document_id}", response_model=UnlinkSuccessResponse, response_model_by_alias=True)
+@matters_router.delete(
+    "/documents/{document_id}",
+    response_model=UnlinkSuccessResponse,
+    response_model_by_alias=True,
+)
 async def unlink_library_document(
     matter_id: str = Path(..., description="Matter UUID"),
     document_id: str = Path(..., description="Library document UUID to unlink"),
@@ -340,7 +388,9 @@ async def unlink_library_document(
             user_id=membership.user_id,
         )
 
-        return UnlinkSuccessResponse(success=True, message="Document unlinked from matter")
+        return UnlinkSuccessResponse(
+            success=True, message="Document unlinked from matter"
+        )
     except LibraryServiceError as e:
         logger.error(
             "unlink_library_document_failed",

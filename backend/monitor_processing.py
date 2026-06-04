@@ -60,7 +60,9 @@ def get_job_stats():
         # Calculate latency for completed jobs
         if job.get("started_at") and job.get("completed_at"):
             try:
-                started = datetime.fromisoformat(job["started_at"].replace("Z", "+00:00"))
+                started = datetime.fromisoformat(
+                    job["started_at"].replace("Z", "+00:00")
+                )
                 completed = datetime.fromisoformat(
                     job["completed_at"].replace("Z", "+00:00")
                 )
@@ -98,11 +100,7 @@ def get_citation_stats():
     """Get citation extraction statistics."""
     client = get_supabase_client()
 
-    citations = (
-        client.table("citations")
-        .select("id", count="exact")
-        .execute()
-    )
+    citations = client.table("citations").select("id", count="exact").execute()
     acts = client.table("act_resolutions").select("id", count="exact").execute()
 
     return {

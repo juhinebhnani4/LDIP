@@ -105,7 +105,10 @@ class VoyageRerankService:
 
         try:
             response = await self._call_voyage_rerank(
-                query, list(documents), effective_top_k, matter_id=matter_id,
+                query,
+                list(documents),
+                effective_top_k,
+                matter_id=matter_id,
             )
 
             results = [
@@ -148,14 +151,18 @@ class VoyageRerankService:
                 cooldown_remaining=e.cooldown_remaining,
             )
             return self._fallback_result(
-                query, len(documents), effective_top_k,
+                query,
+                len(documents),
+                effective_top_k,
                 reason=f"Circuit open, retry after {e.cooldown_remaining:.0f}s",
             )
 
         except TimeoutError:
             logger.warning("voyage_rerank_timeout", timeout=RERANK_TIMEOUT_SECONDS)
             return self._fallback_result(
-                query, len(documents), effective_top_k,
+                query,
+                len(documents),
+                effective_top_k,
                 reason=f"Timeout after {RERANK_TIMEOUT_SECONDS}s",
             )
 
@@ -166,11 +173,15 @@ class VoyageRerankService:
                 error_type=type(e).__name__,
             )
             return self._fallback_result(
-                query, len(documents), effective_top_k,
+                query,
+                len(documents),
+                effective_top_k,
                 reason=f"API error: {e}",
             )
 
-    @with_circuit_breaker(CircuitService.VOYAGE_RERANK, timeout_override=RERANK_TIMEOUT_SECONDS)
+    @with_circuit_breaker(
+        CircuitService.VOYAGE_RERANK, timeout_override=RERANK_TIMEOUT_SECONDS
+    )
     async def _call_voyage_rerank(
         self,
         query: str,
@@ -180,7 +191,10 @@ class VoyageRerankService:
     ):
         """Call Voyage API with circuit breaker protection."""
         return await asyncio.to_thread(
-            self._do_rerank, query, documents, top_k,
+            self._do_rerank,
+            query,
+            documents,
+            top_k,
         )
 
     def _fallback_result(

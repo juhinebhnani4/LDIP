@@ -25,53 +25,54 @@ logger = structlog.get_logger(__name__)
 # Pattern: Isolated Devanagari/Gujarati characters mixed with Latin text
 # Matches: single non-Latin chars or short sequences (1-5 chars) surrounded by Latin
 MIXED_SCRIPT_NOISE = re.compile(
-    r'(?<=[a-zA-Z0-9\s.,;:!?\-])'  # Preceded by Latin/punctuation
-    r'[\u0900-\u097F\u0A80-\u0AFF\u0980-\u09FF]{1,5}'  # Short Devanagari/Gujarati/Bengali
-    r'(?=[a-zA-Z0-9\s.,;:!?\-])',  # Followed by Latin/punctuation
-    re.UNICODE
+    r"(?<=[a-zA-Z0-9\s.,;:!?\-])"  # Preceded by Latin/punctuation
+    r"[\u0900-\u097F\u0A80-\u0AFF\u0980-\u09FF]{1,5}"  # Short Devanagari/Gujarati/Bengali
+    r"(?=[a-zA-Z0-9\s.,;:!?\-])",  # Followed by Latin/punctuation
+    re.UNICODE,
 )
 
 # Pattern: Repeated characters (OCR stutter) - e.g., "aaaaaaa" or "======"
-REPEATED_CHARS = re.compile(r'(.)\1{5,}')
+REPEATED_CHARS = re.compile(r"(.)\1{5,}")
 
 # Pattern: Excessive whitespace
-EXCESSIVE_WHITESPACE = re.compile(r'[ \t]{3,}')
+EXCESSIVE_WHITESPACE = re.compile(r"[ \t]{3,}")
 
 # Pattern: Multiple newlines
-EXCESSIVE_NEWLINES = re.compile(r'\n{4,}')
+EXCESSIVE_NEWLINES = re.compile(r"\n{4,}")
 
 # Pattern: Random special characters sequences (OCR garbage)
-SPECIAL_CHAR_GARBAGE = re.compile(r'[^\w\s.,;:!?\-\'\"(){}[\]@#$%&*+=/<>]{3,}')
+SPECIAL_CHAR_GARBAGE = re.compile(r"[^\w\s.,;:!?\-\'\"(){}[\]@#$%&*+=/<>]{3,}")
 
 # Pattern: Repeated punctuation (OCR stutter) - e.g., "***", ":::", "..."
 # These are common OCR artifacts from scanned legal documents
-REPEATED_PUNCTUATION = re.compile(r'([.:*\'\"]{2,}\s*){2,}')
+REPEATED_PUNCTUATION = re.compile(r"([.:*\'\"]{2,}\s*){2,}")
 
 # Pattern: Mixed punctuation gibberish - sequences like "..::.. : *** **"
 # Matches: punctuation-heavy sequences with low alphanumeric ratio
 PUNCTUATION_GIBBERISH = re.compile(
-    r'(?<![a-zA-Z])'  # Not preceded by letter
-    r'[.:*\'\"_\-,;!?\s]{6,}'  # 6+ chars of punctuation/space mix
-    r'(?![a-zA-Z])',  # Not followed by letter
-    re.UNICODE
+    r"(?<![a-zA-Z])"  # Not preceded by letter
+    r"[.:*\'\"_\-,;!?\s]{6,}"  # 6+ chars of punctuation/space mix
+    r"(?![a-zA-Z])",  # Not followed by letter
+    re.UNICODE,
 )
 
 # Pattern: Asterisk sequences (common OCR artifact)
-ASTERISK_NOISE = re.compile(r'\*{2,}')
+ASTERISK_NOISE = re.compile(r"\*{2,}")
 
 # Pattern: Isolated box drawing characters (common OCR error)
-BOX_DRAWING = re.compile(r'[\u2500-\u257F]+')
+BOX_DRAWING = re.compile(r"[\u2500-\u257F]+")
 
 # Pattern: Isolated combining diacritical marks
-ORPHAN_DIACRITICS = re.compile(r'[\u0300-\u036F]+(?!\w)')
+ORPHAN_DIACRITICS = re.compile(r"[\u0300-\u036F]+(?!\w)")
 
 # Pattern: PDF artifact characters
-PDF_ARTIFACTS = re.compile(r'[\ufeff\u200b\u200c\u200d\u2028\u2029]+')
+PDF_ARTIFACTS = re.compile(r"[\ufeff\u200b\u200c\u200d\u2028\u2029]+")
 
 
 # =============================================================================
 # OCR Cleaner Implementation
 # =============================================================================
+
 
 class OCRCleaner:
     """Cleans OCR noise from text while preserving meaningful content.
@@ -109,33 +110,33 @@ class OCRCleaner:
         cleaned = text
 
         # Step 1: Remove PDF artifacts (zero-width chars, BOM, etc.)
-        cleaned = PDF_ARTIFACTS.sub('', cleaned)
+        cleaned = PDF_ARTIFACTS.sub("", cleaned)
 
         # Step 2: Remove isolated box drawing characters
-        cleaned = BOX_DRAWING.sub(' ', cleaned)
+        cleaned = BOX_DRAWING.sub(" ", cleaned)
 
         # Step 3: Remove orphan diacritical marks
-        cleaned = ORPHAN_DIACRITICS.sub('', cleaned)
+        cleaned = ORPHAN_DIACRITICS.sub("", cleaned)
 
         # Step 4: Remove mixed script noise (isolated non-Latin in Latin context)
-        cleaned = MIXED_SCRIPT_NOISE.sub(' ', cleaned)
+        cleaned = MIXED_SCRIPT_NOISE.sub(" ", cleaned)
 
         # Step 5: Collapse repeated characters (>5 same char)
-        cleaned = REPEATED_CHARS.sub(r'\1\1', cleaned)
+        cleaned = REPEATED_CHARS.sub(r"\1\1", cleaned)
 
         # Step 6: Remove punctuation-based OCR artifacts (always applied)
         # These patterns catch garbage like "...:::... : *** **..'' ****"
-        cleaned = ASTERISK_NOISE.sub(' ', cleaned)
-        cleaned = REPEATED_PUNCTUATION.sub(' ', cleaned)
-        cleaned = PUNCTUATION_GIBBERISH.sub(' ', cleaned)
+        cleaned = ASTERISK_NOISE.sub(" ", cleaned)
+        cleaned = REPEATED_PUNCTUATION.sub(" ", cleaned)
+        cleaned = PUNCTUATION_GIBBERISH.sub(" ", cleaned)
 
         # Step 7: Remove special character garbage sequences (aggressive only)
         if self.aggressive:
-            cleaned = SPECIAL_CHAR_GARBAGE.sub(' ', cleaned)
+            cleaned = SPECIAL_CHAR_GARBAGE.sub(" ", cleaned)
 
         # Step 8: Normalize whitespace
-        cleaned = EXCESSIVE_WHITESPACE.sub(' ', cleaned)
-        cleaned = EXCESSIVE_NEWLINES.sub('\n\n', cleaned)
+        cleaned = EXCESSIVE_WHITESPACE.sub(" ", cleaned)
+        cleaned = EXCESSIVE_NEWLINES.sub("\n\n", cleaned)
 
         # Step 9: Strip and normalize
         cleaned = cleaned.strip()
@@ -172,10 +173,7 @@ class OCRCleaner:
 
         # Additional display-specific cleaning
         # Remove any remaining non-printable characters
-        cleaned = ''.join(
-            c for c in cleaned
-            if c.isprintable() or c in '\n\t'
-        )
+        cleaned = "".join(c for c in cleaned if c.isprintable() or c in "\n\t")
 
         return cleaned
 
@@ -213,8 +211,9 @@ class OCRCleaner:
 
         # Check for excessive special characters
         special_char_count = sum(
-            1 for c in text
-            if not c.isalnum() and not c.isspace() and c not in '.,;:!?-\'"(){}[]'
+            1
+            for c in text
+            if not c.isalnum() and not c.isspace() and c not in ".,;:!?-'\"(){}[]"
         )
         return bool(len(text) > 0 and special_char_count / len(text) > 0.1)
 
@@ -222,6 +221,7 @@ class OCRCleaner:
 # =============================================================================
 # Factory Function
 # =============================================================================
+
 
 @lru_cache(maxsize=1)
 def get_ocr_cleaner(aggressive: bool = False) -> OCRCleaner:
@@ -239,6 +239,7 @@ def get_ocr_cleaner(aggressive: bool = False) -> OCRCleaner:
 # =============================================================================
 # Convenience Functions
 # =============================================================================
+
 
 def clean_ocr_text(text: str) -> str:
     """Clean OCR noise from text (convenience function).

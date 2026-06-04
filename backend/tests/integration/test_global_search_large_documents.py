@@ -75,17 +75,19 @@ def create_document_chunks():
         for page_start in range(1, page_count + 1, 10):  # Chunks every 10 pages
             page_end = min(page_start + 9, page_count)
 
-            chunks.append({
-                "id": str(uuid4()),
-                "document_id": document_id,
-                "matter_id": matter_id,
-                "content": f"Content from pages {page_start}-{page_end}. "
-                           f"Contains legal terms, parties, and obligations.",
-                "page_number": page_start,
-                "chunk_index": chunk_id,
-                "bbox_ids": [str(uuid4()) for _ in range(20)],  # 20 bboxes
-                "embedding": [0.1] * 1536,
-            })
+            chunks.append(
+                {
+                    "id": str(uuid4()),
+                    "document_id": document_id,
+                    "matter_id": matter_id,
+                    "content": f"Content from pages {page_start}-{page_end}. "
+                    f"Contains legal terms, parties, and obligations.",
+                    "page_number": page_start,
+                    "chunk_index": chunk_id,
+                    "bbox_ids": [str(uuid4()) for _ in range(20)],  # 20 bboxes
+                    "embedding": [0.1] * 1536,
+                }
+            )
             chunk_id += 1  # noqa: SIM113
 
         return chunks
@@ -115,8 +117,7 @@ class TestGlobalSearchWithLargeDocuments:
 
         # Simulate search that matches chunks
         search_results = [
-            chunk for chunk in chunks
-            if "legal terms" in chunk["content"].lower()
+            chunk for chunk in chunks if "legal terms" in chunk["content"].lower()
         ]
 
         # Should find results in large document
@@ -238,9 +239,7 @@ class TestMatterIsolation:
 
         # Simulate search in Matter A context
         search_matter_id = matter_a_id
-        filtered_results = [
-            c for c in all_chunks if c["matter_id"] == search_matter_id
-        ]
+        filtered_results = [c for c in all_chunks if c["matter_id"] == search_matter_id]
 
         # Results should only be from Matter A
         assert len(filtered_results) > 0
@@ -365,15 +364,17 @@ class TestOCRMergerForGlobalSearch:
 
             bboxes = []
             for rel_page in range(1, page_count + 1):
-                bboxes.append({
-                    "page": rel_page,
-                    "reading_order_index": 0,
-                    "text": f"Searchable content on page {page_start + rel_page - 1}",
-                    "x": 72,
-                    "y": 72,
-                    "width": 468,
-                    "height": 20,
-                })
+                bboxes.append(
+                    {
+                        "page": rel_page,
+                        "reading_order_index": 0,
+                        "text": f"Searchable content on page {page_start + rel_page - 1}",
+                        "x": 72,
+                        "y": 72,
+                        "width": 468,
+                        "height": 20,
+                    }
+                )
 
             ocr_chunks.append(
                 ChunkOCRResult(

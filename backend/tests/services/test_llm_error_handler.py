@@ -10,7 +10,6 @@ Test Categories:
 - Response formatting
 """
 
-
 import pytest
 
 from app.services.llm_error_handler import (
@@ -221,7 +220,8 @@ class TestErrorMessages:
         # At least some messages should suggest what to do
         actionable_phrases = ["try again", "please", "contact support", "rephrase"]
         has_actionable = sum(
-            1 for msg in ERROR_MESSAGES.values()
+            1
+            for msg in ERROR_MESSAGES.values()
             if any(phrase in msg.lower() for phrase in actionable_phrases)
         )
         assert has_actionable >= 8, "Most messages should be actionable"
@@ -238,7 +238,9 @@ class TestRetryRecommendations:
     def test_all_error_codes_have_recommendations(self) -> None:
         """Every error code should have a retry recommendation."""
         for code in LLMErrorCode:
-            assert code in RETRY_RECOMMENDATIONS, f"Missing retry recommendation for {code}"
+            assert code in RETRY_RECOMMENDATIONS, (
+                f"Missing retry recommendation for {code}"
+            )
 
     def test_rate_limited_suggests_retry_with_delay(self) -> None:
         """Rate limited should suggest retry with delay."""
@@ -284,6 +286,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_returns_result_on_success(self) -> None:
         """Should return result and None error on success."""
+
         async def successful_op():
             return "success"
 
@@ -295,6 +298,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_returns_error_on_exception(self) -> None:
         """Should return None result and error on exception."""
+
         async def failing_op():
             raise Exception("Rate limit exceeded")
 
@@ -307,6 +311,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_includes_provider_in_error(self) -> None:
         """Should include provider in error result."""
+
         async def failing_op():
             raise Exception("Some error")
 

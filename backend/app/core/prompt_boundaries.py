@@ -261,7 +261,8 @@ def format_multiple_excerpts(
         formatted.append(
             format_document_excerpt(
                 content=excerpt.get("content", ""),
-                document_name=excerpt.get("document_name") or excerpt.get("documentName"),
+                document_name=excerpt.get("document_name")
+                or excerpt.get("documentName"),
                 page_number=excerpt.get("page_number") or excerpt.get("pageNumber"),
                 index=i,
             )
@@ -292,12 +293,16 @@ def detect_injection_patterns(text: str) -> list[dict[str, Any]]:
 
     detections = []
     for match in _INJECTION_PATTERN.finditer(text):
-        detections.append({
-            "pattern": match.group(),
-            "start": match.start(),
-            "end": match.end(),
-            "context": text[max(0, match.start() - 30):min(len(text), match.end() + 30)],
-        })
+        detections.append(
+            {
+                "pattern": match.group(),
+                "start": match.start(),
+                "end": match.end(),
+                "context": text[
+                    max(0, match.start() - 30) : min(len(text), match.end() + 30)
+                ],
+            }
+        )
 
     if detections:
         logger.warning(

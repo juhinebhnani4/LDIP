@@ -323,7 +323,11 @@ async def get_matter_summary(
                 job_type_filter=JobType.SUMMARY_GENERATION,
             )
             active_job = next(
-                (j for j in jobs if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)),
+                (
+                    j
+                    for j in jobs
+                    if j.status in (JobStatus.QUEUED, JobStatus.PROCESSING)
+                ),
                 None,
             )
             if active_job is not None:
@@ -353,9 +357,7 @@ async def get_matter_summary(
 
         # CRITICAL: .delay() is synchronous (blocks on Redis broker).
         # Run in a thread to avoid freezing the async event loop.
-        result = await asyncio.to_thread(
-            generate_summary.delay, matter_id, job.id
-        )
+        result = await asyncio.to_thread(generate_summary.delay, matter_id, job.id)
 
         # Store Celery task ID on the job record for debugging correlation
         await tracker.update_job_status(

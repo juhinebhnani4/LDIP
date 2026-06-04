@@ -209,9 +209,7 @@ class TestVerifyAnomaly:
 class TestMatterIsolation:
     """Tests for matter-level access control."""
 
-    def test_anomalies_require_matter_membership(
-        self, sync_client: TestClient
-    ) -> None:
+    def test_anomalies_require_matter_membership(self, sync_client: TestClient) -> None:
         """Should require membership in the matter."""
         # All endpoints should require matter membership
         endpoints = [
@@ -248,17 +246,13 @@ class TestFilteringPagination:
     def test_filter_by_severity_param(self, sync_client: TestClient) -> None:
         """Should accept severity filter parameter."""
         # Verify endpoint accepts the parameter (auth will fail but not 422)
-        response = sync_client.get(
-            "/api/matters/matter-123/anomalies?severity=high"
-        )
+        response = sync_client.get("/api/matters/matter-123/anomalies?severity=high")
         # Should fail auth, not validation
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_filter_by_type_param(self, sync_client: TestClient) -> None:
         """Should accept anomaly_type filter parameter."""
-        response = sync_client.get(
-            "/api/matters/matter-123/anomalies?anomaly_type=gap"
-        )
+        response = sync_client.get("/api/matters/matter-123/anomalies?anomaly_type=gap")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_pagination_params(self, sync_client: TestClient) -> None:
@@ -304,8 +298,10 @@ class TestListAnomaliesAuthenticated:
             mock_service_fn.return_value = mock_service
 
             with patch("app.api.deps.require_matter_role") as mock_role:
+
                 async def mock_dep():
                     return mock_matter_membership
+
                 mock_role.return_value = mock_dep
 
                 async with AsyncClient(
@@ -316,7 +312,10 @@ class TestListAnomaliesAuthenticated:
                     response = await client.get("/api/matters/matter-123/anomalies")
 
                     # Should succeed with mocked auth
-                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]
+                    assert response.status_code in [
+                        status.HTTP_200_OK,
+                        status.HTTP_401_UNAUTHORIZED,
+                    ]
 
 
 class TestGetAnomalySummaryAuthenticated:
@@ -347,8 +346,10 @@ class TestGetAnomalySummaryAuthenticated:
             mock_service_fn.return_value = mock_service
 
             with patch("app.api.deps.require_matter_role") as mock_role:
+
                 async def mock_dep():
                     return mock_matter_membership
+
                 mock_role.return_value = mock_dep
 
                 async with AsyncClient(
@@ -356,10 +357,15 @@ class TestGetAnomalySummaryAuthenticated:
                     base_url="http://test",
                     headers={"Authorization": "Bearer test-token"},
                 ) as client:
-                    response = await client.get("/api/matters/matter-123/anomalies/summary")
+                    response = await client.get(
+                        "/api/matters/matter-123/anomalies/summary"
+                    )
 
                     # Should succeed with mocked auth
-                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]
+                    assert response.status_code in [
+                        status.HTTP_200_OK,
+                        status.HTTP_401_UNAUTHORIZED,
+                    ]
 
 
 class TestDismissVerifyAuthenticated:
@@ -384,8 +390,10 @@ class TestDismissVerifyAuthenticated:
             mock_service_fn.return_value = mock_service
 
             with patch("app.api.deps.require_matter_role") as mock_role:
+
                 async def mock_dep():
                     return mock_matter_membership
+
                 mock_role.return_value = mock_dep
 
                 async with AsyncClient(
@@ -398,4 +406,7 @@ class TestDismissVerifyAuthenticated:
                     )
 
                     # Should succeed with mocked auth
-                    assert response.status_code in [status.HTTP_200_OK, status.HTTP_401_UNAUTHORIZED]
+                    assert response.status_code in [
+                        status.HTTP_200_OK,
+                        status.HTTP_401_UNAUTHORIZED,
+                    ]

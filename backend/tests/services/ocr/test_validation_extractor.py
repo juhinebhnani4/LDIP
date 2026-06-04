@@ -16,11 +16,15 @@ class TestValidationExtractor:
 
     def test_initialization_uses_settings(self) -> None:
         """Should use settings for threshold configuration."""
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 
-            with patch("app.services.ocr.validation_extractor.get_service_client") as mock_client:
+            with patch(
+                "app.services.ocr.validation_extractor.get_service_client"
+            ) as mock_client:
                 mock_client.return_value = MagicMock()
                 extractor = ValidationExtractor()
 
@@ -30,11 +34,15 @@ class TestValidationExtractor:
 
     def test_raises_error_when_client_not_configured(self) -> None:
         """Should raise error when database client is None."""
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 
-            with patch("app.services.ocr.validation_extractor.get_service_client") as mock_client:
+            with patch(
+                "app.services.ocr.validation_extractor.get_service_client"
+            ) as mock_client:
                 mock_client.return_value = None
                 extractor = ValidationExtractor()
 
@@ -50,11 +58,15 @@ class TestExtractLowConfidenceWords:
     @pytest.fixture
     def mock_extractor(self) -> ValidationExtractor:
         """Create an extractor with mock client."""
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 
-            with patch("app.services.ocr.validation_extractor.get_service_client") as mock_client:
+            with patch(
+                "app.services.ocr.validation_extractor.get_service_client"
+            ) as mock_client:
                 mock_client.return_value = MagicMock()
                 extractor = ValidationExtractor()
 
@@ -98,7 +110,9 @@ class TestExtractLowConfidenceWords:
         """Should return empty lists when no bounding boxes exist."""
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value.data = None
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         assert gemini_words == []
         assert human_words == []
@@ -114,7 +128,9 @@ class TestExtractLowConfidenceWords:
         mock_result.data = boxes
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value = mock_result
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         assert len(gemini_words) == 0
         assert len(human_words) == 0
@@ -130,7 +146,9 @@ class TestExtractLowConfidenceWords:
         mock_result.data = boxes
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value = mock_result
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         assert len(gemini_words) == 3
         assert len(human_words) == 0
@@ -150,7 +168,9 @@ class TestExtractLowConfidenceWords:
         mock_result.data = boxes
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value = mock_result
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         assert len(gemini_words) == 0
         assert len(human_words) == 3
@@ -173,7 +193,9 @@ class TestExtractLowConfidenceWords:
         mock_result.data = boxes
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value = mock_result
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         # 2 words for Gemini (0.70, 0.80)
         assert len(gemini_words) == 2
@@ -189,16 +211,45 @@ class TestExtractLowConfidenceWords:
     ) -> None:
         """Should skip bounding boxes with empty text."""
         boxes = [
-            {"id": "bbox-1", "page_number": 1, "x": 10, "y": 20, "width": 8, "height": 5, "text": "", "confidence": 0.60},
-            {"id": "bbox-2", "page_number": 1, "x": 20, "y": 20, "width": 8, "height": 5, "text": "   ", "confidence": 0.60},
-            {"id": "bbox-3", "page_number": 1, "x": 30, "y": 20, "width": 8, "height": 5, "text": "valid", "confidence": 0.60},
+            {
+                "id": "bbox-1",
+                "page_number": 1,
+                "x": 10,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "",
+                "confidence": 0.60,
+            },
+            {
+                "id": "bbox-2",
+                "page_number": 1,
+                "x": 20,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "   ",
+                "confidence": 0.60,
+            },
+            {
+                "id": "bbox-3",
+                "page_number": 1,
+                "x": 30,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "valid",
+                "confidence": 0.60,
+            },
         ]
 
         mock_result = MagicMock()
         mock_result.data = boxes
         mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.return_value = mock_result
 
-        gemini_words, human_words = mock_extractor.extract_low_confidence_words("doc-123")
+        gemini_words, human_words = mock_extractor.extract_low_confidence_words(
+            "doc-123"
+        )
 
         assert len(gemini_words) == 1
         assert gemini_words[0].text == "valid"
@@ -209,7 +260,16 @@ class TestExtractLowConfidenceWords:
     ) -> None:
         """Should include coordinates in LowConfidenceWord."""
         boxes = [
-            {"id": "bbox-1", "page_number": 2, "x": 15.5, "y": 25.5, "width": 12.0, "height": 8.0, "text": "word", "confidence": 0.60},
+            {
+                "id": "bbox-1",
+                "page_number": 2,
+                "x": 15.5,
+                "y": 25.5,
+                "width": 12.0,
+                "height": 8.0,
+                "text": "word",
+                "confidence": 0.60,
+            },
         ]
 
         mock_result = MagicMock()
@@ -233,9 +293,36 @@ class TestExtractLowConfidenceWords:
     ) -> None:
         """Should extract surrounding context for words."""
         boxes = [
-            {"id": "bbox-1", "page_number": 1, "x": 10, "y": 20, "width": 8, "height": 5, "text": "before", "confidence": 0.95},
-            {"id": "bbox-2", "page_number": 1, "x": 20, "y": 20, "width": 8, "height": 5, "text": "target", "confidence": 0.60},
-            {"id": "bbox-3", "page_number": 1, "x": 30, "y": 20, "width": 8, "height": 5, "text": "after", "confidence": 0.95},
+            {
+                "id": "bbox-1",
+                "page_number": 1,
+                "x": 10,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "before",
+                "confidence": 0.95,
+            },
+            {
+                "id": "bbox-2",
+                "page_number": 1,
+                "x": 20,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "target",
+                "confidence": 0.60,
+            },
+            {
+                "id": "bbox-3",
+                "page_number": 1,
+                "x": 30,
+                "y": 20,
+                "width": 8,
+                "height": 5,
+                "text": "after",
+                "confidence": 0.95,
+            },
         ]
 
         mock_result = MagicMock()
@@ -256,7 +343,9 @@ class TestExtractLowConfidenceWords:
         mock_extractor: ValidationExtractor,
     ) -> None:
         """Should wrap database errors in ValidationExtractorError."""
-        mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.side_effect = Exception("Database error")
+        mock_extractor.client.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.order.return_value.execute.side_effect = Exception(
+            "Database error"
+        )
 
         with pytest.raises(ValidationExtractorError) as exc_info:
             mock_extractor.extract_low_confidence_words("doc-123")
@@ -272,20 +361,46 @@ class TestGetWordsByPage:
         """Should group words by page number."""
         words = [
             LowConfidenceWord(
-                bbox_id="1", text="word1", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="1",
+                text="word1",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),
             LowConfidenceWord(
-                bbox_id="2", text="word2", confidence=0.6, page=2,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="2",
+                text="word2",
+                confidence=0.6,
+                page=2,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),
             LowConfidenceWord(
-                bbox_id="3", text="word3", confidence=0.6, page=1,
-                context_before="", context_after="", x=0, y=0, width=10, height=5
+                bbox_id="3",
+                text="word3",
+                confidence=0.6,
+                page=1,
+                context_before="",
+                context_after="",
+                x=0,
+                y=0,
+                width=10,
+                height=5,
             ),
         ]
 
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 
@@ -302,7 +417,9 @@ class TestGetWordsByPage:
 
     def test_returns_empty_dict_for_empty_list(self) -> None:
         """Should return empty dict for empty word list."""
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 
@@ -320,7 +437,9 @@ class TestExtractContext:
     @pytest.fixture
     def extractor(self) -> ValidationExtractor:
         """Create an extractor for testing."""
-        with patch("app.services.ocr.validation_extractor.get_settings") as mock_settings:
+        with patch(
+            "app.services.ocr.validation_extractor.get_settings"
+        ) as mock_settings:
             mock_settings.return_value.ocr_validation_gemini_threshold = 0.85
             mock_settings.return_value.ocr_validation_human_threshold = 0.50
 

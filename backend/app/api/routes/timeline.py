@@ -980,7 +980,12 @@ async def get_timeline_with_entities(
         description="Include unclassified raw_date events",
     ),
     page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(50, ge=1, le=1000, description="Items per page (max 1000 for comprehensive timelines)"),
+    per_page: int = Query(
+        50,
+        ge=1,
+        le=1000,
+        description="Items per page (max 1000 for comprehensive timelines)",
+    ),
     membership: MatterMembership = Depends(
         require_matter_role([MatterRole.OWNER, MatterRole.EDITOR, MatterRole.VIEWER])
     ),
@@ -1023,17 +1028,21 @@ async def get_timeline_with_entities(
                         event_date=e.event_date,
                         event_date_precision=e.event_date_precision,
                         event_date_text=e.event_date_text,
-                        event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
+                        event_type=e.event_type.value
+                        if hasattr(e.event_type, "value")
+                        else e.event_type,
                         description=e.description,
                         document_id=e.document_id,
-                        document_name=getattr(e, 'document_name', None),
+                        document_name=getattr(e, "document_name", None),
                         source_page=e.source_page,
                         confidence=e.confidence,
                         entities=[
                             EntityReference(
                                 entity_id=ent.entity_id,
                                 canonical_name=ent.canonical_name,
-                                entity_type=ent.entity_type.value if hasattr(ent.entity_type, 'value') else ent.entity_type,
+                                entity_type=ent.entity_type.value
+                                if hasattr(ent.entity_type, "value")
+                                else ent.entity_type,
                                 role=ent.role,
                             )
                             for ent in e.entities
@@ -1041,7 +1050,7 @@ async def get_timeline_with_entities(
                         is_ambiguous=e.is_ambiguous,
                         is_verified=e.is_verified,
                         is_manual=e.is_verified,  # is_verified maps to is_manual in cache
-                        source_bbox_ids=getattr(e, 'source_bbox_ids', []),
+                        source_bbox_ids=getattr(e, "source_bbox_ids", []),
                     )
                     for e in cached.events
                 ]
@@ -1096,7 +1105,9 @@ async def get_timeline_with_entities(
                 event_date=e.event_date,
                 event_date_precision=e.event_date_precision,
                 event_date_text=e.event_date_text,
-                event_type=e.event_type.value if hasattr(e.event_type, 'value') else e.event_type,
+                event_type=e.event_type.value
+                if hasattr(e.event_type, "value")
+                else e.event_type,
                 description=e.description,
                 document_id=e.document_id,
                 document_name=e.document_name,
@@ -1106,7 +1117,9 @@ async def get_timeline_with_entities(
                     EntityReference(
                         entity_id=ent.entity_id,
                         canonical_name=ent.canonical_name,
-                        entity_type=ent.entity_type.value if hasattr(ent.entity_type, 'value') else ent.entity_type,
+                        entity_type=ent.entity_type.value
+                        if hasattr(ent.entity_type, "value")
+                        else ent.entity_type,
                         role=ent.role,
                     )
                     for ent in e.entities
@@ -1515,7 +1528,9 @@ async def get_entity_timeline(
                 total=entity_view.event_count,
                 page=page,
                 per_page=per_page,
-                total_pages=ceil(entity_view.event_count / per_page) if per_page > 0 else 0,
+                total_pages=ceil(entity_view.event_count / per_page)
+                if per_page > 0
+                else 0,
             ),
         )
 
@@ -1551,7 +1566,10 @@ async def get_entity_timeline(
     responses={
         201: {"description": "Manual event created"},
         400: {"model": TimelineErrorResponse, "description": "Invalid request"},
-        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        403: {
+            "model": TimelineErrorResponse,
+            "description": "Insufficient permissions",
+        },
         404: {"model": TimelineErrorResponse, "description": "Matter not found"},
     },
 )
@@ -1631,7 +1649,10 @@ async def create_manual_event(
     responses={
         200: {"description": "Event updated"},
         400: {"model": TimelineErrorResponse, "description": "Invalid request"},
-        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        403: {
+            "model": TimelineErrorResponse,
+            "description": "Insufficient permissions",
+        },
         404: {"model": TimelineErrorResponse, "description": "Event not found"},
     },
 )
@@ -1727,17 +1748,21 @@ async def update_timeline_event(
     response_model_by_alias=True,
     responses={
         200: {"description": "Event deleted"},
-        400: {"model": TimelineErrorResponse, "description": "Cannot delete auto-extracted event"},
-        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        400: {
+            "model": TimelineErrorResponse,
+            "description": "Cannot delete auto-extracted event",
+        },
+        403: {
+            "model": TimelineErrorResponse,
+            "description": "Insufficient permissions",
+        },
         404: {"model": TimelineErrorResponse, "description": "Event not found"},
     },
 )
 async def delete_manual_event(
     matter_id: str = Path(..., description="Matter UUID"),
     event_id: str = Path(..., description="Event UUID"),
-    membership: MatterMembership = Depends(
-        require_matter_role([MatterRole.OWNER])
-    ),
+    membership: MatterMembership = Depends(require_matter_role([MatterRole.OWNER])),
     timeline_service: TimelineService = Depends(_get_timeline_service),
     cache_service: TimelineCacheService = Depends(_get_cache_service),
 ) -> ManualEventDeleteResponse:
@@ -1832,7 +1857,10 @@ async def delete_manual_event(
     response_model_by_alias=True,
     responses={
         200: {"description": "Event verification updated"},
-        403: {"model": TimelineErrorResponse, "description": "Insufficient permissions"},
+        403: {
+            "model": TimelineErrorResponse,
+            "description": "Insufficient permissions",
+        },
         404: {"model": TimelineErrorResponse, "description": "Event not found"},
     },
 )

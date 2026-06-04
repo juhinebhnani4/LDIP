@@ -34,7 +34,7 @@ def export_service(mock_settings):
 
     with patch(
         "app.services.verification.export_eligibility.get_settings",
-        return_value=mock_settings
+        return_value=mock_settings,
     ):
         return ExportEligibilityService()
 
@@ -302,7 +302,7 @@ class TestSingletonFactory:
 
         with patch(
             "app.services.verification.export_eligibility.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             service1 = get_export_eligibility_service()
             service2 = get_export_eligibility_service()
@@ -313,7 +313,7 @@ class TestSingletonFactory:
         """reset_export_eligibility_service should clear singleton."""
         with patch(
             "app.services.verification.export_eligibility.get_settings",
-            return_value=mock_settings
+            return_value=mock_settings,
         ):
             service1 = get_export_eligibility_service()
             reset_export_eligibility_service()

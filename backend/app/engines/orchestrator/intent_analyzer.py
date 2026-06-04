@@ -75,7 +75,9 @@ FALLBACK_CONFIDENCE = 0.3
 CITATION_PATTERNS = [
     re.compile(r"\bcitations?\b", re.IGNORECASE),  # citation, citations
     re.compile(r"\b(cite|cited|citing)\b", re.IGNORECASE),
-    re.compile(r"\bacts?\s+(of\s+)?\d{4}\b", re.IGNORECASE),  # "Act 1956", "Acts of 2013"
+    re.compile(
+        r"\bacts?\s+(of\s+)?\d{4}\b", re.IGNORECASE
+    ),  # "Act 1956", "Acts of 2013"
     re.compile(r"\bsection\s+\d+", re.IGNORECASE),  # "Section 138"
     re.compile(r"\b(statute|statutory|provisions?)\b", re.IGNORECASE),
     re.compile(r"\breferences?\b.*\b(act|law|statute)\b", re.IGNORECASE),
@@ -97,8 +99,12 @@ TIMELINE_PATTERNS = [
 # Contradiction patterns - detect inconsistency queries
 CONTRADICTION_PATTERNS = [
     re.compile(r"\bcontradictions?\b", re.IGNORECASE),  # contradiction, contradictions
-    re.compile(r"\b(contradict|contradicts|contradictory|contradicting)\b", re.IGNORECASE),
-    re.compile(r"\binconsisten(t|cy|cies)\b", re.IGNORECASE),  # inconsistent, inconsistency
+    re.compile(
+        r"\b(contradict|contradicts|contradictory|contradicting)\b", re.IGNORECASE
+    ),
+    re.compile(
+        r"\binconsisten(t|cy|cies)\b", re.IGNORECASE
+    ),  # inconsistent, inconsistency
     re.compile(r"\bconflicts?\b", re.IGNORECASE),  # conflict, conflicts
     re.compile(r"\b(conflicting)\b", re.IGNORECASE),
     re.compile(r"\bdisagrees?\b", re.IGNORECASE),  # disagree, disagrees
@@ -111,10 +117,15 @@ CONTRADICTION_PATTERNS = [
 # Document discovery patterns - detect document listing/metadata queries
 DOCUMENT_DISCOVERY_PATTERNS = [
     re.compile(r"\bwhat\s+(documents?|files?)\b", re.IGNORECASE),  # what documents
-    re.compile(r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE),
+    re.compile(
+        r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE
+    ),
     re.compile(r"\bwhich\s+(documents?|files?)\b", re.IGNORECASE),  # which documents
     re.compile(r"\bhow\s+many\s+(documents?|files?|pages?)\b", re.IGNORECASE),
-    re.compile(r"\b(show|display)\s*(me\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(show|display)\s*(me\s*)?(all\s*)?(the\s*)?(documents?|files?)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bdocuments?\s+(are|were)\s+(in|uploaded|available)\b", re.IGNORECASE),
     re.compile(r"\b(all|total)\s+(documents?|files?|pages?)\b", re.IGNORECASE),
     re.compile(r"\bexhibits?\b", re.IGNORECASE),  # legal document reference
@@ -123,9 +134,15 @@ DOCUMENT_DISCOVERY_PATTERNS = [
 # Entity lookup patterns - detect person/party queries
 ENTITY_LOOKUP_PATTERNS = [
     re.compile(r"\bwho\s+is\b", re.IGNORECASE),  # who is X
-    re.compile(r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?|petitioners?|defendants?|plaintiffs?)\b", re.IGNORECASE),
+    re.compile(
+        r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?|petitioners?|defendants?|plaintiffs?)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\btell\s+me\s+about\s+\w+", re.IGNORECASE),  # tell me about [name]
-    re.compile(r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bwhat\s+is\s+the\s+role\s+of\b", re.IGNORECASE),
     re.compile(r"\b(information|details?)\s+(about|on|regarding)\s+\w+", re.IGNORECASE),
     re.compile(r"\bwho\s+(filed|initiated|brought)\b", re.IGNORECASE),
@@ -294,7 +311,9 @@ class IntentAnalyzer:
             )
 
         # Step 2: Use LLM classification
-        classification, cost = await self._llm_classification(query, matter_id=matter_id)
+        classification, cost = await self._llm_classification(
+            query, matter_id=matter_id
+        )
 
         # Step 3: Apply confidence-based multi-engine fallback
         classification = self._apply_multi_engine_fallback(classification)
@@ -396,7 +415,9 @@ class IntentAnalyzer:
         return None
 
     async def _llm_classification(
-        self, query: str, matter_id: str | None = None,
+        self,
+        query: str,
+        matter_id: str | None = None,
     ) -> tuple[IntentClassification, IntentAnalysisCost]:
         """Classify query intent using GPT-3.5 with circuit breaker.
 
@@ -418,7 +439,8 @@ class IntentAnalyzer:
         try:
             # Call OpenAI with circuit breaker protection
             response_text, input_tokens, output_tokens = await self._call_openai_chat(
-                user_prompt, matter_id=matter_id,
+                user_prompt,
+                matter_id=matter_id,
             )
 
             # Track cost
@@ -474,7 +496,9 @@ class IntentAnalyzer:
 
     @with_circuit_breaker(CircuitService.OPENAI_CHAT)
     async def _call_openai_chat(
-        self, user_prompt: str, matter_id: str | None = None,
+        self,
+        user_prompt: str,
+        matter_id: str | None = None,
     ) -> tuple[str, int, int]:
         """Call OpenAI Chat API with circuit breaker protection.
 
@@ -506,13 +530,19 @@ class IntentAnalyzer:
         if response.usage and response.usage.prompt_tokens_details:
             cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
 
-        tracker.add_tokens(input_tokens=input_tokens, output_tokens=output_tokens, cached_input_tokens=cached_tokens)
+        tracker.add_tokens(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_input_tokens=cached_tokens,
+        )
         tracker.log_cost()
         await persist_cost(tracker)
 
         return response_text, input_tokens, output_tokens
 
-    def _parse_classification_response(self, response_text: str) -> IntentClassification:
+    def _parse_classification_response(
+        self, response_text: str
+    ) -> IntentClassification:
         """Parse GPT-3.5 response into IntentClassification.
 
         Args:
@@ -615,10 +645,14 @@ class IntentAnalyzer:
         if classification.confidence < LOW_CONFIDENCE_THRESHOLD:
             reasoning = f"{classification.reasoning} (Low confidence + RAG context)"
         else:
-            reasoning = f"{classification.reasoning} (+ RAG context for document grounding)"
+            reasoning = (
+                f"{classification.reasoning} (+ RAG context for document grounding)"
+            )
 
         return IntentClassification(
-            intent=QueryIntent.MULTI_ENGINE if len(engines) > 1 else classification.intent,
+            intent=QueryIntent.MULTI_ENGINE
+            if len(engines) > 1
+            else classification.intent,
             confidence=classification.confidence,
             required_engines=engines,
             reasoning=reasoning,
@@ -648,15 +682,36 @@ def get_intent_analyzer() -> IntentAnalyzer:
 INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
     EngineType.DOCUMENT_DISCOVERY: [
         (re.compile(r"\bwhat\s+(documents?|files?)\b", re.IGNORECASE), 0.95),
-        (re.compile(r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b", re.IGNORECASE), 0.95),
+        (
+            re.compile(
+                r"\blist\s*(of\s*)?(all\s*)?(the\s*)?(documents?|files?)\b",
+                re.IGNORECASE,
+            ),
+            0.95,
+        ),
         (re.compile(r"\bwhich\s+(documents?|files?)\b", re.IGNORECASE), 0.9),
-        (re.compile(r"\bhow\s+many\s+(documents?|files?|pages?)\b", re.IGNORECASE), 0.9),
+        (
+            re.compile(r"\bhow\s+many\s+(documents?|files?|pages?)\b", re.IGNORECASE),
+            0.9,
+        ),
         (re.compile(r"\bexhibits?\b", re.IGNORECASE), 0.8),
     ],
     EngineType.ENTITY_LOOKUP: [
         (re.compile(r"\bwho\s+is\b", re.IGNORECASE), 0.9),
-        (re.compile(r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?)\b", re.IGNORECASE), 0.95),
-        (re.compile(r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b", re.IGNORECASE), 0.9),
+        (
+            re.compile(
+                r"\bwho\s+are\s+(the\s+)?(parties?|respondents?|applicants?)\b",
+                re.IGNORECASE,
+            ),
+            0.95,
+        ),
+        (
+            re.compile(
+                r"\b(parties?|respondents?|applicants?|petitioners?)\s+(involved|in\s+this)\b",
+                re.IGNORECASE,
+            ),
+            0.9,
+        ),
         (re.compile(r"\bwho\s+(filed|initiated|brought)\b", re.IGNORECASE), 0.85),
         (re.compile(r"\brelationship\s+(between|of)\b", re.IGNORECASE), 0.8),
     ],
@@ -672,22 +727,49 @@ INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
         (re.compile(r"\bchronolog(y|ical|ically)?\b", re.IGNORECASE), 0.9),
         (re.compile(r"\bsequence\s+(of\s+)?events?\b", re.IGNORECASE), 0.85),
         (re.compile(r"\bchronological\s+order\b", re.IGNORECASE), 0.85),
-        (re.compile(r"\bwhen\s+(did|was)\b", re.IGNORECASE), 0.5),         # Secondary — below LOW_CONFIDENCE_THRESHOLD
-        (re.compile(r"\b(dates?|order\s+of)\b", re.IGNORECASE), 0.45),     # Secondary — below LOW_CONFIDENCE_THRESHOLD
+        (
+            re.compile(r"\bwhen\s+(did|was)\b", re.IGNORECASE),
+            0.5,
+        ),  # Secondary — below LOW_CONFIDENCE_THRESHOLD
+        (
+            re.compile(r"\b(dates?|order\s+of)\b", re.IGNORECASE),
+            0.45,
+        ),  # Secondary — below LOW_CONFIDENCE_THRESHOLD
     ],
     EngineType.CONTRADICTION: [
         (re.compile(r"\bcontradictions?\b", re.IGNORECASE), 0.9),
         (re.compile(r"\binconsisten(t|cy|cies)\b", re.IGNORECASE), 0.9),
-        (re.compile(r"\bconflicting\s+(statements?|accounts?|claims?|versions?|testimon)", re.IGNORECASE), 0.85),
+        (
+            re.compile(
+                r"\bconflicting\s+(statements?|accounts?|claims?|versions?|testimon)",
+                re.IGNORECASE,
+            ),
+            0.85,
+        ),
         (re.compile(r"\bconflict\s+between\b", re.IGNORECASE), 0.85),
         (re.compile(r"\bdiscrepanc(y|ies)\b", re.IGNORECASE), 0.8),
-        (re.compile(r"\bdisagree(ment|s)?\s+(about|on|between|regarding|with)\b", re.IGNORECASE), 0.7),
+        (
+            re.compile(
+                r"\bdisagree(ment|s)?\s+(about|on|between|regarding|with)\b",
+                re.IGNORECASE,
+            ),
+            0.7,
+        ),
         (re.compile(r"\bmismatche?s?\b", re.IGNORECASE), 0.7),
-        (re.compile(r"\bconflicts?\b", re.IGNORECASE), 0.6),  # Low confidence — contributes as signal but won't dominate RAG
+        (
+            re.compile(r"\bconflicts?\b", re.IGNORECASE),
+            0.6,
+        ),  # Low confidence — contributes as signal but won't dominate RAG
     ],
     EngineType.RAG: [
         (re.compile(r"\b(summarize|summary)\b", re.IGNORECASE), 0.8),
-        (re.compile(r"\bwhat\s+(is|are|was|were)\s+(the\s+)?(core|main|central|key|primary)?\s*(dispute|issue|case|matter|claim)\b", re.IGNORECASE), 0.9),
+        (
+            re.compile(
+                r"\bwhat\s+(is|are|was|were)\s+(the\s+)?(core|main|central|key|primary)?\s*(dispute|issue|case|matter|claim)\b",
+                re.IGNORECASE,
+            ),
+            0.9,
+        ),
         (re.compile(r"\bwhat\s+(is|are|was|were)\b", re.IGNORECASE), 0.7),
         (re.compile(r"\bexplain\b", re.IGNORECASE), 0.7),
         (re.compile(r"\btell\s+me\s+about\b", re.IGNORECASE), 0.7),
@@ -697,10 +779,16 @@ INTENT_PATTERNS: dict[EngineType, list[tuple[re.Pattern, float]]] = {
 
 # Comprehensive analysis patterns - triggers ALL engines
 COMPREHENSIVE_PATTERNS = [
-    re.compile(r"\b(complete|full|comprehensive)\s+(analysis|review|report)", re.IGNORECASE),
+    re.compile(
+        r"\b(complete|full|comprehensive)\s+(analysis|review|report)", re.IGNORECASE
+    ),
     re.compile(r"\b(all|everything)\s+(about|regarding)", re.IGNORECASE),
-    re.compile(r"(summarize|summary).+(citation|timeline|contradiction)", re.IGNORECASE),
-    re.compile(r"\band\b.+\band\b.+\band\b", re.IGNORECASE),  # Multiple "and" conjunctions
+    re.compile(
+        r"(summarize|summary).+(citation|timeline|contradiction)", re.IGNORECASE
+    ),
+    re.compile(
+        r"\band\b.+\band\b.+\band\b", re.IGNORECASE
+    ),  # Multiple "and" conjunctions
 ]
 
 
@@ -799,6 +887,7 @@ class MultiIntentAnalyzer:
                 return None  # LLM refinement unavailable
             try:
                 from openai import AsyncOpenAI
+
                 self._client = AsyncOpenAI(api_key=self.api_key)
             except Exception as e:
                 logger.warning("multi_intent_llm_init_failed", error=str(e))
@@ -810,6 +899,7 @@ class MultiIntentAnalyzer:
         if self._redis is None:
             try:
                 from app.services.memory.redis_client import get_redis_client
+
                 self._redis = await get_redis_client()
             except Exception as e:
                 logger.debug("intent_cache_redis_init_failed", error=str(e))
@@ -822,7 +912,9 @@ class MultiIntentAnalyzer:
         query_hash = hashlib.sha256(normalized.encode()).hexdigest()
         return f"intent_cache:{query_hash}"
 
-    async def _get_cached_classification(self, query: str) -> MultiIntentClassification | None:
+    async def _get_cached_classification(
+        self, query: str
+    ) -> MultiIntentClassification | None:
         """Check Redis for a cached classification result."""
         try:
             redis = await self._ensure_redis()
@@ -831,7 +923,9 @@ class MultiIntentAnalyzer:
             data = await redis.get(self._cache_key(query))
             if data is None:
                 return None
-            payload = json.loads(data if isinstance(data, str) else data.decode("utf-8"))
+            payload = json.loads(
+                data if isinstance(data, str) else data.decode("utf-8")
+            )
             result = MultiIntentClassification.from_cache(payload)
             logger.info("intent_cache_hit", query_length=len(query))
             return result
@@ -839,19 +933,28 @@ class MultiIntentAnalyzer:
             logger.debug("intent_cache_get_failed", error=str(e))
             return None
 
-    async def _set_cached_classification(self, query: str, result: MultiIntentClassification) -> None:
+    async def _set_cached_classification(
+        self, query: str, result: MultiIntentClassification
+    ) -> None:
         """Store classification result in Redis with short TTL."""
         try:
             redis = await self._ensure_redis()
             if not redis:
                 return
             payload = result.to_cache()
-            await redis.set(self._cache_key(query), json.dumps(payload), ex=self.INTENT_CACHE_TTL)
+            await redis.set(
+                self._cache_key(query), json.dumps(payload), ex=self.INTENT_CACHE_TTL
+            )
             logger.debug("intent_cache_set", query_length=len(query))
         except Exception as e:
             logger.debug("intent_cache_set_failed", error=str(e))
 
-    async def classify(self, query: str, matter_id: str | None = None, document_count: int | None = None) -> MultiIntentClassification:
+    async def classify(
+        self,
+        query: str,
+        matter_id: str | None = None,
+        document_count: int | None = None,
+    ) -> MultiIntentClassification:
         """Main entry point for query classification.
 
         Flow:
@@ -898,7 +1001,9 @@ class MultiIntentAnalyzer:
             if cached is not None:
                 return cached
 
-            signals = await self._llm_refine_signals(query, signals, matter_id=matter_id)
+            signals = await self._llm_refine_signals(
+                query, signals, matter_id=matter_id
+            )
 
         # Stage 3: Detect compound intents
         compound = self._detect_compound_intent(signals)
@@ -909,7 +1014,9 @@ class MultiIntentAnalyzer:
         # Stage 5: Derive QueryProfile from signals + query text
         from app.engines.rag.query_profile import QueryProfile
 
-        profile = QueryProfile.from_intent_signals(signals, query, document_count=document_count)
+        profile = QueryProfile.from_intent_signals(
+            signals, query, document_count=document_count
+        )
 
         result = MultiIntentClassification(
             signals=signals,
@@ -1036,7 +1143,10 @@ class MultiIntentAnalyzer:
         return high_confidence_count > 1 or high_confidence_count == 0
 
     async def _llm_refine_signals(
-        self, query: str, initial_signals: list[IntentSignal], matter_id: str | None = None,
+        self,
+        query: str,
+        initial_signals: list[IntentSignal],
+        matter_id: str | None = None,
     ) -> list[IntentSignal]:
         """Use LLM to refine/validate intent signals.
 
@@ -1084,7 +1194,9 @@ class MultiIntentAnalyzer:
             if response.usage:
                 cached_tokens = 0
                 if response.usage.prompt_tokens_details:
-                    cached_tokens = response.usage.prompt_tokens_details.cached_tokens or 0
+                    cached_tokens = (
+                        response.usage.prompt_tokens_details.cached_tokens or 0
+                    )
                 tracker.add_tokens(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
@@ -1122,7 +1234,9 @@ class MultiIntentAnalyzer:
 
             signals: list[IntentSignal] = []
             for intent_data in intents:
-                engine_str = intent_data.get("engine", "").lower().replace("rag_search", "rag")
+                engine_str = (
+                    intent_data.get("engine", "").lower().replace("rag_search", "rag")
+                )
                 try:
                     engine = EngineType(engine_str)
                     confidence = float(intent_data.get("confidence", 0.5))
@@ -1207,7 +1321,9 @@ class MultiIntentAnalyzer:
             )
             logger.debug(
                 "rag_always_added_multi_intent",
-                existing_engines=[s.engine.value for s in signals if s.engine != EngineType.RAG],
+                existing_engines=[
+                    s.engine.value for s in signals if s.engine != EngineType.RAG
+                ],
                 max_confidence=max_conf,
             )
 

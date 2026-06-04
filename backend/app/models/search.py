@@ -289,7 +289,9 @@ class FuzzyMatchInfo(BaseModel):
     """Information about a fuzzy entity match."""
 
     query_term: str = Field(..., description="The term from the query that was matched")
-    matched_entity: str = Field(..., description="The canonical entity name that was matched")
+    matched_entity: str = Field(
+        ..., description="The canonical entity name that was matched"
+    )
     match_score: float = Field(..., description="Match confidence score (0-100)")
     is_exact: bool = Field(..., description="True if exact match, False if fuzzy")
 

@@ -2163,6 +2163,13 @@ Seven commits land the cleanup (all behavior-preserving except #4):
 
 **NEW BLOCKER for step (4) "get CI green":** that 196 is a separate, pre-existing problem — **196 tests fail in a CI-like env** (placeholder Supabase/API keys) with `getaddrinfo`/`ConnectError`/`missing-api-key`. They fail **identically on `master`**, so they're not from this cleanup, but they will likely keep CI's **pytest** step red even after lint/format are green. Unknown whether they pass on CI's Linux env (could be Windows-local mock-patching quirks) — **the next step is to open a PR `ci-hardening-inf013` → `master` so CI actually runs and tells us the truth**, then decide whether the 196 are a real CI blocker (separate work item: proper Supabase/LLM mocking) before step (5) branch protection. Do **not** enable branch protection until CI's full job (lint + format + pytest + security-tests) is actually green.
 
+**CI run confirmed (2026-06-04, PR #60, run 26946760147):** opening the PR triggered backend CI for the first time ever. Results:
+- ✅ **`ruff check .` GREEN on Linux.** ✅ **`ruff format --check .` GREEN on Linux.** (Lint/format half of INF-013 = done.)
+- Surfaced a **third undeclared-dep gap**: `pytest-cov` was used by the CI command (`--cov=app`) but never declared → `unrecognized arguments: --cov`, pytest aborted at exit 4. Fixed (commit 9: add `pytest-cov`, relock).
+- ❌ **pytest: 2955 passed / 236 failed** on CI. The 236 are the pre-existing env/mock-dependent failures — **confirmed real on Linux**, spanning Supabase + OpenAI + Gemini + Cohere mock gaps across many test files. NOT caused by this cleanup (master-diff proved 0 branch-only failures).
+
+**Net:** INF-013's lint/format/deps work is **complete and CI-verified green**. The remaining blocker to a *fully* green merge-gate is the **236 pre-existing pytest failures** — a distinct test-suite-health work item (proper external-service mocking; candidate for `forensic-hunt` to find shared root-cause SHAPEs). Branch protection on the **full** `lint-and-test` job must wait for that. **Option to get a partial real guard now:** split `ci-backend.yml` into separate `lint` (ruff+format, already green) and `test` (pytest) jobs, and make only `lint` merge-blocking until the 236 are fixed.
+
 ---
 
 ## 7. Other

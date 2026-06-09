@@ -27,6 +27,7 @@ test necessarily flows through, not 41 scattered conventions:
 See BUGS.md INF-014 and memory ``inf014-test-quarantine-shipped``.
 """
 
+import socket
 from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
 from typing import Any
@@ -39,9 +40,23 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 
-from app.core.security import get_current_user
-from app.main import app
-from app.models.auth import AuthenticatedUser
+# Optional egress transports — imported once, guarded so a missing package never
+# breaks collection. Each is a SEPARATE network channel the app can reach Google
+# (or anything) through, and each needs its own chokepoint (see the wall below).
+try:
+    import aiohttp  # google-genai's async path uses aiohttp, NOT httpx
+except ImportError:  # pragma: no cover
+    aiohttp = None  # type: ignore[assignment]
+try:
+    import grpc  # google-cloud-documentai uses grpc (C-core, bypasses sockets)
+    import grpc.aio as _grpc_aio
+except ImportError:  # pragma: no cover
+    grpc = None  # type: ignore[assignment]
+    _grpc_aio = None  # type: ignore[assignment]
+
+from app.core.security import get_current_user  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.auth import AuthenticatedUser  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # INF-014: central quarantine of pre-existing failures (test-suite rot).
@@ -118,21 +133,37 @@ def _isolate_global_state() -> Iterator[None]:
 # ---------------------------------------------------------------------------
 # INF-014 ② — WALL part 2: no real network egress from unit tests (autouse).
 #
-# Real (non-ASGI) httpx egress RAISES loudly. A unit test that genuinely needs
-# the network fails visibly here instead of silently passing or hanging on DNS
-# resolution of ``placeholder.supabase.co``. TestClient uses httpx.ASGITransport
-# (in-process), which is NOT patched — so authed_client / client keep working.
+# A unit test that genuinely needs the network must fail VISIBLY here instead of
+# silently passing (or hanging on DNS) by reaching a real API. The original wall
+# patched only httpx — but the app reaches the network through FOUR distinct
+# transport families, and httpx is just one. Each needs its own chokepoint
+# (proven empirically 2026-06-09, not assumed — see the probe in the PR):
 #
-# Deliberately NOT a blanket Supabase-client mock. A generic ``MagicMock`` for
-# the client makes DB queries *succeed* returning empty-but-truthy data
-# (``MagicMock`` iterates as empty), which silently changes behaviour rather
-# than blocking it. That actually broke 3 contradiction tests: the DB-backed
-# ``pricing_loader.initialize_pricing`` ran at app startup, "loaded" an EMPTY
-# pricing dict from the mock, cached it in a module global, and every LLM-cost
-# calc then returned $0. Blocking egress (vs faking success) preserves the
-# real fallback path (``initialize_pricing`` catches the error → hardcoded
-# pricing). Tests that need specific Supabase data mock the client locally, as
-# they already do — and those local mocks are scoped, not process-global.
+#   * httpx           — Supabase, OpenAI, Cohere, google-genai SYNC calls.
+#   * aiohttp         — google-genai ASYNC calls go through aiohttp, NOT httpx,
+#                       so they escaped the old wall (the broken-Gemini-mock
+#                       tests reached real Gemini and got "400 API key invalid").
+#   * grpc            — google-cloud-documentai. grpc does its socket I/O in C,
+#                       BELOW Python's ``socket`` module, so NO socket patch can
+#                       catch it — the only Python chokepoint is channel creation.
+#   * socket (backstop) — catches requests/urllib/raw-socket sync egress that
+#                       isn't one of the above. Loopback is ALLOWED so the local
+#                       Redis/Celery broker (127.0.0.1:6379) still works.
+#
+# Why chokepoints-per-transport and not "patch every SDK": transport families
+# are a small, stable, closed set (4); SDKs are not. The socket backstop catches
+# the long tail of Python-level egress for free, so the only thing ever needing
+# an explicit entry is a new C-level transport (rare, and it fails loudly in CI).
+# This is a wall, not the ARCH-003 "remember to mock each new client" sticky-note.
+# ``tests/test_network_wall.py`` asserts each layer holds, so the wall is
+# self-verifying and can't silently regress.
+#
+# TestClient/``client`` use httpx.ASGITransport (in-process, no socket) and are
+# NOT affected. Deliberately NOT a blanket Supabase-client mock: a ``MagicMock``
+# makes DB queries *succeed* returning empty-but-truthy data, which silently
+# changes behaviour — it once zeroed every LLM cost by "loading" an empty pricing
+# dict at startup and breaking 3 contradiction tests. Blocking egress preserves
+# the real fallback paths; tests needing DB data mock the client locally (scoped).
 # ---------------------------------------------------------------------------
 def _blocked_egress(*_args: Any, **_kwargs: Any) -> Any:
     raise RuntimeError(
@@ -141,12 +172,51 @@ def _blocked_egress(*_args: Any, **_kwargs: Any) -> Any:
     )
 
 
+def _is_loopback(host: object) -> bool:
+    """True for localhost-family hosts (Redis/Celery broker run here in tests)."""
+    return isinstance(host, str) and (
+        host == "localhost" or host == "::1" or host.startswith("127.")
+    )
+
+
 @pytest.fixture(autouse=True)
 def _block_external_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1. httpx (sync + async) — keeps the friendly "mock me" message.
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _blocked_egress)
     monkeypatch.setattr(
         httpx.AsyncHTTPTransport, "handle_async_request", _blocked_egress
     )
+
+    # 2. aiohttp — google-genai's async path. One chokepoint covers every verb.
+    if aiohttp is not None:
+        monkeypatch.setattr(aiohttp.client.ClientSession, "_request", _blocked_egress)
+
+    # 3. grpc — google-cloud-documentai. Block channel creation (the only Python
+    #    seam; grpc's actual I/O is in C and unreachable from a socket patch).
+    if grpc is not None:
+        monkeypatch.setattr(grpc, "secure_channel", _blocked_egress)
+        monkeypatch.setattr(grpc, "insecure_channel", _blocked_egress)
+    if _grpc_aio is not None:
+        monkeypatch.setattr(_grpc_aio, "secure_channel", _blocked_egress)
+        monkeypatch.setattr(_grpc_aio, "insecure_channel", _blocked_egress)
+
+    # 4. socket backstop — any other Python-level egress (requests/urllib/raw).
+    #    Loopback is allowed so the test Redis/Celery broker keeps working;
+    #    AF_UNIX (address is a str path, not a tuple) is local IPC, not network.
+    _real_connect = socket.socket.connect
+
+    def _guarded_connect(self: socket.socket, address: Any) -> Any:
+        if not isinstance(address, (tuple, list)):  # AF_UNIX path — local IPC
+            return _real_connect(self, address)
+        host = address[0] if address else None
+        if _is_loopback(host):
+            return _real_connect(self, address)
+        raise RuntimeError(
+            f"INF-014 wall: real socket egress to {host!r} is blocked in unit "
+            "tests. Mock the client, or move this test to tests/integration."
+        )
+
+    monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
 
 
 # ---------------------------------------------------------------------------

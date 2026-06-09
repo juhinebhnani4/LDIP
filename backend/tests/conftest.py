@@ -131,6 +131,34 @@ def _isolate_global_state() -> Iterator[None]:
 
 
 # ---------------------------------------------------------------------------
+# INF-014 ② — WALL part 1b: pre-warm deterministic offline assets (session).
+#
+# tiktoken downloads its BPE vocab from the network on FIRST use. The chunking
+# tests tokenize real text (token_counter / text_splitter / parent_child_chunker
+# use ``cl100k_base`` and ``p50k_base``), so they need that vocab present. This
+# fixture is SESSION-scoped and autouse, so it runs ONCE at session start —
+# BEFORE any function-scoped network wall is installed — and warms the cache so
+# every test then reads it from disk and never touches the network.
+#
+# Why here and not a CI-only pre-warm step: a CI step would leave the exact
+# local-vs-CI gap that hid this for so long (a dev's warm cache passes locally
+# while a cold CI runner downloads mid-test → blocked). Warming in the shared
+# session setup makes local and CI behave IDENTICALLY. It is idempotent — a
+# no-op once cached — and failures are swallowed so an offline/air-gapped run
+# surfaces per-test (with the wall's clear message) instead of dying at setup.
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="session", autouse=True)
+def _prewarm_offline_assets() -> None:
+    try:
+        import tiktoken
+
+        for encoding_name in ("cl100k_base", "p50k_base"):
+            tiktoken.get_encoding(encoding_name)
+    except Exception:  # pragma: no cover - provisioning best-effort
+        pass
+
+
+# ---------------------------------------------------------------------------
 # INF-014 ② — WALL part 2: no real network egress from unit tests (autouse).
 #
 # A unit test that genuinely needs the network must fail VISIBLY here instead of

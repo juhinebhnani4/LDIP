@@ -369,15 +369,18 @@ def _check_verified_section_token_mismatch(client) -> InvariantResult:
             m = _RAW_SECTION_RE.search(c.get("raw_citation_text") or "")
             if not m:
                 continue
-            raw_section = canonicalize_section(m.group(1))[0]
-            stored = (c.get("section") or "").strip()
-            if raw_section and stored and raw_section != stored:
+            # Compare section IDENTITIES, not raw strings: canonicalize BOTH sides so
+            # "138(1)" (stored) vs "138(1)" (raw) -> both "138" (no false flag), while
+            # a bare "205" stored against raw "205A" -> "205" vs "205A" (true mismatch).
+            raw_id = canonicalize_section(m.group(1))[0]
+            stored_id = canonicalize_section((c.get("section") or "").strip())[0]
+            if raw_id and stored_id and raw_id != stored_id:
                 violations.append(
                     {
                         "citation_id": c["id"],
                         "matter_id": c.get("matter_id"),
-                        "raw_section": raw_section,
-                        "stored_section": stored,
+                        "raw_section": raw_id,
+                        "stored_section": c.get("section"),
                     }
                 )
         if len(batch) < page:

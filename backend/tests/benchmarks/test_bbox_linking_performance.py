@@ -84,10 +84,13 @@ class MockBboxLinker:
     Simulates the sliding window fuzzy matching algorithm.
     """
 
-    def __init__(self, timeout_seconds: int = 60):
+    def __init__(self, timeout_seconds: float = 60, clock=time.perf_counter):
         self.timeout_seconds = timeout_seconds
         self.progress_interval = 1000
         self._matched_count = 0
+        # Injectable clock so the timeout path can be tested deterministically
+        # instead of racing a real wall-clock deadline against host speed.
+        self._clock = clock
 
     def link_bboxes_to_chunks(
         self,
@@ -106,7 +109,7 @@ class MockBboxLinker:
         Returns:
             Chunks with populated bbox_ids.
         """
-        start_time = time.perf_counter()
+        start_time = self._clock()
 
         # Create page -> chunk mapping for O(1) lookup
         page_to_chunk: dict[int, dict] = {}
@@ -117,7 +120,7 @@ class MockBboxLinker:
         # Link bboxes to chunks
         for i, bbox in enumerate(bboxes):
             # Check timeout
-            if time.perf_counter() - start_time > self.timeout_seconds:
+            if self._clock() - start_time > self.timeout_seconds:
                 raise TimeoutError(
                     f"Bbox linking timed out after {self.timeout_seconds}s. "
                     f"Processed {i}/{len(bboxes)} bboxes."
@@ -131,7 +134,7 @@ class MockBboxLinker:
 
             # Log progress
             if self._matched_count % self.progress_interval == 0:
-                elapsed = time.perf_counter() - start_time
+                elapsed = self._clock() - start_time
                 print(f"Processed {self._matched_count} bboxes in {elapsed:.2f}s")
 
         return chunks
@@ -319,25 +322,36 @@ class TestTimeout:
     """Tests for timeout behavior."""
 
     def test_timeout_at_60_seconds(self, create_bboxes, create_chunks):
-        """Timeout at 60 seconds fails gracefully."""
+        """Timeout fails gracefully with partial progress — deterministically.
 
-        # Create a very slow linker (simulated)
-        class SlowLinker(MockBboxLinker):
-            def link_bboxes_to_chunks(self, bboxes, chunks):
-                # Simulate slow processing by reducing timeout
-                self.timeout_seconds = 0.001  # Very short timeout
-                return super().link_bboxes_to_chunks(bboxes, chunks)
+        Drives the linker with an injected fake clock that advances a fixed
+        0.1s per tick, so a 1.0s deadline is first exceeded on the 11th tick =>
+        exactly 10 bboxes processed, on every machine. The previous version
+        raced a real 0.001s wall-clock deadline against iteration speed: on a
+        fast host the 2,000 trivial iterations finished in under a millisecond,
+        no TimeoutError fired, and ``pytest.raises`` failed (hardware-fragile
+        flake, BUGS.md INF-014 "Minor"). No wall-clock dependence remains.
+        """
+        # tick 0 = start_time (0.0s); each later call advances +0.1s.
+        ticks = [0]
 
-        bboxes = create_bboxes(100, bboxes_per_page=20)
+        def fake_clock() -> float:
+            value = ticks[0] * 0.1
+            ticks[0] += 1
+            return value
+
+        bboxes = create_bboxes(100, bboxes_per_page=20)  # 2,000 bboxes
         chunks = create_chunks(100, chunk_size=10)
 
-        linker = SlowLinker(timeout_seconds=0.001)
+        linker = MockBboxLinker(timeout_seconds=1.0, clock=fake_clock)
 
         with pytest.raises(TimeoutError) as exc:
             linker.link_bboxes_to_chunks(bboxes, chunks)
 
-        assert "timed out" in str(exc.value).lower()
-        assert "Processed" in str(exc.value)  # Reports partial progress
+        message = str(exc.value)
+        assert "timed out" in message.lower()
+        # Reports partial progress, and the count is deterministic.
+        assert "Processed 10/2000" in message
 
 
 class TestConcurrentDocuments:

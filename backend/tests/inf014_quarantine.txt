@@ -1,6 +1,13 @@
 # INF-014 quarantine — pre-existing pytest failures (test-suite rot). See BUGS.md INF-014.
-# Applied as xfail(strict=False) by tests/conftest.py::pytest_collection_modifyitems.
-# RULE: when you FIX a test, DELETE its line here. This list must only ever SHRINK.
+# Applied as xfail(strict=True) by tests/conftest.py::pytest_collection_modifyitems.
+# SELF-CLEANING: strict makes a fixed test's XPASS FAIL the required `test` job, so a
+#   fix that doesn't also delete its line here turns CI red. You cannot let a fixed test
+#   rot on this list behind a green badge. RULE: when you FIX a test, DELETE its line.
+#   This list must only ever SHRINK.
+# ESCAPE HATCH: if (and only if) a test is genuinely FLAKY (non-deterministic — passes on
+#   some runs), append `  # flaky` to its line. That single entry reverts to strict=False
+#   so an incidental pass can't red the required job and block unrelated merges. Use this
+#   sparingly and with evidence; deterministic failures must stay strict.
 # Built 2026-06-04 from Backend CI runs 26947697559 + 26951210169 (test job), UNIT failures.
 # 2026-06-04 INF-014 ② (the wall): removed 32 now-fixed lines — chunking_logging state
 #   pollution (16), auth-not-overridden test_users (9), slowapi get_verifications (2), and

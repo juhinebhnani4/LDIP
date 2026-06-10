@@ -67,38 +67,75 @@ from app.models.auth import AuthenticatedUser  # noqa: E402
 # proceed. This is deliberately ONE wall, not scattered @xfail decorators (that
 # would be the ARCH-003 "remember to" sticky-note shape).
 #
-# strict=False on purpose: a strict XPASS on a flaky test would turn the
-# REQUIRED check red and block ALL merges — a worse foot-gun than the rot. New
-# regressions are still caught: any failure NOT in the list fails the job.
+# strict=True by DEFAULT — the quarantine is self-cleaning (the INF-014 ⑤ plan).
+# When a quarantined test is fixed it XPASSes; strict turns that XPASS into a
+# FAILURE on the REQUIRED `test` job, which FORCES whoever fixed it to delete the
+# line to go green. Without strict, a fixed test silently passes and rots on the
+# list forever behind a green badge — the exact disease INF-014 set out to kill.
+# So self-cleaning is structural (the build forces the prune), not a convention
+# anyone has to remember.
+#
+# ESCAPE HATCH for the one real foot-gun: a genuinely FLAKY test (passes on some
+# runs) would, under strict, red the required check and block UNRELATED merges.
+# That hazard is handled per-entry, not by weakening the whole list: append
+# ``# flaky`` to that test's line in inf014_quarantine.txt and it reverts to
+# strict=False (won't fail the build if it happens to pass). The flakiness is
+# DECLARED in the data, not left to each author to remember — so the deterministic
+# majority stays self-cleaning while the rare flaky entry is explicitly exempt.
+#
 # RULE: when a test is fixed, DELETE its line from the list. It must only shrink.
+# New regressions are still caught: any failure NOT in the list fails the job.
 # ---------------------------------------------------------------------------
 _QUARANTINE_FILE = Path(__file__).parent / "inf014_quarantine.txt"
 
 
-def _load_quarantine() -> set[str]:
+def _parse_quarantine(text: str) -> dict[str, bool]:
+    """Map each quarantined nodeid -> its xfail ``strict`` flag.
+
+    Each non-comment line is a pytest nodeid. A trailing ``# flaky`` (anything
+    after a ``#`` containing the word "flaky") flips that single entry to
+    strict=False — the narrow escape hatch for non-deterministic tests. Every
+    other entry is strict (self-cleaning). Pure (no I/O) so it is unit-testable;
+    see tests/test_inf014_quarantine.py.
+    """
+    result: dict[str, bool] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        nodeid, _, inline_tag = line.partition("#")
+        nodeid = nodeid.strip()
+        if not nodeid:
+            continue
+        # strict by default; opt OUT only with an explicit `# flaky` tag.
+        result[nodeid] = "flaky" not in inline_tag.lower()
+    return result
+
+
+def _load_quarantine() -> dict[str, bool]:
+    """Read the quarantine file and parse it. ``{}`` if the file is absent."""
     if not _QUARANTINE_FILE.exists():
-        return set()
-    return {
-        line.strip()
-        for line in _QUARANTINE_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    }
+        return {}
+    return _parse_quarantine(_QUARANTINE_FILE.read_text(encoding="utf-8"))
 
 
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:
-    """Mark known INF-014 failures as xfail by exact node id."""
+    """Mark known INF-014 failures as xfail by exact node id (strict per-entry)."""
     quarantined = _load_quarantine()
     if not quarantined:
         return
-    marker = pytest.mark.xfail(
-        reason="INF-014 pre-existing failure (test-suite rot) — see BUGS.md",
-        strict=False,
-    )
     for item in items:
-        if item.nodeid in quarantined:
-            item.add_marker(marker)
+        strict = quarantined.get(item.nodeid)
+        if strict is None:
+            continue
+        item.add_marker(
+            pytest.mark.xfail(
+                reason="INF-014 pre-existing failure (test-suite rot) — see BUGS.md",
+                strict=strict,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------

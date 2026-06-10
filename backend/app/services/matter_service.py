@@ -553,12 +553,15 @@ class MatterService:
 
         logger.info("deleting_matter", matter_id=matter_id, user_id=user_id)
 
-        # Soft delete
+        deleted_at = datetime.now(UTC).isoformat()
+
+        # Soft delete the matter. This is the authoritative action — it removes
+        # the matter from the user's list and satisfies the delete intent.
         result = (
             self.db.table("matters")
             .update(
                 {
-                    "deleted_at": datetime.now(UTC).isoformat(),
+                    "deleted_at": deleted_at,
                 }
             )
             .eq("id", matter_id)
@@ -567,6 +570,31 @@ class MatterService:
 
         if not result.data:
             raise MatterNotFoundError(matter_id)
+
+        # PROD-004 Part A: stamp the matter's documents with the SAME soft-delete
+        # convention soft_delete_document() uses — deleted_at + status='deleted'
+        # (INF-009/PROD-005). This drops them out of the deleted_at-filtered
+        # document readers and recovery sweeps during the 30-day trash window.
+        # Flag-only by design: the DB ON DELETE CASCADE reclaims the children at
+        # hard_delete_expired_matters (30d); there is no restore path.
+        #
+        # Ordered AFTER the matter delete and best-effort: a transient failure
+        # here leaves exactly the pre-PROD-004 state (no worse than baseline,
+        # and Part B already excludes deleted matters in the citation readers),
+        # and we never stamp documents for a matter that is still live.
+        try:
+            self.db.table("documents").update(
+                {
+                    "deleted_at": deleted_at,
+                    "status": "deleted",
+                }
+            ).eq("matter_id", matter_id).is_("deleted_at", "null").execute()
+        except Exception as e:
+            logger.warning(
+                "delete_matter_document_stamp_failed",
+                matter_id=matter_id,
+                error=str(e),
+            )
 
     def invite_member(
         self,

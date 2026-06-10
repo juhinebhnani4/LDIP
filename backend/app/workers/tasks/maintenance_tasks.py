@@ -345,12 +345,18 @@ def dispatch_stuck_queued_jobs(self, stale_minutes: int = 10) -> dict:
                     if doc_resp.data
                     else "case_file"
                 )
-                if doc_status == "completed":
+                # Zombie QUEUED jobs for completed OR soft-deleted documents must
+                # be closed out, never re-dispatched. PROD-004 Part A now stamps a
+                # matter's documents status='deleted' on matter delete (flag-only,
+                # children survive until the 30d CASCADE), so a stuck QUEUED job can
+                # outlive its doc — re-dispatching it would re-process a deleted
+                # matter's doc (Gemini cost + status churn on a dead doc).
+                if doc_status in ("completed", "deleted"):
                     logger.info(
                         "stuck_queued_job_auto_completed",
                         job_id=job_id,
                         document_id=doc_id,
-                        reason="document already completed",
+                        reason=f"document already {doc_status}",
                     )
                     client.table("processing_jobs").update(
                         {

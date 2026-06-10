@@ -2929,6 +2929,12 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 | **FE-019** | P3 | OPEN | Internal/technical controls exposed to end users (Embedding model dropdown, "1 worker") | — |
 | **FE-020** | P3 | OPEN | `href="#"` on source/citation links (middle-click produces dead tabs) | — |
 | **FE-021** | P3 | OPEN | Redundant filename shown twice in document viewer toolbar | — |
+| **FE-025** | P2 | OPEN | Citations UI shows "pending · available" while DB status is `act_unavailable` during the verify window — status vocabulary diverges from backend enum, misleads on a mid-window glance (E2E#3, 2026-06-10) | FE-ARCH-01 |
+| **FE-026** | P3 | OPEN | Summary loading skeletons misaligned after the upload→matter auto-redirect (stray bar + mismatched cards → visible shift when data lands) (E2E#3, user-flagged) | FE-ARCH-03, FE-022 |
+| **FE-027** | P3 | OPEN | Section+subsection rendered with a literal dot: "Section 205A.(8)" (E2E#3) | FE-ARCH-04 |
+| **PROD-INF-1** | P3 | OPEN | `recover_stuck_document` + `finalize_chunked_document` (`has_chunk_results=False`) fire for a doc that processes & completes normally — recovery sweep firing on a healthy in-flight doc; watch for double-processing (E2E#3, 2026-06-10) | — |
+
+> E2E #3 (2026-06-10) full-stack observation — frontend/Railway/DB — recorded in `docs/PROD-FINDINGS-2026-06-10.md`. Confirms GAP-28 L2 end-to-end (faithful `205A`/`205C` in DB + UI, 14/14 `section_not_found`, 0 errors); the FE-025/026/027 + PROD-INF-1 rows above are the non-blocking findings it surfaced. FE-012 (touch console warning) re-confirmed reproducing.
 
 **Coverage gaps from this audit** (also in `FRONTEND-AUDIT-2026-05-20.md` §8): logged-out landing page not audited (would have required logging out); upload end-to-end not exercised (no file submitted, avoided throwaway matter); auth flows, settings/usage, dark mode, Firefox/Safari/iOS, real devices, network throttling all uncovered.
 

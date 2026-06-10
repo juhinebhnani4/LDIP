@@ -127,6 +127,35 @@ Implications:
 
 **Verdict on the E2E goal:** the deployed pipeline + reconciler WORK; but the test meant to "confirm GAP-26" instead proved GAP-26 alone is insufficient and the **extraction L2 fix is essential** — with a reproducible production false-positive as evidence.
 
+## E2E #3 — full-stack observed run on the FINAL deploy (2026-06-10 14:23, matter `a987e8d2`)
+Re-uploaded the same Hero Honda affidavit on the final deploy (`9160935b`). Observed across frontend (Playwright), Railway logs, and live DB.
+
+**WHAT WE WANT vs WHAT WE GET:**
+| Want | Get | Verdict |
+|---|---|---|
+| `205A`/`205(C)` stored faithfully (not bare `205`) | DB: 13×`205A` (+sub `(8)`/`(5)`), 1×`205C`; **0 bare-205** | ✅ |
+| Clean act_name (no `"A of the…"`) | `act_name_original="Companies Act"` on all 14 | ✅ |
+| 1956 provisions rejected vs 2013 Act | Verify task `total=14, not_found=14, verified=0, errors=0` → **14/14 `section_not_found`** | ✅ |
+| Faithful sections visible to the USER | Citations UI shows **Section 205A, 205C, 205A.(8), 205A.(5)** distinctly | ✅ |
+
+**FRONTEND (Playwright):** upload wizard + 5-stage processing UI healthy; auto-redirect to matter workspace on completion; Citations view grouped "By Act" correct. Console: **0 errors**, 1 warning (FE-012).
+
+**BACKEND (Railway logs):** clean pipeline OCR→chunk→embed→entities→citations→resolve→verify; verify ran 14:30–14:31, `errors=0`. One oddity: `recover_stuck_document_triggered` + `finalize_chunked_document_started has_chunk_results=False chunk_results_count=0` fired for the doc mid-run, though it completed fine (see PROD-FE/INF below).
+
+**ASSUMPTIONS vs ACTUAL (corrected this run):**
+- I assumed verification runs ~inline; ACTUAL: citations sit `act_unavailable` for ~1–3 min (awaiting the per-matter act-resolution auto-fetch to link the library doc), THEN a verify task flips them. My 14:29 DB snapshot caught the `act_unavailable` window; verify completed 14:31 → `section_not_found`. So a single DB snapshot can mislead — the verdict is eventually-correct, not immediate.
+- I assumed `/health/invariants` reflects live state; ACTUAL: it reflects the **last beat write** (~30 min cadence) — showed stale `section_token=9` while live code = `2`.
+
+**GAPS / BUGS (new + confirmed):**
+- 🟠 **PROD-FE-1 (new) — status-vocabulary divergence (FE-ARCH-01 family):** during the `act_unavailable` window the Citations UI showed **"14 pending · 1 available · All available"** while the DB status was `act_unavailable`. The UI's optimistic "available/pending" vocabulary doesn't match the backend enum; self-corrects to "issues" after verify, but a single glance mid-window misleads the user.
+- 🟠 **PROD-FE-2 (confirmed FE-ARCH-03 + FE-022) — summary loading-skeleton misalignment after auto-redirect** (user-flagged, screenshot): the skeleton placeholder cards under "Generating Summary" don't align with the loaded layout (stray narrow skeleton bar + mismatched cards) → visible shift when real data lands. Instance of skeleton-as-parallel-copy drift + CLS.
+- 🟡 **PROD-FE-3 (new, cosmetic; FE-ARCH-04) — section display `"205A.(8)"`:** section+subsection joined with a literal `.` ("205A" + "(8)") — format-at-call-site artifact (no presentation layer).
+- 🟡 **FE-012 confirmed** reproducing: `touch failed: ... Unexpected end of JSON input` console warning on every matter open.
+- 🟡 **PROD-INF-1 (new, watch) — unnecessary recovery:** `recover_stuck_document` fired + `finalize_chunked_document` re-ran with `has_chunk_results=False`/`chunk_results_count=0` for a doc that processed and completed normally (38pp). Recovery sweep firing on a healthy in-flight doc = wasted work / potential idempotency noise. Watch for whether it ever double-processes.
+- 📌 **Watchman dashboard is eventually-consistent** (last-beat, ~30 min) — not a bug, but `/health/invariants` can lag the true value between beats.
+
+**Net:** the L2 fix is proven end-to-end on the final deploy — faithful sections in DB AND UI, correct `section_not_found` verdicts, zero false positives, zero errors. The findings above are pre-existing FE-debt instances + observability nuances, none blocking.
+
 ## Cleanup owed
 - Test matter `ebe2f0bc-7bde-4858-ab12-a43a7241b5c9` (this E2E) — delete after
   investigation, OR keep as the live repro for FINDING-1.

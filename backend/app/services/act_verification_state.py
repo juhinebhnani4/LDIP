@@ -87,3 +87,48 @@ def act_doc_fully_embedded(
     if cache is not None:
         cache[lib_doc_id] = ok
     return ok
+
+
+def get_deleted_matter_ids(client) -> set[str]:
+    """Return the ids of all soft-deleted matters (``matters.deleted_at`` set).
+
+    Background tasks that read per-matter data (the RISK-1 reconciler and the
+    watchman invariants) must DERIVE liveness rather than trust that a delete was
+    signalled to every child row. Matter soft-delete only stamps
+    ``matters.deleted_at`` — the children (citations have no soft-delete column at
+    all) are reclaimed later by the 30-day hard-delete via Postgres ON DELETE
+    CASCADE. In that window, any reader keyed on ``matter_id`` that does not
+    exclude soft-deleted matters processes "zombie" rows: the reconciler would
+    re-dispatch verification for deleted matters and the watchmen would count
+    their citations as live invariant violations (PROD-004).
+
+    This is the single shared exclusion gate (sibling to ``act_doc_fully_embedded``
+    above) so the reconciler and the auditor exclude the SAME set — avoiding the
+    ARCH-001 parallel-implementation shape. Fetched once per task run; callers
+    test ``matter_id in get_deleted_matter_ids(client)``.
+
+    Fail-open: on any error returns an empty set (process everything, today's
+    behaviour) — never risks excluding a LIVE matter's data from reconciliation.
+    """
+    deleted: set[str] = set()
+    try:
+        offset, page = 0, 1000
+        while True:
+            resp = (
+                client.table("matters")
+                .select("id")
+                .not_.is_("deleted_at", "null")
+                .range(offset, offset + page - 1)
+                .execute()
+            )
+            batch = resp.data or []
+            if not batch:
+                break
+            deleted.update(r["id"] for r in batch)
+            if len(batch) < page:
+                break
+            offset += page
+    except Exception as e:
+        logger.warning("get_deleted_matter_ids_failed", error=str(e))
+        return set()
+    return deleted

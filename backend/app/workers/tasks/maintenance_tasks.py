@@ -2130,7 +2130,10 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
     # verify task is a 0-Gemini no-op and this sweep stops selecting the Act.
     # Budget bucket: GEMINI_FLASH (operation="citation_verification"), behind the
     # existing get_rate_limiter(LLMProvider.GEMINI). No new queue/worker/quota.
-    from app.services.act_verification_state import act_doc_fully_embedded
+    from app.services.act_verification_state import (
+        act_doc_fully_embedded,
+        get_deleted_matter_ids,
+    )
     from app.workers.tasks.verification_tasks import trigger_verification_on_act_upload
 
     _NON_TERMINAL = ["act_unavailable", "pending"]
@@ -2161,10 +2164,18 @@ def sync_citation_statuses_with_resolutions(self) -> dict:
             logger.info("sync_citation_statuses_no_available_resolutions")
             return results
 
+        # Exclude soft-deleted matters (PROD-004): their citations are zombie rows
+        # awaiting the 30-day hard-delete CASCADE; re-dispatching verification for
+        # them wastes Gemini budget and can resurrect terminal statuses. Derive the
+        # exclusion set once from observed DB state (not a per-delete signal).
+        deleted_matters = get_deleted_matter_ids(client)
+
         # Group by matter_id for efficient processing
         matters_map: dict[str, list[dict]] = {}
         for res in available_resolutions.data:
             matter_id = res["matter_id"]
+            if matter_id in deleted_matters:
+                continue
             if matter_id not in matters_map:
                 matters_map[matter_id] = []
             matters_map[matter_id].append(res)

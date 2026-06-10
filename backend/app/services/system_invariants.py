@@ -181,11 +181,15 @@ def _check_acts_resolved_embedded_zero_verified(client) -> InvariantResult:
     from datetime import UTC, datetime, timedelta
 
     from app.engines.citation.abbreviations import normalize_act_name
-    from app.services.act_verification_state import act_doc_fully_embedded
+    from app.services.act_verification_state import (
+        act_doc_fully_embedded,
+        get_deleted_matter_ids,
+    )
 
     GRACE_MINUTES = 60
     cutoff = (datetime.now(UTC) - timedelta(minutes=GRACE_MINUTES)).isoformat()
     embed_cache: dict[str, bool] = {}
+    deleted_matters = get_deleted_matter_ids(client)  # PROD-004: exclude zombies
 
     resolutions = (
         client.table("act_resolutions")
@@ -198,6 +202,8 @@ def _check_acts_resolved_embedded_zero_verified(client) -> InvariantResult:
     # matter_id -> {normalized_act_name: act_document_id}
     by_matter: dict[str, dict[str, str]] = {}
     for r in resolutions.data or []:
+        if r["matter_id"] in deleted_matters:
+            continue
         by_matter.setdefault(r["matter_id"], {})[r["act_name_normalized"]] = r[
             "act_document_id"
         ]
@@ -270,8 +276,11 @@ def _check_verified_citation_vintage_mismatch(client) -> InvariantResult:
     """
     import re
 
+    from app.services.act_verification_state import get_deleted_matter_ids
+
     YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
     doc_year: dict[str, object] = {}
+    deleted_matters = get_deleted_matter_ids(client)  # PROD-004: exclude zombies
 
     def _target_year(doc_id: str):
         if doc_id not in doc_year:
@@ -303,6 +312,8 @@ def _check_verified_citation_vintage_mismatch(client) -> InvariantResult:
         if not batch:
             break
         for c in batch:
+            if c.get("matter_id") in deleted_matters:
+                continue  # PROD-004: skip soft-deleted matters' zombie citations
             ty = _target_year(c["target_act_document_id"])
             if ty is None:
                 continue  # doc has no recorded vintage -> cannot assert mismatch
@@ -351,7 +362,9 @@ def _check_verified_section_token_mismatch(client) -> InvariantResult:
     citations (stored section already == canonical raw token) never fire.
     """
     from app.engines.citation.extractor import _RAW_SECTION_RE, canonicalize_section
+    from app.services.act_verification_state import get_deleted_matter_ids
 
+    deleted_matters = get_deleted_matter_ids(client)  # PROD-004: exclude zombies
     violations: list[dict] = []
     offset, page = 0, 1000
     while True:
@@ -366,6 +379,8 @@ def _check_verified_section_token_mismatch(client) -> InvariantResult:
         if not batch:
             break
         for c in batch:
+            if c.get("matter_id") in deleted_matters:
+                continue  # PROD-004: skip soft-deleted matters' zombie citations
             raw = c.get("raw_citation_text") or ""
             # Collect EVERY section identity in the raw text — a citation's raw can
             # name multiple sections ("Sec.3(3) r/w Sec.13"), and the stored section

@@ -174,7 +174,17 @@ def repair_citation_in_place(citation: ExtractedCitation) -> None:
         m = _RAW_SECTION_RE.search(raw)
         if m:
             section, subsection, clause = canonicalize_section(m.group(1))
-            if section and section != citation.section:
+            # Only REFINE a dropped suffix/clause on the SAME base number
+            # ("205"->"205A", "205"->"205C"); never reassign to a different number.
+            # `_RAW_SECTION_RE.search` finds the FIRST marker, so a "read with"/
+            # multi-section raw_text must not move citation 139 onto 138.
+            def _base(s: str) -> str:
+                mm = re.match(r"\d+", s or "")
+                return mm.group(0) if mm else ""
+
+            if section and section != citation.section and _base(section) == _base(
+                citation.section
+            ):
                 citation.section = section
                 citation.subsection = subsection
                 citation.clause = clause

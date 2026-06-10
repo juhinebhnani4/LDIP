@@ -187,7 +187,24 @@ class CitationStorageService:
                 batch = extraction_result.citations[i : i + BATCH_SIZE]
                 records = []
 
+                # L2 repair chokepoint (fail-open): both the regex and Gemini engines
+                # converge here before the DB write. Re-derive the section identity
+                # from raw citation text so a mangled section ("205A"->"205",
+                # "205(C)"->"205") cannot reach storage and falsely verify, and strip a
+                # leading "<letter> of the" act-name fragment. Any failure leaves the
+                # citation exactly as extracted — never drops it or blocks the pipeline.
+                from app.engines.citation.extractor import repair_citation_in_place
+
                 for citation in batch:
+                    try:
+                        repair_citation_in_place(citation)
+                    except Exception as e:
+                        logger.debug(
+                            "citation_repair_skipped",
+                            error=str(e),
+                            section=getattr(citation, "section", None),
+                        )
+
                     # Clean the act name first (remove sentence fragments)
                     cleaned_act_name = clean_act_name(citation.act_name)
 

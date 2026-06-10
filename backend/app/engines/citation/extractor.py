@@ -67,39 +67,121 @@ CHUNK_OVERLAP: Final[int] = (
     500  # Overlap between chunks to avoid missing citations at boundaries
 )
 
+# The section-identity capture used in every pattern below. It captures the FULL
+# section token — digits, an immediate alpha suffix, and any parenthesised
+# parts — e.g. "205", "205A", "205(C)", "205A(8)", "138(1)". Capturing the suffix
+# HERE is what stops "205A" from being split into section="205" + the stray "A"
+# bleeding into the act name (the GAP-26 / extraction-corruption root cause,
+# 2026-06-10). Identity vs subsection/clause is decided later in
+# `canonicalize_section`, consistently for both the regex and Gemini paths.
+_SECTION_TOKEN: Final[str] = r"\d+[A-Za-z]?(?:\s*\([A-Za-z0-9]+\s*\))*"
+
 # Regex patterns for common citation formats
 CITATION_PATTERNS: Final[list[re.Pattern]] = [
     # Section X of Act Name, Year - e.g., "Section 138 of the Negotiable Instruments Act, 1881"
     re.compile(
-        r"[Ss]ection\s+(\d+(?:\s*\(\s*\d+\s*\))?(?:\s*\(\s*[a-z]\s*\))?)"
+        rf"[Ss]ection\s+({_SECTION_TOKEN})"
         r"(?:\s+(?:of\s+)?(?:the\s+)?)?([A-Z][A-Za-z\s,&]+(?:Act|Code|Rules))"
         r"(?:,?\s*(\d{4}))?",
         re.IGNORECASE,
     ),
     # S. X / Sec. X of Act - e.g., "S. 138 NI Act"
     re.compile(
-        r"[Ss](?:ec)?\.?\s*(\d+(?:\s*\(\s*\d+\s*\))?)"
+        rf"[Ss](?:ec)?\.?\s*({_SECTION_TOKEN})"
         r"\s+(?:of\s+)?([A-Z][A-Za-z\s\.]+(?:Act|Code))",
         re.IGNORECASE,
     ),
     # u/s X patterns - e.g., "u/s 138 of NI Act"
     re.compile(
-        r"u/s\s*\.?\s*(\d+(?:\s*\(\s*\d+\s*\))?)"
+        rf"u/s\s*\.?\s*({_SECTION_TOKEN})"
         r"\s+(?:of\s+)?([A-Z][A-Za-z\s\.]+)",
         re.IGNORECASE,
     ),
     # Section ranges - e.g., "Sections 138-141 of NI Act"
     re.compile(
-        r"[Ss]ections?\s+(\d+)\s*[-–to]+\s*(\d+)"
+        r"[Ss]ections?\s+(\d+[A-Za-z]?)\s*[-–to]+\s*(\d+[A-Za-z]?)"
         r"\s+(?:of\s+)?([A-Z][A-Za-z\s\.]+(?:Act|Code)?)",
         re.IGNORECASE,
     ),
     # Read with patterns - e.g., "Section 138 read with Section 139"
     re.compile(
-        r"[Ss]ection\s+(\d+)\s+read\s+with\s+[Ss]ection\s+(\d+)",
+        r"[Ss]ection\s+(\d+[A-Za-z]?)\s+read\s+with\s+[Ss]ection\s+(\d+[A-Za-z]?)",
         re.IGNORECASE,
     ),
 ]
+
+
+def canonicalize_section(token: str) -> tuple[str, str | None, str | None]:
+    """Split a raw section token into (section_identity, subsection, clause).
+
+    The section IDENTITY keeps a distinct lettered section together; a numeric
+    subsection or a lowercase clause is split off (and the verifier drills down
+    into them). The rule, aligned with `ActIndexer._section_core`:
+      - immediate alpha suffix      -> part of identity:  "205A"   -> ("205A", None, None)
+      - UPPERCASE paren letter      -> folded into ident:  "205(C)" -> ("205C", None, None)
+      - numeric paren               -> subsection:         "138(1)" -> ("138", "(1)", None)
+      - lowercase paren letter      -> clause:             "138(a)" -> ("138", None, "(a)")
+      - combined:                                          "205A(8)"-> ("205A", "(8)", None)
+
+    Folding UPPERCASE but not lowercase is deliberate: in Indian drafting a
+    lettered section is upper ("205C"), a clause is lower ("(a)"). This is what
+    stops "Section 205(C)" (a 1956 provision) from collapsing to "205" and
+    falsely verifying against the 2013 Act's §205 (live false-positive, 2026-06-10).
+    """
+    t = re.sub(r"\s+", "", token or "")
+    m = re.match(r"(\d+[A-Za-z]?)(.*)$", t)
+    if not m:
+        return (token or "").strip(), None, None
+    section, rest = m.group(1), m.group(2)
+    subsection = clause = None
+    mu = re.match(r"\(([A-Z])\)", rest)
+    if mu:  # uppercase paren-letter -> distinct lettered section
+        section, rest = section + mu.group(1), rest[mu.end() :]
+    mn = re.match(r"\((\d+)\)", rest)
+    if mn:
+        subsection, rest = f"({mn.group(1)})", rest[mn.end() :]
+    ml = re.match(r"\(([a-z])\)", rest)
+    if ml:
+        clause = f"({ml.group(1)})"
+    return section, subsection, clause
+
+
+# Section token immediately following a section marker in raw citation text.
+_RAW_SECTION_RE: Final[re.Pattern] = re.compile(
+    rf"(?:[Ss]ection|[Ss]ec\.?|u/s|§)\s*\.?\s*({_SECTION_TOKEN})", re.IGNORECASE
+)
+# A leading "<single letter> of (the)" fragment the legacy digit-only regex produced
+# when it dropped a section's alpha suffix into the act name ("A of the Companies Act").
+_ACT_FRAGMENT_RE: Final[re.Pattern] = re.compile(
+    r"^[A-Za-z]\s+of\s+(?:the\s+)?", re.IGNORECASE
+)
+
+
+def repair_citation_in_place(citation: ExtractedCitation) -> None:
+    """Storage-boundary repair (fail-open) applied to citations from BOTH engines.
+
+    1. Re-derive the section identity from the raw citation text so a section the
+       extractor truncated ("205A"->"205", "205(C)"->"205") is restored before the
+       verifier sees it — the raw text is the source of truth.
+    2. Strip a leading "<letter> of the" act-name fragment ("A of the Companies Act"
+       -> "Companies Act") left by the legacy digit-only regex.
+
+    The caller wraps this in try/except; any failure must leave the citation
+    untouched (never drop a citation or block the pipeline).
+    """
+    raw = (citation.raw_text or "").strip()
+    if raw:
+        m = _RAW_SECTION_RE.search(raw)
+        if m:
+            section, subsection, clause = canonicalize_section(m.group(1))
+            if section and section != citation.section:
+                citation.section = section
+                citation.subsection = subsection
+                citation.clause = clause
+    if citation.act_name:
+        repaired = _ACT_FRAGMENT_RE.sub("", citation.act_name).strip()
+        if repaired and repaired != citation.act_name:
+            citation.act_name = repaired
 
 
 # =============================================================================
@@ -689,20 +771,11 @@ class CitationExtractor(ReasoningCaptureMixin):
                         if not act_name:
                             continue
 
-                        # Parse subsection from section (e.g., "138(1)")
-                        subsection = None
-                        clause = None
-                        section_match = re.match(
-                            r"(\d+)\s*(?:\((\d+)\))?\s*(?:\(([a-z])\))?",
-                            section,
-                            re.IGNORECASE,
-                        )
-                        if section_match:
-                            section = section_match.group(1)
-                            if section_match.group(2):
-                                subsection = f"({section_match.group(2)})"
-                            if section_match.group(3):
-                                clause = f"({section_match.group(3)})"
+                        # Split the captured token into identity / subsection / clause.
+                        # Keeps the alpha suffix in the section ("205A"), folds an
+                        # uppercase paren-letter ("205(C)"->"205C"), splits numeric
+                        # subsection / lowercase clause. Shared with the storage repair.
+                        section, subsection, clause = canonicalize_section(section)
 
                         citation = ExtractedCitation(
                             act_name=act_name,

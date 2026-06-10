@@ -338,6 +338,61 @@ def _check_verified_citation_vintage_mismatch(client) -> InvariantResult:
     return InvariantResult(len(violations), violations[:SAMPLE_LIMIT], msg)
 
 
+def _check_verified_section_token_mismatch(client) -> InvariantResult:
+    """GAP-26 sibling (2026-06-10): a citation marked ``verified`` whose stored
+    ``section`` disagrees with the section token in its OWN ``raw_citation_text``
+    was verified against the wrong provision because extraction corrupted the
+    section ("Section 205(C)…" stored as ``205`` → falsely verified against the
+    2013 Act's §205). The year-based ``verified_citation_vintage_mismatch`` watchman
+    is blind to these (the citation names no year), so this is its complement.
+
+    Conservative: fires only when raw_citation_text clearly contains a section token
+    that canonicalizes DIFFERENTLY from the stored section. Properly-extracted
+    citations (stored section already == canonical raw token) never fire.
+    """
+    from app.engines.citation.extractor import _RAW_SECTION_RE, canonicalize_section
+
+    violations: list[dict] = []
+    offset, page = 0, 1000
+    while True:
+        resp = (
+            client.table("citations")
+            .select("id, matter_id, section, raw_citation_text")
+            .eq("verification_status", "verified")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        if not batch:
+            break
+        for c in batch:
+            m = _RAW_SECTION_RE.search(c.get("raw_citation_text") or "")
+            if not m:
+                continue
+            raw_section = canonicalize_section(m.group(1))[0]
+            stored = (c.get("section") or "").strip()
+            if raw_section and stored and raw_section != stored:
+                violations.append(
+                    {
+                        "citation_id": c["id"],
+                        "matter_id": c.get("matter_id"),
+                        "raw_section": raw_section,
+                        "stored_section": stored,
+                    }
+                )
+        if len(batch) < page:
+            break
+        offset += page
+
+    msg = ""
+    if violations:
+        msg = (
+            f"{len(violations)} citation(s) 'verified' whose stored section differs "
+            f"from the section in their raw text (extraction-corruption false positive)."
+        )
+    return InvariantResult(len(violations), violations[:SAMPLE_LIMIT], msg)
+
+
 # =============================================================================
 # The catalog — append one Invariant per shape. New shape = new row, not new code.
 # =============================================================================
@@ -366,6 +421,12 @@ INVARIANTS: list[Invariant] = [
         severity="warning",
         description="Citation 'verified' against an Act of a different year than it names (GAP-26 wrong-vintage; L3 trigger).",
         check=_check_verified_citation_vintage_mismatch,
+    ),
+    Invariant(
+        name="verified_section_token_mismatch",
+        severity="warning",
+        description="Citation 'verified' whose stored section differs from its raw-text section (extraction-corruption false positive; GAP-26 sibling).",
+        check=_check_verified_section_token_mismatch,
     ),
 ]
 

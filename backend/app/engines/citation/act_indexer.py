@@ -421,11 +421,18 @@ class ActIndexer:
         if normalized_section in index.sections:
             chunk_ids.extend(index.sections[normalized_section])
         else:
-            # Try partial matches (e.g., "138" matches "138(1)", "138(2)")
+            # Fallback: match on section IDENTITY, not string prefix. The old
+            # `startswith` logic let "205A" match a bare "205" key (and vice-versa),
+            # but "205A" is a DISTINCT section from "205", not a sub-part of it. That
+            # false match verified ~174 Companies-1956 citations against the 2013 Act
+            # at 100% confidence (GAP-26). Two sections share chunks here only when
+            # their cores are equal — the core keeps an alpha suffix ("205A") but
+            # drops a NUMERIC subsection ("205(1)" -> "205"), so the legitimate
+            # drilldown the original intended ("138" reaches "138(1)"/"138(2)") still
+            # works while "205A"/"205(C)" no longer collapse into "205".
+            query_core = self._section_core(normalized_section)
             for sec, cids in index.sections.items():
-                if sec.startswith(normalized_section) or normalized_section.startswith(
-                    sec.split("(")[0]
-                ):
+                if self._section_core(sec) == query_core:
                     chunk_ids.extend(cids)
 
         if not chunk_ids:
@@ -551,6 +558,26 @@ class ActIndexer:
         # (GAP-24: Constitution Article 39A is cited as "39-A" ×15 but the text uses "39A".)
         normalized = re.sub(r"(\d)[-–—]([A-Za-z])", r"\1\2", normalized)
         return normalized
+
+    @staticmethod
+    def _section_core(normalized: str) -> str:
+        """The section *identity* used for fallback (non-exact) matching.
+
+        A NUMERIC subsection is part of the same section and is dropped, so
+        "205(1)" and "138(2)" reduce to "205"/"138" — querying the bare section
+        still reaches its subsection chunks (the drilldown the fallback intends).
+        An alpha suffix or an alpha paren-clause denotes a DISTINCT section and is
+        kept/folded in, so "205A" stays "205A" and "205(C)" becomes "205C" — neither
+        collapses into bare "205". That is what stops a 1956-era "205A"/"205(C)"
+        citation from matching the 2013 Act's unrelated section 205 (GAP-26).
+
+        Input is already `_normalize_section`-ed (whitespace stripped, "39-A"->"39A"),
+        so this only has to resolve parentheses.
+        """
+        # Drop numeric subsections only: "205(1)" -> "205", "205A(8)" -> "205A".
+        core = re.sub(r"\(\d+\)", "", normalized)
+        # Fold any remaining alpha paren-clause into the identity: "205(C)" -> "205C".
+        return core.replace("(", "").replace(")", "")
 
     def get_available_sections(self, document_id: str) -> list[str]:
         """Get list of sections available in an indexed Act.

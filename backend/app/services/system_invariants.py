@@ -251,6 +251,93 @@ def _check_acts_resolved_embedded_zero_verified(client) -> InvariantResult:
     return InvariantResult(len(violations), violations[:SAMPLE_LIMIT], msg)
 
 
+def _check_verified_citation_vintage_mismatch(client) -> InvariantResult:
+    """GAP-26 / L3-trigger: a citation marked ``verified`` must not be verified
+    against an Act document whose vintage (year) contradicts the year the citation
+    itself names. "s.205 of the Companies Act, 1956" verified against the 2013 Act
+    is a false positive — the section numbers coincide but the provisions do not.
+
+    This is the residual the GAP-26 L2 section-match fix CANNOT catch: the citation
+    resolved to the wrong-VINTAGE document. The clean structural cure is L3
+    (vintage-safe binding in the resolver); until then this invariant makes the
+    residual VISIBLE instead of letting it hide for months (the GAP-2/3/11/23/24
+    pattern). A non-zero, growing count is the agreed trigger to do L3.
+
+    Conservative by design (an invariant that cries wolf gets ignored): it fires
+    ONLY when the citation text carries an EXPLICIT 4-digit year that differs from
+    the target doc's ``year``. A citation that names no year is never guessed at,
+    and a target doc with no recorded ``year`` is skipped (cannot assert).
+    """
+    import re
+
+    YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
+    doc_year: dict[str, object] = {}
+
+    def _target_year(doc_id: str):
+        if doc_id not in doc_year:
+            resp = (
+                client.table("library_documents")
+                .select("year")
+                .eq("id", doc_id)
+                .limit(1)
+                .execute()
+            )
+            doc_year[doc_id] = resp.data[0].get("year") if resp.data else None
+        return doc_year[doc_id]
+
+    violations: list[dict] = []
+    offset, page = 0, 1000
+    while True:
+        resp = (
+            client.table("citations")
+            .select(
+                "id, matter_id, act_name_original, raw_citation_text, "
+                "target_act_document_id"
+            )
+            .eq("verification_status", "verified")
+            .not_.is_("target_act_document_id", "null")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        if not batch:
+            break
+        for c in batch:
+            ty = _target_year(c["target_act_document_id"])
+            if ty is None:
+                continue  # doc has no recorded vintage -> cannot assert mismatch
+            # Read the citation's ORIGINAL claim only. ``act_name`` is the
+            # POST-resolution name (it already carries the wrong binding's year, e.g.
+            # "Companies Act, 2013") and would mask the mismatch; ``act_name_original``
+            # + ``raw_citation_text`` carry the year the citation actually names.
+            # quoted_text is excluded to keep incidental years out of the signal.
+            text = " ".join(
+                str(c.get(f) or "")
+                for f in ("act_name_original", "raw_citation_text")
+            )
+            years = {int(y) for y in YEAR.findall(text)}
+            if years and int(ty) not in years:
+                violations.append(
+                    {
+                        "citation_id": c["id"],
+                        "matter_id": c.get("matter_id"),
+                        "cited_years": sorted(years),
+                        "verified_against_year": int(ty),
+                    }
+                )
+        if len(batch) < page:
+            break
+        offset += page
+
+    msg = ""
+    if violations:
+        msg = (
+            f"{len(violations)} citation(s) marked 'verified' against an Act of a "
+            f"DIFFERENT year than the citation names (GAP-26 wrong-vintage; L3 trigger)."
+        )
+    return InvariantResult(len(violations), violations[:SAMPLE_LIMIT], msg)
+
+
 # =============================================================================
 # The catalog — append one Invariant per shape. New shape = new row, not new code.
 # =============================================================================
@@ -273,6 +360,12 @@ INVARIANTS: list[Invariant] = [
         severity="critical",
         description="Resolved + fully-embedded Act with pending citations (>1h) but 0 verified (GAP-24).",
         check=_check_acts_resolved_embedded_zero_verified,
+    ),
+    Invariant(
+        name="verified_citation_vintage_mismatch",
+        severity="warning",
+        description="Citation 'verified' against an Act of a different year than it names (GAP-26 wrong-vintage; L3 trigger).",
+        check=_check_verified_citation_vintage_mismatch,
     ),
 ]
 

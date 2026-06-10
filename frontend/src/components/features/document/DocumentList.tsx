@@ -69,7 +69,10 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
 ];
 
 /**
- * User-friendly status labels for all 12 backend statuses.
+ * User-friendly status labels for all 13 backend statuses.
+ * 'deleted' (soft-delete) falls through to the muted-gray default in the badge
+ * color logic below — deleted docs are excluded from list endpoints anyway, so
+ * this is defensive (e.g. a stale detail link) rather than a normal list state.
  */
 const STATUS_LABELS: Record<DocumentStatus, string> = {
   pending: 'Pending',
@@ -84,6 +87,7 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   searchable: 'Indexed',
   completed: 'Indexed',
   failed: 'Failed',
+  deleted: 'Deleted',
 };
 
 /** Status groups for badge coloring */

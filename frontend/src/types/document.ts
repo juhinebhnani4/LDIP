@@ -11,12 +11,13 @@ export type DocumentType = 'case_file' | 'act' | 'annexure' | 'other';
 /** Document source indicating how the document was added */
 export type DocumentSource = 'user_upload' | 'auto_fetched' | 'system';
 
-/** Document status from processing pipeline — must match all 12 backend statuses */
+/** Document status from processing pipeline — must match all 13 backend statuses
+ *  (incl. 'deleted', the soft-delete terminal sink paired with deleted_at). */
 export type DocumentStatus =
   | 'pending' | 'processing' | 'ocr_complete' | 'ocr_failed'
   | 'pending_review' | 'chunking' | 'chunking_failed'
   | 'embedding' | 'embedding_failed'
-  | 'searchable' | 'completed' | 'failed';
+  | 'searchable' | 'completed' | 'failed' | 'deleted';
 
 /** OCR quality status based on confidence thresholds */
 export type OCRQualityStatus = 'good' | 'fair' | 'poor';

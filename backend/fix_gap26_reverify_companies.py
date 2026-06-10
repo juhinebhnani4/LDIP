@@ -8,21 +8,29 @@ Context (see BUGS.md GAP-26 + the choose-solution L2 plan):
   unrelated section 205 at 100% confidence (no text was ever compared).
 
 What this script does:
-  Resets the provably-wrong rows to 'pending' so the RISK-1 reconciler
-  (sync_citation_statuses_with_resolutions) RE-DERIVES them through the
-  now-fixed indexer (act_indexer._section_core). After re-derivation:
+  Resets the provably-wrong rows to 'pending' and ACTIVELY RE-TRIGGERS
+  verify_citations_for_act for each (matter, act_name, doc) tuple, running the
+  now-fixed indexer (act_indexer._section_core). After re-verification:
     * "205A"/"205(C)" -> section_not_found (terminal; the 2013 Act has no such
       section) — the false positive is gone.
     * a bare "205" whose text says 1956 may re-verify against 2013's real s.205
       (the L3 residual) — that is EXPECTED and is what the new
       `verified_citation_vintage_mismatch` watchman now flags.
 
+  IMPORTANT — why it re-triggers instead of leaning on the reconciler:
+  these citations are bound to a LIBRARY Act via citations.target_act_document_id,
+  while the matter's act_resolution for the same Act has act_document_id=NULL
+  (status 'missing'/'not_on_indiacode'). The RISK-1 reconciler
+  (sync_citation_statuses_with_resolutions) only selects resolutions WHERE
+  act_document_id IS NOT NULL, so it would NEVER re-derive these — a reset-only
+  approach would STRAND them in 'pending' forever. (Discovered 2026-06-10 the
+  hard way; this is the reconciler's library-binding coverage gap.)
+
 ORDERING (critical — GAP-25 churn-trap safety):
   Deploy the worker WITH the act_indexer fix FIRST, THEN run this with --apply.
-  Resetting before the fix is live would just let the reconciler re-verify the
-  same wrong rows again. Because the fix drives "205A" to a TERMINAL state
-  (section_not_found, in the reconciler's exclude set), there is no
-  pending<->terminal churn — the reset is safe and idempotent.
+  Because the fix drives "205A" to a TERMINAL state (section_not_found, in
+  get_citations_for_act's exclude set, storage.py:1165), re-verification cannot
+  churn. The reset+re-trigger is idempotent.
 
 Usage:
     python fix_gap26_reverify_companies.py            # dry-run (default): report only
@@ -67,7 +75,10 @@ def _wrong_companies_2013_verifications(client) -> tuple[list[dict], list[str]]:
     while True:
         resp = (
             client.table("citations")
-            .select("id, section, act_name, raw_citation_text, verification_status")
+            .select(
+                "id, matter_id, section, act_name, raw_citation_text, "
+                "target_act_document_id, verification_status"
+            )
             .in_("target_act_document_id", doc_ids)
             .eq("verification_status", "verified")
             .range(offset, offset + page - 1)
@@ -101,20 +112,51 @@ def main(apply: bool) -> None:
     if len(wrong) > 15:
         print(f"  ... and {len(wrong) - 15} more")
 
+    # Group into the (matter, act_name, doc) tuples verify_citations_for_act needs.
+    tuples = sorted(
+        {
+            (c["matter_id"], c.get("act_name") or "", c["target_act_document_id"])
+            for c in wrong
+        }
+    )
+    print(f"\nVerification tuples (matter, act_name, doc) to re-trigger: {len(tuples)}")
+
     if not apply:
         print("\nDRY RUN — no rows changed. Re-run with --apply AFTER the worker is")
-        print("deployed with the act_indexer fix. The reconciler will re-derive them.")
+        print("deployed with the act_indexer fix.")
         return
+
+    # Reset to pending, THEN actively re-trigger verification. We do NOT rely on the
+    # RISK-1 reconciler: these citations are bound to a LIBRARY Act via
+    # citations.target_act_document_id, and the matter's act_resolution for the same
+    # Act has act_document_id=NULL (status 'missing'/'not_on_indiacode'). The
+    # reconciler only selects resolutions WHERE act_document_id IS NOT NULL, so it
+    # would never re-derive these — resetting to pending alone would STRAND them.
+    # verify_citations_for_act re-runs the (now-fixed) indexer and drives each row to
+    # a terminal state (205A -> section_not_found; real-2013 sections -> verified).
+    from app.workers.tasks.verification_tasks import verify_citations_for_act
 
     ids = [c["id"] for c in wrong]
     for i in range(0, len(ids), 500):
-        chunk = ids[i : i + 500]
         client.table("citations").update({"verification_status": "pending"}).in_(
-            "id", chunk
+            "id", ids[i : i + 500]
         ).execute()
     print(f"\nAPPLIED — reset {len(ids)} citation(s) to 'pending'.")
-    print("The RISK-1 reconciler will re-verify them through the fixed indexer on its")
-    print("next beat tick. Confirm with the verified_citation_vintage_mismatch watchman.")
+
+    for matter_id, act_name, doc_id in tuples:
+        verify_citations_for_act.apply_async(
+            kwargs={
+                "matter_id": matter_id,
+                "act_name": act_name,
+                "act_document_id": doc_id,
+            },
+            queue="default",
+        )
+        print(f"  dispatched verify: matter={matter_id[:8]} act={act_name!r}")
+    print(
+        "\nDispatched re-verification to the worker. Confirm convergence with the "
+        "verified_citation_vintage_mismatch watchman (205A-family -> section_not_found)."
+    )
 
 
 if __name__ == "__main__":

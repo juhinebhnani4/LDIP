@@ -366,20 +366,24 @@ def _check_verified_section_token_mismatch(client) -> InvariantResult:
         if not batch:
             break
         for c in batch:
-            m = _RAW_SECTION_RE.search(c.get("raw_citation_text") or "")
-            if not m:
-                continue
-            # Compare section IDENTITIES, not raw strings: canonicalize BOTH sides so
-            # "138(1)" (stored) vs "138(1)" (raw) -> both "138" (no false flag), while
-            # a bare "205" stored against raw "205A" -> "205" vs "205A" (true mismatch).
-            raw_id = canonicalize_section(m.group(1))[0]
+            raw = c.get("raw_citation_text") or ""
+            # Collect EVERY section identity in the raw text — a citation's raw can
+            # name multiple sections ("Sec.3(3) r/w Sec.13"), and the stored section
+            # legitimately equals any one of them. Comparing IDENTITIES (canonicalize
+            # both sides) avoids flagging cosmetic forms ("138(1)" vs "138").
+            raw_ids = {
+                canonicalize_section(mm.group(1))[0]
+                for mm in _RAW_SECTION_RE.finditer(raw)
+            }
             stored_id = canonicalize_section((c.get("section") or "").strip())[0]
-            if raw_id and stored_id and raw_id != stored_id:
+            # Flag only when the stored section matches NONE of the raw's sections —
+            # i.e. it was corrupted (raw "205A" but stored bare "205").
+            if raw_ids and stored_id and stored_id not in raw_ids:
                 violations.append(
                     {
                         "citation_id": c["id"],
                         "matter_id": c.get("matter_id"),
-                        "raw_section": raw_id,
+                        "raw_sections": sorted(raw_ids),
                         "stored_section": c.get("section"),
                     }
                 )

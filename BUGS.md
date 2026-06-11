@@ -1060,7 +1060,7 @@ find frontend/src/app -name "error.tsx" -o -name "not-found.tsx" -o -name "loadi
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (Architectural — frontend) |
-| **Status** | **MATTER-SHELL FIXED (L2) 2026-06-11 — DEPLOY + LIVE-VERIFY PENDING** (debt narrowed, not fully closed; see Resolution) |
+| **Status** | **MATTER-SHELL FIXED (L2) + DEPLOYED + LIVE-VERIFIED 2026-06-11** (debt narrowed, not fully closed; see Resolution) |
 | **Date Found** | 2026-05-20 |
 | **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
 
@@ -2929,11 +2929,11 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 
 | ID | Sev | Status | Title | Parent |
 |----|-----|--------|-------|--------|
-| **FE-001** | P1 | **FIXED (L2) 2026-06-11 — verify pending** | "Ask jaanch" panel never collapses on mobile → now collapses to a bottom-sheet drawer below md via useBreakpoint | FE-ARCH-02 |
-| **FE-002** | P1 | **FIXED (L2) 2026-06-11 — verify pending** | Matter header buttons clipped at 390 → label hidden below sm + min-w-0 center so actions no longer clip | FE-ARCH-02 |
+| **FE-001** | P1 | **FIXED (L2) + LIVE-VERIFIED 2026-06-11** | "Ask jaanch" panel never collapses on mobile → collapses to a bottom-sheet drawer below md via useBreakpoint. Prod-verified @390px: split gone, "Ask jaanch" trigger opens the sheet; @1280px split unchanged | FE-ARCH-02 |
+| **FE-002** | P1 | **FIXED (L2) + LIVE-VERIFIED 2026-06-11** | Matter header buttons clipped at 390 → "Dashboard" label hidden below sm + min-w-0 center; prod-verified actions no longer clip @390px | FE-ARCH-02 |
 | **FE-003** | P1 | **FIXED + LIVE-VERIFIED (L2, prod 2026-06-11)** | Invalid matter URL rendered broken "Untitled Matter" shell + 18 console errors → now a clean MatterErrorScreen via the MatterGate convergence point; shell + 7 panels never mount. Prod-verified: bad matter = 1 console error (single gate 404), valid matter = full shell, 0 errors | FE-ARCH-01 |
 | **FE-004** | P2 | OPEN | Dashboard horizontal scroll at 320 + truncated stat labels ("Active Ma…", "Veri…") | FE-ARCH-02 |
-| **FE-005** | P2 | **FIXED (L2) 2026-06-11 — verify pending** | "Documents" tab label cut off → tab strip now `overflow-x-auto` (scrolls instead of clipping) | FE-ARCH-02 |
+| **FE-005** | P2 | **FIXED (L2) + LIVE-VERIFIED 2026-06-11** | "Documents" tab label cut off → tab strip now `overflow-x-auto`; prod-verified all 3 primary tabs + More present @390px | FE-ARCH-02 |
 | **FE-006** | P2 | **PARTIAL (L2) 2026-06-11** | Verification table 1470px in a squeezed column — relieved by freed width (Q&A no longer eats 35% on mobile) + table's own overflow-x-auto; deep card-collapse deferred | FE-ARCH-02 (compounds with FE-001) |
 | **FE-007** | P2 | **FIXED + DEPLOYED + LIVE-VERIFIED 2026-06-11** | Dashboard shows "Ready" for a matter whose only document failed processing | FE-ARCH-01 |
 | **FE-008** | P2 | OPEN | Search snippets polluted with matter name repeated 2–3× | — |

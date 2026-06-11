@@ -208,8 +208,12 @@ export function ResponsiveTable<T,>({
   }
 
   // ---- Desktop: real table (same column.cell, no duplicated logic) ----
+  // Wrapped in `no-scrollbar` so a table wider than its container scrolls
+  // WITHOUT the ugly trough that ui/table.tsx's own overflow wrapper shows
+  // (the utility cascades to descendants — see globals.css).
   return (
-    <Table className={className} data-testid={testId}>
+    <div className={cn('no-scrollbar', className)} data-testid={testId}>
+      <Table>
       <TableHeader>
         <TableRow>
           {selection && (
@@ -298,6 +302,7 @@ export function ResponsiveTable<T,>({
           );
         })}
       </TableBody>
-    </Table>
+      </Table>
+    </div>
   );
 }

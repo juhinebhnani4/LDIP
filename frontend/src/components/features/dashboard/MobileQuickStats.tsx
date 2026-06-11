@@ -27,17 +27,15 @@ interface StatCardProps {
 function StatCard({ icon: Icon, label, value, iconColorClass = 'text-muted-foreground' }: StatCardProps) {
   return (
     <Card className="w-full min-w-0">
-      <CardContent className="p-3 flex items-center gap-3">
+      <CardContent className="flex flex-col items-center gap-1 p-3 text-center">
         <div
-          className="flex items-center justify-center size-10 rounded-md bg-muted/50"
+          className="flex size-9 items-center justify-center rounded-md bg-muted/50"
           aria-hidden="true"
         >
           <Icon className={cn('size-5', iconColorClass)} />
         </div>
-        <div className="min-w-0">
-          <p className="text-lg font-bold leading-none">{value.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">{label}</p>
-        </div>
+        <p className="text-lg font-bold leading-none">{value.toLocaleString()}</p>
+        <p className="text-xs leading-tight text-muted-foreground">{label}</p>
       </CardContent>
     </Card>
   );
@@ -46,12 +44,10 @@ function StatCard({ icon: Icon, label, value, iconColorClass = 'text-muted-foreg
 function StatCardSkeleton() {
   return (
     <Card className="w-full min-w-0">
-      <CardContent className="p-3 flex items-center gap-3">
-        <Skeleton className="size-10 rounded-md shrink-0" />
-        <div className="space-y-1.5 min-w-0">
-          <Skeleton className="h-5 w-8" />
-          <Skeleton className="h-3 w-16" />
-        </div>
+      <CardContent className="flex flex-col items-center gap-1.5 p-3">
+        <Skeleton className="size-9 shrink-0 rounded-md" />
+        <Skeleton className="h-5 w-8" />
+        <Skeleton className="h-3 w-14" />
       </CardContent>
     </Card>
   );

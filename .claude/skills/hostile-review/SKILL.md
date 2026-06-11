@@ -314,6 +314,17 @@ your blast radius even though you didn't edit it:
    "UNEXERCISED" and schedule a follow-up — do NOT mark VERIFIED off logs alone.
 4. **Pre-existing error triage**: Any errors found that are NOT in the
    deployed code: check if they're in BUGS.md. If not, file them.
+5. **Visual verification (UI changes — the GATE; the DOM cannot close it)**:
+   For any change that alters rendered UI, "verified" can ONLY be concluded
+   from looking at the actual RENDERED PIXELS at 375 / 768 / 1024 / 1440 on
+   every surface touched — never from a Playwright accessibility/DOM snapshot
+   (that proves an element exists, not that it renders without clipping,
+   overflow, overlap, raw scrollbar troughs, or cramped layout). Symmetric to
+   step 3: pixels are the gate, the DOM can't close it. Auth-gated pages need
+   the logged-in (usually prod) environment. If you cannot render it, mark
+   "UNVERIFIED — visual" and do NOT claim it works. Use the `visual-verify`
+   skill. (Added 2026-06-11 after an FE-ARCH-02 fix was marked LIVE-VERIFIED
+   off the DOM tree and shipped broken.)
 
 ---
 

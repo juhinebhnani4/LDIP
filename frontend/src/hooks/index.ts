@@ -8,6 +8,15 @@
 // Generic UI hooks
 export { useTransientValue } from './useTransientValue';
 
+// Responsive layout primitive (FE-ARCH-02) — the single source of truth for
+// viewport-driven structural layout decisions.
+export {
+  useMediaQuery,
+  useIsBelowBreakpoint,
+  BREAKPOINTS,
+  type Breakpoint,
+} from './useBreakpoint';
+
 // Auth hooks
 export { useSession, useUser, useAuthActions, useAuth } from './useAuth';
 

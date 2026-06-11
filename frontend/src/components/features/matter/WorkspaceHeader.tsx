@@ -74,7 +74,7 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" data-testid="workspace-header">
-      <div className="container flex h-16 items-center gap-6 px-4 sm:px-6">
+      <div className="container flex h-16 items-center gap-3 px-4 sm:gap-6 sm:px-6">
         {/* Left: Back navigation */}
         <div className="flex items-center gap-2">
           <Link
@@ -83,13 +83,13 @@ export function WorkspaceHeader({ matterId }: WorkspaceHeaderProps) {
             aria-label="Back to Dashboard"
             data-testid="workspace-back-link"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm font-medium">Dashboard</span>
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span className="hidden text-sm font-medium sm:inline">Dashboard</span>
           </Link>
         </div>
 
         {/* Center: Editable matter name */}
-        <div className="flex-1 flex justify-center px-4">
+        <div className="flex min-w-0 flex-1 justify-center px-2 sm:px-4">
           <EditableMatterName matterId={matterId} />
         </div>
 

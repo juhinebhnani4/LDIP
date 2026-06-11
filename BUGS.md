@@ -1060,9 +1060,19 @@ find frontend/src/app -name "error.tsx" -o -name "not-found.tsx" -o -name "loadi
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (Architectural — frontend) |
-| **Status** | OPEN |
+| **Status** | **MATTER-SHELL FIXED (L2) 2026-06-11 — DEPLOY + LIVE-VERIFY PENDING** (debt narrowed, not fully closed; see Resolution) |
 | **Date Found** | 2026-05-20 |
 | **Source** | Frontend audit + 4-agent code census (2026-05-20). Evidence: `FRONTEND-AUDIT-2026-05-20.md` §3. |
+
+**Resolution (L2, 2026-06-11)** — chosen via blast-radius-research → choose-solution (L2) → architecture-guard → hostile-review:
+- Built the missing structural primitive: `frontend/src/hooks/useBreakpoint.ts` (`useMediaQuery` + `useIsBelowBreakpoint`, SSR-safe via `useSyncExternalStore`). This is the "one decision in one place" the audit prescribed.
+- `WorkspaceContentArea.tsx`: below `md` (768px) the resizable split is structurally replaced — main content goes full-width and the Q&A panel collapses into a **bottom `Sheet` drawer** (reuses the existing `sheet.tsx`). VIEW-TIME override derived from viewport; `qaPanelStore` is NOT mutated (the stored desktop position stays the user's preference — no "remember to restore on resize" hazard). Fixes **FE-001**.
+- `WorkspaceHeader.tsx` (cosmetic): "Dashboard" label `hidden sm:inline`, gap `gap-3 sm:gap-6`, center name `min-w-0` so actions stop clipping. Fixes **FE-002**.
+- `WorkspaceTabBar.tsx`: tab strip `overflow-x-auto` so tabs scroll instead of clipping. Fixes **FE-005**.
+- `globals.css`: `html { scrollbar-gutter: stable; }` — stops the load-time horizontal re-center. Addresses **FE-022** (the FE-ARCH-02 contribution).
+- Tests: `useBreakpoint.test.ts` (5) + 3 mobile-collapse tests in `WorkspaceContentArea.test.tsx` (the structural guard the audit said was missing). The test edit also repaired a pre-existing fully-red mock (`@/hooks` omitted `useBoundingBoxes`): that file went 26-fail → 1-fail (the 1 is an unrelated pre-existing `getAuthToken`-mock gap). Net across matter+hooks folders: 59→34 pre-existing failures, **0 new**.
+- **Scope honesty — debt NARROWED, not closed**: only the dangerous matter-shell instances are fixed. The ~62 benign cosmetic `sm:`/`md:` padding usages across other files are deliberately left (working code; not the hazard). The **ESLint "wall"** (ban raw *structural* breakpoint classes outside the primitive) is DEFERRED — revisit when a 2nd non-collapsing multi-pane layout appears. FE-006 (verification table) is largely relieved by the freed width + the table's own `overflow-x-auto`; deep card-collapse not done.
+- **Accepted RISK**: tapping a source citation inside the mobile bottom-sheet opens the PDF split *behind* the sheet — strictly better than today (panel was unusable on mobile); refinement is a follow-up, not a regression.
 
 **Description**: There is **no `useMediaQuery` / `useBreakpoint` / `useViewport` primitive** anywhere in `frontend/src` (verified: zero matches). Responsiveness is **68 files hand-adding raw Tailwind `sm:`/`md:`/`lg:` classes**, 140 total occurrences. The matter two-pane layout (`WorkspaceContentArea.tsx` + `qaPanelStore.ts`) supports four panel positions (right/bottom/float/hidden) but **none is selected by viewport** — the position is hardcoded and only the user can change it, so on mobile the "Ask jaanch" panel stays side-by-side. No `scrollbar-gutter` anywhere — causes the content re-centering observed in FE-022.
 
@@ -2919,12 +2929,12 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 
 | ID | Sev | Status | Title | Parent |
 |----|-----|--------|-------|--------|
-| **FE-001** | P1 | OPEN | "Ask jaanch" panel never collapses on mobile (matter workspace unusable on phones) | FE-ARCH-02 |
-| **FE-002** | P1 | OPEN | Matter header buttons (Export, More) clipped off-screen at 390 | FE-ARCH-02 |
+| **FE-001** | P1 | **FIXED (L2) 2026-06-11 — verify pending** | "Ask jaanch" panel never collapses on mobile → now collapses to a bottom-sheet drawer below md via useBreakpoint | FE-ARCH-02 |
+| **FE-002** | P1 | **FIXED (L2) 2026-06-11 — verify pending** | Matter header buttons clipped at 390 → label hidden below sm + min-w-0 center so actions no longer clip | FE-ARCH-02 |
 | **FE-003** | P1 | **FIXED + LIVE-VERIFIED (L2, prod 2026-06-11)** | Invalid matter URL rendered broken "Untitled Matter" shell + 18 console errors → now a clean MatterErrorScreen via the MatterGate convergence point; shell + 7 panels never mount. Prod-verified: bad matter = 1 console error (single gate 404), valid matter = full shell, 0 errors | FE-ARCH-01 |
 | **FE-004** | P2 | OPEN | Dashboard horizontal scroll at 320 + truncated stat labels ("Active Ma…", "Veri…") | FE-ARCH-02 |
-| **FE-005** | P2 | OPEN | Matter "Documents" tab label cut off on mobile | FE-ARCH-02 |
-| **FE-006** | P2 | OPEN | Verification table 1470px wide inside a squeezed mobile column | FE-ARCH-02 (compounds with FE-001) |
+| **FE-005** | P2 | **FIXED (L2) 2026-06-11 — verify pending** | "Documents" tab label cut off → tab strip now `overflow-x-auto` (scrolls instead of clipping) | FE-ARCH-02 |
+| **FE-006** | P2 | **PARTIAL (L2) 2026-06-11** | Verification table 1470px in a squeezed column — relieved by freed width (Q&A no longer eats 35% on mobile) + table's own overflow-x-auto; deep card-collapse deferred | FE-ARCH-02 (compounds with FE-001) |
 | **FE-007** | P2 | **FIXED + DEPLOYED + LIVE-VERIFIED 2026-06-11** | Dashboard shows "Ready" for a matter whose only document failed processing | FE-ARCH-01 |
 | **FE-008** | P2 | OPEN | Search snippets polluted with matter name repeated 2–3× | — |
 | **FE-009** | P2 | OPEN | Search returns the same document page multiple times (no dedup) | — |

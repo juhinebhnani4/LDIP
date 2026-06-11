@@ -261,7 +261,7 @@ export function WorkspaceTabBar({ matterId }: WorkspaceTabBarProps) {
       aria-label="Matter workspace navigation"
       data-testid="workspace-tab-bar"
     >
-      <div className="container flex h-14 items-center px-4 sm:px-6">
+      <div className="container flex h-14 items-center overflow-x-auto px-4 sm:px-6">
         {/* Primary tabs */}
         {PRIMARY_TABS.map((tab, index) => {
           const isActive = activeTab === tab.id;

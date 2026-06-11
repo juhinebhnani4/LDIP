@@ -76,7 +76,19 @@ vi.mock('@/components/features/chat/QAPanelExpandButton', () => ({
   QAPanelExpandButton: () => <button data-testid="qa-expand-button">Expand</button>,
 }));
 
-// Mock PDFSplitView component
+// next/dynamic renders null on the first synchronous tick when ssr:false,
+// which breaks the synchronous getByTestId queries below (the body renders
+// empty until the dynamic import resolves a tick later). Resolve the dynamic
+// component eagerly to a passthrough — the only dynamic target here is
+// PDFSplitView, which is a transparent wrapper around its children.
+vi.mock('next/dynamic', () => ({
+  default: () =>
+    function DynamicPassthrough({ children }: { children?: React.ReactNode }) {
+      return <>{children}</>;
+    },
+}));
+
+// Mock PDFSplitView component (kept for the data-testid when not dynamically loaded)
 vi.mock('@/components/features/pdf/PDFSplitView', () => ({
   PDFSplitView: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="pdf-split-view">{children}</div>
@@ -91,9 +103,20 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock useUser hook
+// Controls the viewport-collapse decision for tests. Mutated per-describe.
+// Default false = desktop, so the existing desktop-layout tests are unaffected.
+let mockIsBelowTablet = false;
+
+// Mock the @/hooks barrel. NOTE: WorkspaceContentArea calls useUser,
+// useBoundingBoxes AND useIsBelowBreakpoint — all three must be provided or the
+// component throws at render (this omission previously left the whole suite red).
 vi.mock('@/hooks', () => ({
   useUser: () => ({ user: { id: 'test-user-123' } }),
+  useBoundingBoxes: () => ({
+    fetchByChunkId: vi.fn().mockResolvedValue({ bboxes: [], pageNumber: null }),
+    fetchByBboxIds: vi.fn().mockResolvedValue({ bboxes: [], pageNumber: null }),
+  }),
+  useIsBelowBreakpoint: () => mockIsBelowTablet,
 }));
 
 describe('WorkspaceContentArea', () => {
@@ -317,6 +340,53 @@ describe('WorkspaceContentArea', () => {
     });
   });
 
+  describe('Mobile collapse below tablet (FE-ARCH-02)', () => {
+    beforeEach(() => {
+      mockIsBelowTablet = true;
+      // Stored desktop preference is 'right' — the viewport must override it.
+      act(() => {
+        useQAPanelStore.getState().setPosition('right');
+      });
+    });
+
+    afterEach(() => {
+      mockIsBelowTablet = false;
+    });
+
+    it('does NOT render the desktop split below tablet, even when stored position is "right"', () => {
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      expect(screen.queryByTestId('resizable-panel-group')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('floating-qa-panel')).not.toBeInTheDocument();
+    });
+
+    it('renders the bottom-sheet trigger instead, with content still present', () => {
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      expect(screen.getByTestId('mobile-qa-trigger')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-content')).toBeInTheDocument();
+    });
+
+    it('keeps the Q&A panel closed (in the sheet) until the trigger is used', () => {
+      render(
+        <WorkspaceContentArea matterId={mockMatterId}>
+          {mockChildren}
+        </WorkspaceContentArea>
+      );
+
+      // Sheet is closed by default → its content (QAPanel) is not mounted.
+      expect(screen.queryByTestId('qa-panel')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Position transitions (AC #3)', () => {
     it('switches from right to bottom correctly', () => {
       act(() => {
@@ -444,7 +514,7 @@ describe('WorkspaceContentArea', () => {
         </WorkspaceContentArea>
       );
 
-      const contentWrapper = container.querySelector('.overflow-auto');
+      const contentWrapper = container.querySelector('.overflow-y-auto');
       expect(contentWrapper).toBeInTheDocument();
     });
 

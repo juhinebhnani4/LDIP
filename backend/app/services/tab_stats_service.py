@@ -54,6 +54,18 @@ JOB_TYPE_TO_TAB: dict[str, str] = {
 """Maps job_type to workspace tab for processing status derivation."""
 
 
+# Terminal failure states in documents.status (live CHECK constraint, 2026-06-11).
+# A matter with any document in one of these states is surfaced as 'failed' on the
+# documents tab (FE-007). Derived read-only — never written back to documents.status.
+DOCUMENT_FAILURE_STATUSES: tuple[str, ...] = (
+    "ocr_failed",
+    "chunking_failed",
+    "embedding_failed",
+    "failed",
+)
+"""documents.status values that mean processing terminally broke for that document."""
+
+
 # =============================================================================
 # Story 14.12: Exceptions
 # =============================================================================
@@ -442,25 +454,70 @@ class TabStatsService:
         Story 14.12: AC #3 - Derive status from background jobs.
         """
         try:
-            # Query active jobs (queued or processing)
-            result = await asyncio.to_thread(
-                lambda: self.supabase.table("processing_jobs")
-                .select("job_type")
-                .eq("matter_id", matter_id)
-                .in_("status", [JobStatus.QUEUED.value, JobStatus.PROCESSING.value])
-                .execute()
+            # Query active jobs (queued or processing) and failed documents in
+            # parallel. Failure is derived read-only from documents.status — the
+            # authoritative terminal truth — so the dashboard can no longer show
+            # "Ready" for a matter whose document failed to process (FE-007).
+            # return_exceptions=True so the two signals degrade INDEPENDENTLY:
+            # a transient failure in the documents query must not blank the
+            # processing status the jobs query reported fine (and vice versa).
+            jobs_result, failed_docs_result = await asyncio.gather(
+                asyncio.to_thread(
+                    lambda: self.supabase.table("processing_jobs")
+                    .select("job_type")
+                    .eq("matter_id", matter_id)
+                    .in_(
+                        "status",
+                        [JobStatus.QUEUED.value, JobStatus.PROCESSING.value],
+                    )
+                    .execute()
+                ),
+                asyncio.to_thread(
+                    lambda: self.supabase.table("documents")
+                    .select("id", count="exact")
+                    .eq("matter_id", matter_id)
+                    .is_("deleted_at", "null")
+                    .in_("status", list(DOCUMENT_FAILURE_STATUSES))
+                    .execute()
+                ),
+                return_exceptions=True,
             )
 
-            # Build set of tabs with active jobs
+            # Build set of tabs with active jobs (empty on query failure — the
+            # tab simply reads 'ready', the pre-existing graceful default).
             processing_tabs: set[str] = set()
-            for row in result.data or []:
-                job_type = row.get("job_type")
-                if job_type and job_type in JOB_TYPE_TO_TAB:
-                    processing_tabs.add(JOB_TYPE_TO_TAB[job_type])
+            if isinstance(jobs_result, Exception):
+                logger.debug(
+                    "processing_jobs_query_failed",
+                    matter_id=matter_id,
+                    error=str(jobs_result),
+                )
+            else:
+                for row in jobs_result.data or []:
+                    job_type = row.get("job_type")
+                    if job_type and job_type in JOB_TYPE_TO_TAB:
+                        processing_tabs.add(JOB_TYPE_TO_TAB[job_type])
 
-            # Build status data
+            # A failed document surfaces on the documents tab. Precedence:
+            # active processing > failed > ready — if work is still in flight we
+            # show 'processing' and let it settle before reporting failure.
+            # On query failure, default to not-failed (don't fabricate a failure).
+            if isinstance(failed_docs_result, Exception):
+                logger.debug(
+                    "failed_docs_query_failed",
+                    matter_id=matter_id,
+                    error=str(failed_docs_result),
+                )
+                has_failed_docs = False
+            else:
+                has_failed_docs = bool(failed_docs_result.count)
+
             def get_status(tab: str) -> TabProcessingStatus:
-                return "processing" if tab in processing_tabs else "ready"
+                if tab in processing_tabs:
+                    return "processing"
+                if tab == "documents" and has_failed_docs:
+                    return "failed"
+                return "ready"
 
             return TabProcessingStatusData(
                 summary=get_status("summary"),

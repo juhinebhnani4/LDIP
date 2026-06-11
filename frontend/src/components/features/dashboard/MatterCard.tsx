@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle2, AlertTriangle, Clock, FileText, ArrowRight, Zap, TestTube } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, FileText, ArrowRight, Zap, TestTube, XCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,20 @@ function StatusBadge({ status }: { status: MatterCardData['processingStatus'] })
           Needs Attention
         </Badge>
       );
+    case 'failed':
+      return (
+        <Badge variant="destructive" className="gap-1" aria-label="Failed status">
+          <XCircle className="size-3" />
+          Failed
+        </Badge>
+      );
+    default: {
+      // Exhaustiveness guard (FE-007): adding a MatterProcessingStatus value
+      // without a badge case is now a COMPILE error here — the structural fix
+      // for the dead 'needs_attention' value that let FE-007 ship.
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
   }
 }
 
@@ -267,6 +281,36 @@ function ReadyContent({ matter }: { matter: MatterCardData }) {
   );
 }
 
+/** Failed state card content (FE-007) — processing broke; nothing to review yet. */
+function FailedContent({ matter }: { matter: MatterCardData }) {
+  return (
+    <>
+      {/* Status badge at top */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusBadge status={matter.processingStatus} />
+      </div>
+
+      {/* Matter title */}
+      <h3 className="font-semibold text-lg leading-tight line-clamp-2">{matter.title}</h3>
+
+      {/* Plain-language explanation + action (no verification/issue boxes — that
+          data isn't meaningful when processing didn't complete). */}
+      <p className="text-sm text-muted-foreground">
+        We couldn&apos;t finish processing this matter. Open it to retry or
+        re-upload the document.
+      </p>
+
+      {/* Action button: into the matter, where retry/re-upload lives. */}
+      <Button variant="outline" className="w-full mt-2" asChild data-testid="matter-card-view-failed-button">
+        <Link href={`/matter/${matter.id}`}>
+          View matter
+          <ArrowRight className="size-4 ml-1" />
+        </Link>
+      </Button>
+    </>
+  );
+}
+
 export function MatterCard({
   matter,
   className,
@@ -276,6 +320,7 @@ export function MatterCard({
   canDelete = true,
 }: MatterCardProps) {
   const isProcessing = matter.processingStatus === 'processing';
+  const isFailed = matter.processingStatus === 'failed';
 
   const handleCheckboxChange = (checked: boolean | 'indeterminate') => {
     if (onSelectChange && checked !== 'indeterminate') {
@@ -309,6 +354,8 @@ export function MatterCard({
       <CardContent className="flex flex-col gap-3 pt-4">
         {isProcessing ? (
           <ProcessingContent matter={matter} />
+        ) : isFailed ? (
+          <FailedContent matter={matter} />
         ) : (
           <ReadyContent matter={matter} />
         )}

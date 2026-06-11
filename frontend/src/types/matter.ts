@@ -193,8 +193,60 @@ export function hasAccess(role: MatterRole | null): boolean {
 // Story 9-2: Matter Cards Grid Types
 // ============================================================================
 
-/** Processing status types for matters (frontend display) */
-export type MatterProcessingStatus = 'processing' | 'ready' | 'needs_attention';
+/**
+ * Processing status types for matters (frontend display).
+ *
+ * Single source of truth for "is this matter OK?" — computed once by
+ * {@link deriveMatterStatus} and consumed by the card badge, the dashboard
+ * filter, and the matter counts alike (FE-007). Previously this was derived in
+ * three disagreeing places and could only ever say processing/ready, so a
+ * matter whose only document failed was shown a green "Ready".
+ *
+ * - 'processing'      — background work is still in flight.
+ * - 'failed'          — a document terminally failed to process (distinct red
+ *   badge + "open to retry" action — processing broke, nothing to review).
+ * - 'needs_attention' — processed fine, but there are issues to review.
+ * - 'ready'           — processed, nothing outstanding.
+ */
+export type MatterProcessingStatus = 'processing' | 'failed' | 'needs_attention' | 'ready';
+
+/** Inputs to {@link deriveMatterStatus}, gathered from the tab-stats API. */
+export interface DeriveMatterStatusInput {
+  /** Any workspace tab reports active (queued/processing) jobs. */
+  isAnyTabProcessing: boolean;
+  /** Any workspace tab reports a terminal document failure (documents.status). */
+  isAnyTabFailed: boolean;
+  /** Count of items needing review (today: contradictions). */
+  issueCount: number;
+}
+
+/**
+ * Derive a matter's single display status. THE convergence point for FE-007 —
+ * call this everywhere a matter's health is judged; never re-derive inline.
+ *
+ * Precedence (total order): active work wins (wait for it to settle), then a
+ * terminal failure, then outstanding issues, else ready.
+ *
+ * NOTE: `verificationPercent` is intentionally NOT an input — the backend does
+ * not yet provide it (mocked at 0 in the store), so gating on `< 70` would mark
+ * every matter "needs attention". Re-introduce it here once it's real.
+ */
+export function deriveMatterStatus(input: DeriveMatterStatusInput): MatterProcessingStatus {
+  if (input.isAnyTabProcessing) return 'processing';
+  if (input.isAnyTabFailed) return 'failed';
+  if (input.issueCount > 0) return 'needs_attention';
+  return 'ready';
+}
+
+/**
+ * Filter/count grouping: a 'failed' matter also belongs in the "needs attention"
+ * bucket (it unequivocally needs the user). The card BADGE keeps them distinct
+ * (Failed vs Needs Attention) for clarity; this grouping is only for the
+ * dashboard filter + the header count, both reading the same single status.
+ */
+export function matterNeedsAttention(status: MatterProcessingStatus): boolean {
+  return status === 'needs_attention' || status === 'failed';
+}
 
 /** Sort options for matter list */
 export type MatterSortOption = 'recent' | 'alphabetical' | 'most_pages' | 'least_verified' | 'date_created';

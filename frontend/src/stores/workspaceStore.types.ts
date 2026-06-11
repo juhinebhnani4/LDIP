@@ -32,6 +32,8 @@ export interface TabStats {
 }
 
 /**
- * Processing status for each tab
+ * Processing status for each tab.
+ * 'failed' = a document in this matter terminally failed (documents.status);
+ * surfaced on the documents tab and rolled up to the matter badge (FE-007).
  */
-export type TabProcessingStatus = 'ready' | 'processing';
+export type TabProcessingStatus = 'ready' | 'processing' | 'failed';

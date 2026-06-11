@@ -105,6 +105,19 @@ describe('MatterCard', () => {
     });
   });
 
+  describe('Failed state (FE-007)', () => {
+    it('renders a distinct Failed badge and an open-to-retry action — never "Ready"', () => {
+      const matter = createMockMatter({ id: 'matter-9', processingStatus: 'failed' });
+      render(<MatterCard matter={matter} />);
+
+      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(screen.queryByText('Ready')).not.toBeInTheDocument();
+      // Action takes the user into the matter (where retry/re-upload lives).
+      const link = screen.getByRole('link', { name: /view matter/i });
+      expect(link).toHaveAttribute('href', '/matter/matter-9');
+    });
+  });
+
   describe('Processing state', () => {
     const processingMatter = createMockMatter({
       processingStatus: 'processing',

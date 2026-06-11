@@ -38,8 +38,14 @@ class TabStats(BaseModel):
     )
 
 
-TabProcessingStatus = Literal["ready", "processing"]
-"""Processing status for a tab: 'ready' when data is loaded, 'processing' when jobs are active."""
+TabProcessingStatus = Literal["ready", "processing", "failed"]
+"""Processing status for a tab.
+
+- 'ready'      — data is loaded, no active jobs.
+- 'processing' — background jobs are active for this tab.
+- 'failed'     — a document in this matter is in a terminal failure status
+  (FE-007). Derived read-only from ``documents.status``; never written back.
+"""
 
 
 # =============================================================================

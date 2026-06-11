@@ -228,6 +228,32 @@ explored enough — go back to 1.2.
 
 ---
 
+### 1.6 — "It doesn't exist" is a CLAIM, not an observation — run the absence search
+
+When you are about to assert that some capability, file, path, endpoint, column, caller, or recovery mechanism **does not exist** — "the frontend is client-only", "there's no delete path", "this is never called", "no rate limiter here", "no server-side auth", "the infra for X is absent" — **STOP.** A universal-negative is the single easiest claim to get wrong, because you can only reason from the files you happened to open. **Inferring absence from the local files in front of you is not evidence of absence — it is absence of evidence.**
+
+Before the negative claim leaves your mouth — and ESPECIALLY before it becomes a **load-bearing premise** that rules a solution in or out — run the cheap codebase-wide search that would *disprove* it:
+
+- **Search the WHOLE repo, not the subtree you're standing in.** glob/grep for the thing itself: `middleware.ts`, `*/server.ts`, `next/headers`, `createServerClient`, `.delete(`, the route string, the column name.
+- **Search by CONCEPT, not one spelling.** A capability can be implemented many ways — "server-side auth" might be a `middleware.ts` OR a server client OR `cookies()`/`headers()` usage. One name returning nothing proves nothing.
+- **If the claim is "X never happens", enumerate every writer/caller/dispatcher of X**, not just the one path you traced (this is the 1.5A "all entry paths" rule, applied to a negative).
+
+Only after the search comes back empty may you say "does not exist" — and then **say how you checked** ("`grep next/headers|createServerClient` across `frontend/src` = 0 matches"). If it comes back non-empty, you just caught a wrong premise before it cost a decision.
+
+> **Why this was added (2026-06-11):** During FE-ARCH-01 `choose-solution`, I declared the frontend "client-only — no server-side auth path exists" and used it to rule the L3 server-side gate "infeasible / grandiose, would require building absent infra." I'd *inferred* that from the API-client files being `'use client'`, without searching the repo. A single `grep next/headers|createServerClient` would have surfaced `middleware.ts` (already does server-side auth on every `/matter` request) and `lib/supabase/server.ts` (a server-side DB client). The final pick (L2) happened to survive, but the *reason* was wrong — and had the app had 5 resource routes instead of 1, the false premise would have driven the wrong pick. Same shape as the "verify against the live system, not a theory" post-mortem, here applied to **architectural-capability existence during design**, which 1.1–1.5 didn't explicitly cover.
+
+**Prompt fragment:**
+```
+Before asserting that anything DOES NOT EXIST (a capability, file, endpoint,
+column, recovery path, caller, infra), run the codebase-wide search that would
+DISPROVE it — search by CONCEPT across the WHOLE repo, not the subtree you've
+been reading. Report how you checked and the match count. Inference from the
+files you happened to open is NOT evidence of absence. This matters most when
+the negative is a load-bearing premise for ruling a solution in or out.
+```
+
+---
+
 ## Phase 2: Directed Verification (Deductive — Validate What I Think I Know)
 
 **Purpose**: Once you have a proposed change, verify it won't break anything and find the simplest implementation. This phase prevents implementing the wrong thing correctly.
@@ -508,6 +534,7 @@ Report: every file and function with line numbers. Be specific.
 | Tracing ONE path when MULTIPLE exist | Library has 4 entry paths; research traced only upload path | Phase 1.5A (enumerate all entry paths) |
 | No recovery from wrong decisions | Misclassified Act has no reclassification path — permanent garbage | Phase 1.5B (recovery from wrong decisions) |
 | Individual paths look fine but system is incoherent | 4 library entry paths with no shared classification gate | Phase 1.5C (design intent vs architecture) |
+| Claiming absence from local files without searching | "Frontend is client-only" → missed `middleware.ts` + `server.ts`; ruled L3 infeasible on a false premise | Phase 1.6 (absence search) |
 | Reporting "doesn't exist" when partial exists | Q&A guard "NO" when BM25 fallback + searchNotice already built | Phase 2.1 (PARTIALLY answer) |
 | Building something that exists | Skip-1-mention already implemented | Phase 2.1 |
 | Missing type mismatches | CostTracker vs LLMCostTracker | Phase 2.2 |

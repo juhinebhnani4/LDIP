@@ -1023,10 +1023,12 @@ Discovered when `ocr_and_process_library_document` dispatched `chunk_library_doc
 | Field | Value |
 |-------|-------|
 | **Severity** | P1 (Architectural — frontend) |
-| **Status** | **CORE FIX SHIPPED (L2) — pending Vercel deploy (2026-06-11)** |
+| **Status** | **CORE FIX DEPLOYED + LIVE-VERIFIED (L2) — prod 2026-06-11** (commit `f196c6f`, Vercel → www.jaanch-ai.in) |
 | **Date Found** | 2026-05-20 |
 
-> **L2 fix built 2026-06-11 (not yet deployed/committed).** chose-solution → L2 (client convergence gate); blast-radius Phase 2 swept the de-fabrication; architecture-guard answered; hostile-review found 1 bug (fixed) + accepted RISK 1. `tsc`+`eslint` clean.
+> **Live prod verification (2026-06-11, Playwright on www.jaanch-ai.in, authed):** bad matter `00000000-…` → clean **"Matter not available"** MatterErrorScreen, **shell never mounts** (no header/tabs/panels), **exactly 1 API call** (`GET /api/matters/0000…` → 404, the single gate fetch) and **1 console error** (that same 404) — down from ~18. Valid matter (`trial`) → full shell renders (header w/ real name, Summary/Timeline/Documents tabs), **0 console errors**. FE-003 confirmed dead end-to-end.
+>
+> **L2 fix built 2026-06-11.** chose-solution → L2 (client convergence gate); blast-radius Phase 2 swept the de-fabrication; architecture-guard answered; hostile-review found 1 bug (fixed) + accepted RISK 1. `tsc`+`eslint` clean.
 > **What shipped:** (1) a single **`MatterGate`** (`components/features/matter/MatterGate.tsx`) in the segment `layout.tsx` resolves matter existence/auth ONCE before the shell mounts — loading / error (404·403 → `MatterErrorScreen`) / ready. Because it lives in the segment layout, every current+future tab page is structurally behind it (framework-enforced, not per-panel convention). (2) **Deleted the placeholder fabrication** in `matterStore.fetchMatter` — it now records real `currentMatterStatus` `idle|loading|ready|error` (+ `currentMatterId`/`currentMatterError`, dedup guard, atomic reset in `deleteMatter`/`deleteMatters`). (3) **Wired the previously-unused `ApiErrorBoundary`** around the tab content (`{children}`) for per-tab isolation. (4) Extracted **`MatterErrorScreen`** shared by the gate and `error.tsx` (avoids an FE-ARCH-03 duplicate error UI). → **FE-003 FIXED** (no more broken "Untitled Matter" shell + 18 console errors on an invalid/forbidden matter).
 > **Deliberately DEFERRED (still OPEN under FE-ARCH-01):** the `'failed'` `MatterProcessingStatus` value + dashboard computation (**FE-007**) — adding the enum value without the dashboard logic would just be a 2nd dead value (`'needs_attention'` is already dead); it needs its own dashboard-side piece. FE-010 (custom 404) and FE-011 (stuck summary spinner) are NOT addressed by the existence gate (panel/route-level, separate).
 > **Accepted risk (hostile-review RISK 1):** `fetchMatter`'s dashboard-cache fast path does not re-validate against the server, so a matter deleted/revoked by another user within the list's ~30s freshness can still render the shell once (narrow FE-003 re-opening). Documented inline in `matterStore.ts`; trigger to revisit = multi-user concurrent deletes become common.
@@ -2919,7 +2921,7 @@ The stage is O(n²) on entity count and makes individual LLM calls for each pair
 |----|-----|--------|-------|--------|
 | **FE-001** | P1 | OPEN | "Ask jaanch" panel never collapses on mobile (matter workspace unusable on phones) | FE-ARCH-02 |
 | **FE-002** | P1 | OPEN | Matter header buttons (Export, More) clipped off-screen at 390 | FE-ARCH-02 |
-| **FE-003** | P1 | **FIXED (L2, pending deploy 2026-06-11)** | Invalid matter URL renders broken "Untitled Matter" shell with 18 console errors → now a clean MatterErrorScreen via the MatterGate convergence point; shell + 7 panels never mount on a bad matter | FE-ARCH-01 |
+| **FE-003** | P1 | **FIXED + LIVE-VERIFIED (L2, prod 2026-06-11)** | Invalid matter URL rendered broken "Untitled Matter" shell + 18 console errors → now a clean MatterErrorScreen via the MatterGate convergence point; shell + 7 panels never mount. Prod-verified: bad matter = 1 console error (single gate 404), valid matter = full shell, 0 errors | FE-ARCH-01 |
 | **FE-004** | P2 | OPEN | Dashboard horizontal scroll at 320 + truncated stat labels ("Active Ma…", "Veri…") | FE-ARCH-02 |
 | **FE-005** | P2 | OPEN | Matter "Documents" tab label cut off on mobile | FE-ARCH-02 |
 | **FE-006** | P2 | OPEN | Verification table 1470px wide inside a squeezed mobile column | FE-ARCH-02 (compounds with FE-001) |

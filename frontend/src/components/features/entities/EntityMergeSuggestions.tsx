@@ -303,7 +303,7 @@ export function EntityMergeSuggestions({
                 return (
                   <div
                     key={pairKey}
-                    className={`flex items-center justify-between gap-3 p-3 rounded-lg border bg-white dark:bg-gray-900 transition-colors ${
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg border bg-white dark:bg-gray-900 transition-colors ${
                       isSelected ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-950/20' : ''
                     }`}
                   >

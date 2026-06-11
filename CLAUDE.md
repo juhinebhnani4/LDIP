@@ -25,6 +25,23 @@ Before writing a single line of code or proposing an implementation, Claude must
 
 ---
 
+## MANDATORY: Explain in Plain English — Define Every Term (READ FIRST)
+
+**This rule applies to EVERY response that contains information — analyses, recommendations, bug explanations, plans, code walkthroughs, status updates. No exceptions.**
+
+The user is not a deep-technical reader. Whenever a response uses a technical term, jargon word, acronym, internal ID, library name, or code symbol, **explain it in simple English the first time it appears in that response.** Assume the reader does not already know what it means.
+
+**What this looks like in practice:**
+- **Acronyms / internal IDs** (FE-ARCH-01, ARCH-003, OCR, FK, RPC, CLS): spell out what it stands for AND what it means in one short clause. "FE-ARCH-01 (an ID for one frontend structure problem)".
+- **Jargon** (idempotent, reconciler, convergence point, blast radius, race condition): give a one-line plain meaning, ideally with a tiny everyday analogy.
+- **Code symbols** (`fetchMatter`, `error.tsx`, `documents.status`): say what the thing *does* in human terms, not just its name.
+- **Library / framework names** (Celery, Next.js, Supabase, Docling): one clause on what it is and its role here.
+- Prefer a short "jargon decoded" list up front for dense/technical answers, then the plain explanation. Keep the precise term too (don't dumb it down to the point of being wrong) — pair the precise term WITH its plain meaning, never replace one with the other.
+
+**Why this rule exists**: the user explicitly asked on 2026-06-11 that information be given with terms explained simply, so they can actually understand and act on it. An accurate answer the user can't parse is a failed answer.
+
+---
+
 ## MANDATORY: Architecture Guard (READ FIRST)
 
 LDIP carries three foundational architectural debts (**ARCH-001, ARCH-002, ARCH-003** — top of `BUGS.md`) that have caused every P0/P1 pipeline incident in this project's history. They all share one root cause: **implicit coordination through convention instead of explicit coordination through structure**.

@@ -95,6 +95,23 @@ interface MatterState {
   /** Currently active matter in workspace (for workspace header - Story 10A.1) */
   currentMatter: MatterCardData | null;
 
+  /**
+   * Which matter id `currentMatterStatus` / `currentMatterError` describe.
+   * The store is a singleton, so during A→B navigation its status can briefly
+   * still describe matter A — consumers (MatterGate) gate on this id to avoid
+   * trusting stale state. (FE-ARCH-01)
+   */
+  currentMatterId: string | null;
+
+  /**
+   * Load status of the workspace's current matter. Drives the MatterGate
+   * convergence point — the shell renders only when this is 'ready'. (FE-ARCH-01)
+   */
+  currentMatterStatus: 'idle' | 'loading' | 'ready' | 'error';
+
+  /** Error from the last current-matter fetch (404/403/network); null on success. */
+  currentMatterError: Error | null;
+
   /** Loading state for fetching matters */
   isLoading: boolean;
 
@@ -171,6 +188,9 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
   // Initial state
   matters: [],
   currentMatter: null,
+  currentMatterId: null,
+  currentMatterStatus: 'idle',
+  currentMatterError: null,
   isLoading: false,
   error: null,
   sortBy: 'recent',
@@ -256,47 +276,74 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
 
   /**
    * Fetch a single matter by ID for workspace context (Story 10A.1).
-   * First checks if matter exists in local state, otherwise fetches from API.
+   *
+   * Drives the MatterGate convergence point (FE-ARCH-01): records a real
+   * loading / ready / error state instead of fabricating an "Untitled Matter"
+   * placeholder on 404. The placeholder used to hide the failure so the shell
+   * rendered over a matter that didn't exist (FE-003). Never throws — callers
+   * read `currentMatterStatus` (the gate) rather than catching, so a fire-and-
+   * forget call (e.g. EditableMatterName) can't produce an unhandled rejection.
    */
   fetchMatter: async (matterId: string) => {
-    const { matters } = get();
+    const { matters, currentMatterId, currentMatterStatus } = get();
 
-    // Check if matter is already in local state
-    const existingMatter = matters.find((m) => m.id === matterId);
-    if (existingMatter) {
-      set({ currentMatter: existingMatter });
+    // Dedup: this matter is already loading or successfully loaded. (A failed
+    // load is NOT skipped, so retry / re-navigation can re-fetch.)
+    if (
+      currentMatterId === matterId &&
+      (currentMatterStatus === 'loading' || currentMatterStatus === 'ready')
+    ) {
       return;
     }
 
-    // Fetch from backend API
+    // Fast path: matter is already in the loaded list (e.g. came from dashboard),
+    // so render the shell instantly without a network round-trip.
+    //
+    // ACCEPTED RISK (FE-ARCH-01 hostile-review RISK 1, 2026-06-11): this trusts the
+    // cached list and does NOT re-validate against the server. If the matter was
+    // deleted / the user's access revoked by ANOTHER user within the list's ~30s
+    // freshness window, the gate waves them through to a dead matter and the panels
+    // 404 individually (a narrow re-opening of the FE-003 shape). Accepted because
+    // the window is small, it's not data loss, and dropping the fast path would add a
+    // loading spinner to every dashboard→matter click. Revisit (drop the fast path,
+    // or revalidate in the background) if multi-user concurrent deletes become common
+    // or this is observed in production.
+    const existingMatter = matters.find((m) => m.id === matterId);
+    if (existingMatter) {
+      set({
+        currentMatter: existingMatter,
+        currentMatterId: matterId,
+        currentMatterStatus: 'ready',
+        currentMatterError: null,
+      });
+      return;
+    }
+
+    set({
+      currentMatter: null,
+      currentMatterId: matterId,
+      currentMatterStatus: 'loading',
+      currentMatterError: null,
+    });
+
     try {
       const matterWithMembers = await mattersApi.get(matterId);
       const matterCardData = transformMatterToCardData(matterWithMembers);
-      set({ currentMatter: matterCardData });
-    } catch {
-      // Create a placeholder matter for unknown IDs (handles 404 gracefully)
-      const placeholderMatter: MatterCardData = {
-        id: matterId,
-        title: 'Untitled Matter',
-        description: null,
-        status: 'active',
-        verificationMode: 'advisory',
-        analysisMode: 'deep_analysis',
-        practiceGroup: null,
-        dataResidency: 'default',
-        role: 'owner',
-        memberCount: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        deletedAt: null,
-        lastOpenedAt: null,
-        pageCount: 0,
-        documentCount: 0,
-        verificationPercent: 0,
-        issueCount: 0,
-        processingStatus: 'ready',
-      };
-      set({ currentMatter: placeholderMatter });
+      set({
+        currentMatter: matterCardData,
+        currentMatterId: matterId,
+        currentMatterStatus: 'ready',
+        currentMatterError: null,
+      });
+    } catch (error) {
+      // Propagate the failure to the gate instead of fabricating a placeholder.
+      const err = error instanceof Error ? error : new Error('Failed to load matter');
+      set({
+        currentMatter: null,
+        currentMatterId: matterId,
+        currentMatterStatus: 'error',
+        currentMatterError: err,
+      });
     }
   },
 
@@ -350,9 +397,17 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
     const updatedMatters = matters.filter((m) => m.id !== matterId);
     set({ matters: updatedMatters });
 
-    // Clear currentMatter if it was the deleted one
+    // Clear currentMatter AND its gate state if it was the deleted one, so the
+    // MatterGate doesn't strand on a stale 'ready' status with a null matter
+    // (and the dedup guard can re-fetch). Liveness is reset atomically — never
+    // leave two parallel truths about whether the matter exists. (FE-ARCH-01)
     if (currentMatter?.id === matterId) {
-      set({ currentMatter: null });
+      set({
+        currentMatter: null,
+        currentMatterId: null,
+        currentMatterStatus: 'idle',
+        currentMatterError: null,
+      });
     }
   },
 
@@ -368,9 +423,15 @@ export const useMatterStore = create<MatterStore>()((set, get) => ({
     const updatedMatters = matters.filter((m) => !idsToDelete.has(m.id));
     set({ matters: updatedMatters });
 
-    // Clear currentMatter if it was one of the deleted ones
+    // Clear currentMatter AND its gate state if it was one of the deleted ones
+    // (same liveness-reset rationale as deleteMatter — FE-ARCH-01).
     if (currentMatter && idsToDelete.has(currentMatter.id)) {
-      set({ currentMatter: null });
+      set({
+        currentMatter: null,
+        currentMatterId: null,
+        currentMatterStatus: 'idle',
+        currentMatterError: null,
+      });
     }
   },
 

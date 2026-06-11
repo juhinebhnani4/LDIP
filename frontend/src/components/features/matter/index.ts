@@ -6,6 +6,10 @@
 
 export { MatterWorkspaceWrapper } from './MatterWorkspaceWrapper';
 
+// FE-ARCH-01: matter workspace convergence gate + shared error screen
+export { MatterGate } from './MatterGate';
+export { MatterErrorScreen } from './MatterErrorScreen';
+
 // Story 10A.1: Workspace Shell Header components
 export { WorkspaceHeader } from './WorkspaceHeader';
 export { EditableMatterName } from './EditableMatterName';

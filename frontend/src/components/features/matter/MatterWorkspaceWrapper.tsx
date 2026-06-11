@@ -9,7 +9,6 @@ import {
   selectFailedJobCount,
 } from '@/stores/processingStore';
 import { useWorkspaceStore, selectIsAnyTabProcessing } from '@/stores/workspaceStore';
-import { useMatterStore } from '@/stores/matterStore';
 import { jobsApi } from '@/lib/api/jobs';
 import { mattersApi } from '@/lib/api/matters';
 import { createClient } from '@/lib/supabase/client';
@@ -68,11 +67,8 @@ export function MatterWorkspaceWrapper({
     [handleStatusChangeEvent]
   );
 
-  // Pre-fetch matter data so children (e.g. EditableMatterName) don't start from null
-  const fetchMatter = useMatterStore((state) => state.fetchMatter);
-  useEffect(() => {
-    fetchMatter(matterId);
-  }, [matterId, fetchMatter]);
+  // Matter data is fetched once by MatterGate (FE-ARCH-01) before this wrapper
+  // mounts, so `currentMatter` is already populated here — no separate fetch.
 
   // Initialize store with matter ID and load jobs
   useEffect(() => {

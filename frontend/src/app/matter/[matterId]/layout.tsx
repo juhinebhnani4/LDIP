@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 import {
+  MatterGate,
   MatterWorkspaceWrapper,
   WorkspaceHeader,
   WorkspaceTabBar,
   WorkspaceContentArea,
 } from '@/components/features/matter';
+import { ApiErrorBoundary } from '@/components/ui/api-error-boundary';
 import { ServiceStatusBanner, ConnectionStatusBanner } from '@/components/features/status';
 
 interface MatterLayoutProps {
@@ -46,24 +48,35 @@ export default async function MatterLayout({ children, params }: MatterLayoutPro
       {/* Connection status banner - Epic 4 (only shows during reconnection) */}
       <ConnectionStatusBanner />
 
-      {/* Workspace header - Story 10A.1 */}
-      <div className="shrink-0">
-        <WorkspaceHeader matterId={matterId} />
-      </div>
+      {/*
+        FE-ARCH-01: single matter existence/authorization gate. The shell below
+        (header, tab bar, content + 7 feature panels) mounts only once the matter
+        is confirmed loadable; a missing/forbidden matter shows MatterErrorScreen
+        instead of fabricating an "Untitled Matter" shell over 18 panel 404s.
+        Because the gate lives in the segment layout, every tab page is behind it.
+      */}
+      <MatterGate matterId={matterId}>
+        {/* Workspace header - Story 10A.1 */}
+        <div className="shrink-0">
+          <WorkspaceHeader matterId={matterId} />
+        </div>
 
-      {/* Tab bar navigation - Story 10A.2 */}
-      <div className="shrink-0">
-        <WorkspaceTabBar matterId={matterId} />
-      </div>
+        {/* Tab bar navigation - Story 10A.2 */}
+        <div className="shrink-0">
+          <WorkspaceTabBar matterId={matterId} />
+        </div>
 
-      {/* Main content area with Q&A panel - Story 10A.3 */}
-      <main data-matter-id={matterId} className="flex min-h-0 flex-1 overflow-hidden">
-        <MatterWorkspaceWrapper matterId={matterId}>
-          <WorkspaceContentArea matterId={matterId}>
-            {children}
-          </WorkspaceContentArea>
-        </MatterWorkspaceWrapper>
-      </main>
+        {/* Main content area with Q&A panel - Story 10A.3 */}
+        <main data-matter-id={matterId} className="flex min-h-0 flex-1 overflow-hidden">
+          <MatterWorkspaceWrapper matterId={matterId}>
+            <WorkspaceContentArea matterId={matterId}>
+              {/* Per-tab isolation: a single panel's render error degrades that
+                  panel, not the whole workspace (FE-ARCH-01). */}
+              <ApiErrorBoundary>{children}</ApiErrorBoundary>
+            </WorkspaceContentArea>
+          </MatterWorkspaceWrapper>
+        </main>
+      </MatterGate>
     </div>
   );
 }

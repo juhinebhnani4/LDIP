@@ -117,6 +117,12 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* FE-ARCH-02 / FE-022: reserve the scrollbar gutter so content does not
+     re-center horizontally when a vertical scrollbar appears/disappears
+     (e.g. data loading in after a skeleton). Stops the intermittent CLS jump. */
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), Inter, system-ui, sans-serif;

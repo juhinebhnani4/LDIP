@@ -7,6 +7,7 @@ import {
   initializeViewMode,
 } from './matterStore';
 import type { MatterCardData } from '@/types/matter';
+import { deriveMatterStatus, matterNeedsAttention } from '@/types/matter';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -246,12 +247,28 @@ describe('matterStore', () => {
       expect(filtered[0]?.status).not.toBe('archived');
     });
 
-    it('filters by needs_attention', () => {
+    it('filters by needs_attention (reads the single derived status — agrees with the badge)', () => {
       useMatterStore.setState({ filterBy: 'needs_attention' });
       const filtered = selectFilteredMatters(useMatterStore.getState());
-      // Includes Processing Matter (verificationPercent: 0) and Needs Attention Matter (verificationPercent: 60, issueCount: 5)
-      expect(filtered.length).toBe(2);
-      expect(filtered.every((m) => m.issueCount > 0 || m.verificationPercent < 70)).toBe(true);
+      // FE-007: now keyed on processingStatus, not the mocked verificationPercent.
+      // Only the Needs Attention Matter qualifies — a 'processing' matter no
+      // longer leaks in (the old `verificationPercent < 70` clause matched all).
+      expect(filtered.length).toBe(1);
+      expect(filtered.every((m) => matterNeedsAttention(m.processingStatus))).toBe(true);
+      expect(filtered[0]?.processingStatus).toBe('needs_attention');
+    });
+
+    it('filters by needs_attention INCLUDES failed matters', () => {
+      useMatterStore.setState({
+        matters: [
+          ...mockMatters,
+          { ...mockMatters[1]!, id: '5', title: 'Failed Matter', processingStatus: 'failed' },
+        ],
+        filterBy: 'needs_attention',
+      });
+      const filtered = selectFilteredMatters(useMatterStore.getState());
+      // A failed matter unequivocally needs attention (FE-007 grouping).
+      expect(filtered.map((m) => m.processingStatus).sort()).toEqual(['failed', 'needs_attention']);
     });
 
     it('filters by archived', () => {
@@ -454,8 +471,35 @@ describe('matterStore', () => {
       expect(counts.total).toBe(4); // excludes archived
       expect(counts.processing).toBe(1);
       expect(counts.ready).toBe(2);
-      // Processing matter also counts (verificationPercent: 0) + Needs Attention matter
-      expect(counts.needsAttention).toBe(2);
+      // FE-007: needsAttention reads the single derived status — only the one
+      // 'needs_attention' matter. The 'processing' matter no longer inflates it
+      // (it used to, because verificationPercent is mocked at 0 → `< 70`).
+      expect(counts.needsAttention).toBe(1);
     });
+
+    it('counts failed matters under needsAttention', () => {
+      useMatterStore.setState({
+        matters: [...mockMatters, { ...mockMatters[1]!, id: '6', processingStatus: 'failed' }],
+      });
+      const counts = selectMatterCounts(useMatterStore.getState());
+      expect(counts.needsAttention).toBe(2); // needs_attention + failed
+    });
+  });
+});
+
+describe('deriveMatterStatus (FE-007 convergence point)', () => {
+  it('applies precedence: processing > failed > needs_attention > ready', () => {
+    expect(
+      deriveMatterStatus({ isAnyTabProcessing: true, isAnyTabFailed: true, issueCount: 9 })
+    ).toBe('processing');
+    expect(
+      deriveMatterStatus({ isAnyTabProcessing: false, isAnyTabFailed: true, issueCount: 9 })
+    ).toBe('failed');
+    expect(
+      deriveMatterStatus({ isAnyTabProcessing: false, isAnyTabFailed: false, issueCount: 3 })
+    ).toBe('needs_attention');
+    expect(
+      deriveMatterStatus({ isAnyTabProcessing: false, isAnyTabFailed: false, issueCount: 0 })
+    ).toBe('ready');
   });
 });

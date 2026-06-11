@@ -16,12 +16,13 @@
 import { create } from 'zustand';
 import type {
   MatterCardData,
+  MatterProcessingStatus,
   MatterSortOption,
   MatterFilterOption,
   MatterViewMode,
   Matter,
 } from '@/types/matter';
-import { VIEW_PREFERENCE_KEY } from '@/types/matter';
+import { VIEW_PREFERENCE_KEY, deriveMatterStatus, matterNeedsAttention } from '@/types/matter';
 import { mattersApi } from '@/lib/api/matters';
 import { fetchTabStats, transformTabStatsResponse } from '@/lib/api/tabStats';
 
@@ -55,20 +56,33 @@ async function enrichMattersWithStats(
     matters.map(async (matter) => {
       const response = await fetchTabStats(matter.id);
       const { tabCounts, tabProcessingStatus } = transformTabStatsResponse(response);
-      // Derive overall processing status: if ANY tab is processing, matter is processing
+      // Derive the matter's single display status from tab signals (FE-007).
+      // deriveMatterStatus is THE convergence point — badge, filter, and counts
+      // all read the resulting `processingStatus`, so they cannot disagree.
       const isAnyTabProcessing = Object.values(tabProcessingStatus).some(
         (status) => status === 'processing'
       );
+      const isAnyTabFailed = Object.values(tabProcessingStatus).some(
+        (status) => status === 'failed'
+      );
+      const issueCount = tabCounts.contradictions?.count ?? 0;
       return {
         id: matter.id,
         documentCount: tabCounts.documents?.count ?? 0,
-        issueCount: tabCounts.contradictions?.count ?? 0,
-        processingStatus: isAnyTabProcessing ? 'processing' as const : 'ready' as const,
+        issueCount,
+        processingStatus: deriveMatterStatus({
+          isAnyTabProcessing,
+          isAnyTabFailed,
+          issueCount,
+        }),
       };
     })
   );
 
-  const statsMap = new Map<string, { documentCount: number; issueCount: number; processingStatus: 'processing' | 'ready' }>();
+  const statsMap = new Map<
+    string,
+    { documentCount: number; issueCount: number; processingStatus: MatterProcessingStatus }
+  >();
   for (const result of results) {
     if (result.status === 'fulfilled') {
       statsMap.set(result.value.id, result.value);
@@ -507,9 +521,11 @@ export const selectFilteredMatters = (state: MatterStore): MatterCardData[] => {
     case 'ready':
       return matters.filter((m) => m.processingStatus === 'ready' && m.status !== 'archived');
     case 'needs_attention':
-      return matters.filter(
-        (m) => m.issueCount > 0 || m.verificationPercent < 70
-      );
+      // Reads the single derived status (FE-007) instead of re-deriving from
+      // issueCount/verificationPercent — so the filter agrees with the badge.
+      // (verificationPercent is mocked at 0 backend-side; the old `< 70` clause
+      // matched every matter, which is why this filter used to return all.)
+      return matters.filter((m) => matterNeedsAttention(m.processingStatus));
     case 'archived':
       return matters.filter((m) => m.status === 'archived');
     case 'all':
@@ -554,8 +570,7 @@ export const selectMatterCounts = (
     total: nonArchived.length,
     processing: nonArchived.filter((m) => m.processingStatus === 'processing').length,
     ready: nonArchived.filter((m) => m.processingStatus === 'ready').length,
-    needsAttention: nonArchived.filter(
-      (m) => m.issueCount > 0 || m.verificationPercent < 70
-    ).length,
+    needsAttention: nonArchived.filter((m) => matterNeedsAttention(m.processingStatus))
+      .length,
   };
 };

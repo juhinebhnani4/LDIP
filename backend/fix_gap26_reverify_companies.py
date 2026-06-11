@@ -90,7 +90,11 @@ def _wrong_companies_2013_verifications(client) -> tuple[list[dict], list[str]]:
         for c in batch:
             sec = str(c.get("section") or "")
             raw = str(c.get("raw_citation_text") or "")
-            if alpha.search(sec) or paren_letter.search(sec) or vintage_1956.search(raw):
+            if (
+                alpha.search(sec)
+                or paren_letter.search(sec)
+                or vintage_1956.search(raw)
+            ):
                 wrong.append(c)
         if len(batch) < page:
             break
@@ -108,7 +112,9 @@ def main(apply: bool) -> None:
     print(f"2013 Companies doc id(s): {doc_ids}")
     print(f"Provably-wrong 'verified' rows to reset -> pending: {len(wrong)}")
     for c in wrong[:15]:
-        print(f"  sec={c.get('section')!r:10} raw={str(c.get('raw_citation_text'))[:55]!r}")
+        print(
+            f"  sec={c.get('section')!r:10} raw={str(c.get('raw_citation_text'))[:55]!r}"
+        )
     if len(wrong) > 15:
         print(f"  ... and {len(wrong) - 15} more")
 

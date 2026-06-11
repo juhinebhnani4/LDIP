@@ -323,8 +323,7 @@ def _check_verified_citation_vintage_mismatch(client) -> InvariantResult:
             # + ``raw_citation_text`` carry the year the citation actually names.
             # quoted_text is excluded to keep incidental years out of the signal.
             text = " ".join(
-                str(c.get(f) or "")
-                for f in ("act_name_original", "raw_citation_text")
+                str(c.get(f) or "") for f in ("act_name_original", "raw_citation_text")
             )
             years = {int(y) for y in YEAR.findall(text)}
             if years and int(ty) not in years:

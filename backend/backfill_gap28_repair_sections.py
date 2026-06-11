@@ -106,7 +106,9 @@ def main(apply: bool) -> None:
     print(f"\nRe-verification tuples (matter, act, doc): {len(tuples)}")
 
     if not apply:
-        print("\nDRY RUN — no changes. Re-run with --apply AFTER the worker is deployed.")
+        print(
+            "\nDRY RUN — no changes. Re-run with --apply AFTER the worker is deployed."
+        )
         return
 
     # 1) Repair section/subsection/clause; reset verified -> pending.
@@ -115,7 +117,9 @@ def main(apply: bool) -> None:
         if r.get("verification_status") == "verified":
             update["verification_status"] = "pending"
         client.table("citations").update(update).eq("id", r["id"]).execute()
-    print(f"\nAPPLIED — repaired {len(rows)} citation(s); reset {len(verified)} to pending.")
+    print(
+        f"\nAPPLIED — repaired {len(rows)} citation(s); reset {len(verified)} to pending."
+    )
 
     # 2) Re-trigger verification through the deployed (fixed) worker.
     from app.workers.tasks.verification_tasks import verify_citations_for_act

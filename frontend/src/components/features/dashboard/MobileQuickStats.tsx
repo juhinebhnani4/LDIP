@@ -26,7 +26,7 @@ interface StatCardProps {
 
 function StatCard({ icon: Icon, label, value, iconColorClass = 'text-muted-foreground' }: StatCardProps) {
   return (
-    <Card className="shrink-0 w-[140px] snap-start">
+    <Card className="w-full min-w-0">
       <CardContent className="p-3 flex items-center gap-3">
         <div
           className="flex items-center justify-center size-10 rounded-md bg-muted/50"
@@ -45,10 +45,10 @@ function StatCard({ icon: Icon, label, value, iconColorClass = 'text-muted-foreg
 
 function StatCardSkeleton() {
   return (
-    <Card className="shrink-0 w-[140px]">
+    <Card className="w-full min-w-0">
       <CardContent className="p-3 flex items-center gap-3">
-        <Skeleton className="size-10 rounded-md" />
-        <div className="space-y-1.5">
+        <Skeleton className="size-10 rounded-md shrink-0" />
+        <div className="space-y-1.5 min-w-0">
           <Skeleton className="h-5 w-8" />
           <Skeleton className="h-3 w-16" />
         </div>
@@ -83,8 +83,8 @@ export function MobileQuickStats() {
   }
 
   return (
-    <div className="w-full overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
-      <div className="flex gap-3 min-w-min">
+    <div className="w-full">
+      <div className="grid grid-cols-3 gap-3">
         {isLoading ? (
           <>
             <StatCardSkeleton />
@@ -113,7 +113,7 @@ export function MobileQuickStats() {
             />
           </>
         ) : (
-          <p className="text-sm text-muted-foreground py-2">No statistics available</p>
+          <p className="col-span-3 text-sm text-muted-foreground py-2">No statistics available</p>
         )}
       </div>
     </div>

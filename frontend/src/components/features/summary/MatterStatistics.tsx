@@ -55,8 +55,8 @@ function StatCard({
           >
             <Icon className={cn('size-6', iconColorClass)} />
           </div>
-          <div>
-            <p className="text-2xl font-bold leading-none">{value.toLocaleString()}</p>
+          <div className="min-w-0">
+            <p className="text-2xl font-bold leading-none truncate">{value.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground mt-1">{label}</p>
           </div>
         </div>

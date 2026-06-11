@@ -205,7 +205,7 @@ export function AnomalyDetailPanel({
             anomaly.actualOrder && (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Sequence Analysis</h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">Expected</p>
                     <div className="flex flex-wrap gap-1">

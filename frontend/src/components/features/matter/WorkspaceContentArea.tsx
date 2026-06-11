@@ -66,7 +66,7 @@ export function WorkspaceContentArea({
   // write to qaPanelStore (the stored position is the user's desktop preference;
   // mutating it from viewport would clobber it and create a "remember to restore
   // on resize" rule). The desktop branches below are untouched.
-  const isBelowTablet = useIsBelowBreakpoint('md');
+  const isBelowTablet = useIsBelowBreakpoint('lg');
   const [mobileQaOpen, setMobileQaOpen] = useState(false);
   const rightWidth = useQAPanelStore((state) => state.rightWidth);
   const bottomHeight = useQAPanelStore((state) => state.bottomHeight);
@@ -172,7 +172,7 @@ export function WorkspaceContentArea({
     return (
       <PDFSplitView>
         <div className="relative h-full flex-1" data-testid="workspace-content-area">
-          <div className="h-full overflow-y-auto overflow-x-hidden" data-testid="workspace-main-content">
+          <div className="h-full overflow-y-auto overflow-x-hidden pb-24" data-testid="workspace-main-content">
             {children}
           </div>
           <Sheet open={mobileQaOpen} onOpenChange={setMobileQaOpen}>
@@ -188,12 +188,14 @@ export function WorkspaceContentArea({
             </SheetTrigger>
             <SheetContent
               side="bottom"
-              className="flex h-[85vh] flex-col p-0"
+              className="flex h-[85dvh] flex-col rounded-t-xl p-0"
               data-testid="mobile-qa-sheet"
             >
-              <SheetHeader className="sr-only">
-                <SheetTitle>Ask jaanch</SheetTitle>
-                <SheetDescription>
+              {/* compact QAPanel hides its own header, so the sheet supplies the
+                  single visible "Ask jaanch" title. Description stays SR-only. */}
+              <SheetHeader className="border-b p-3 text-left">
+                <SheetTitle className="text-sm font-semibold">Ask jaanch</SheetTitle>
+                <SheetDescription className="sr-only">
                   Ask questions about this matter and its documents.
                 </SheetDescription>
               </SheetHeader>
@@ -202,6 +204,7 @@ export function WorkspaceContentArea({
                   matterId={matterId}
                   userId={userId}
                   onSourceClick={handleSourceClick}
+                  compact
                 />
               </div>
             </SheetContent>

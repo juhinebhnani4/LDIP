@@ -31,7 +31,6 @@ import { DeleteDocumentDialog } from './DeleteDocumentDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -48,6 +47,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ResponsiveTable, type ResponsiveColumn } from '@/components/ui/responsive-table';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface DocumentListProps {
@@ -94,15 +95,6 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
 const FAILED_STATUSES: DocumentStatus[] = ['failed', 'ocr_failed', 'chunking_failed', 'embedding_failed'];
 const SUCCESS_STATUSES: DocumentStatus[] = ['completed', 'searchable'];
 const REVIEW_STATUSES: DocumentStatus[] = ['pending_review'];
-
-/** Column definitions for sortable headers */
-const SORTABLE_COLUMNS: { key: DocumentSortColumn; label: string }[] = [
-  { key: 'filename', label: 'Filename' },
-  { key: 'document_type', label: 'Type' },
-  { key: 'status', label: 'Status' },
-  { key: 'file_size', label: 'Size' },
-  { key: 'uploaded_at', label: 'Uploaded' },
-];
 
 /**
  * Format file size in human-readable format
@@ -480,6 +472,151 @@ export function DocumentList({
   const allSelected = documents.length > 0 && selectedIds.size === documents.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
 
+  // Column definitions — each cell() is the SINGLE source rendered by BOTH the
+  // desktop table and the mobile card (ResponsiveTable), so there is no
+  // table-vs-card duplicate logic (FE-ARCH-02 primitive).
+  const columns: ResponsiveColumn<DocumentListItem>[] = [
+    {
+      id: 'filename',
+      header: 'Filename',
+      sortable: true,
+      isPrimary: true,
+      cell: (doc) => (
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate" title={doc.filename}>{doc.filename}</span>
+          {doc.status === 'pending' && (
+            <span className="text-xs text-amber-600">Needs classification</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'document_type',
+      header: 'Type',
+      sortable: true,
+      cardLabel: 'Type',
+      cell: (doc) => (
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Select
+            value={doc.documentType}
+            onValueChange={(v) => handleTypeChange(doc.id, v as DocumentType)}
+          >
+            <SelectTrigger className="h-auto border-0 p-0 shadow-none focus:ring-0">
+              <DocumentTypeBadge type={doc.documentType} />
+            </SelectTrigger>
+            <SelectContent>
+              {DOCUMENT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <SourceBadge source={doc.source} />
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      sortable: true,
+      cardLabel: 'Status',
+      cell: (doc) => (
+        <span
+          className={cn(
+            'text-sm',
+            FAILED_STATUSES.includes(doc.status)
+              ? 'text-destructive'
+              : SUCCESS_STATUSES.includes(doc.status)
+                ? 'text-green-600'
+                : REVIEW_STATUSES.includes(doc.status)
+                  ? 'text-amber-600'
+                  : 'text-muted-foreground'
+          )}
+        >
+          {STATUS_LABELS[doc.status]}
+        </span>
+      ),
+    },
+    {
+      id: 'file_size',
+      header: 'Size',
+      sortable: true,
+      cardLabel: 'Size',
+      cell: (doc) => <span className="text-muted-foreground">{formatFileSize(doc.fileSize)}</span>,
+    },
+    {
+      id: 'uploaded_at',
+      header: 'Uploaded',
+      sortable: true,
+      cardLabel: 'Uploaded',
+      cell: (doc) => <span className="text-muted-foreground">{formatDate(doc.uploadedAt)}</span>,
+    },
+    {
+      id: 'ocr',
+      header: 'OCR Quality',
+      cardLabel: 'OCR',
+      cell: (doc) =>
+        doc.source === 'auto_fetched' ? (
+          <span className="text-sm text-muted-foreground">N/A</span>
+        ) : (doc.status === 'completed' || doc.status === 'ocr_complete') && !doc.ocrQualityStatus ? (
+          <span className="text-sm text-muted-foreground">—</span>
+        ) : (
+          <OCRQualityBadge
+            status={doc.ocrQualityStatus}
+            confidence={doc.ocrConfidence}
+            showPercentage={true}
+          />
+        ),
+    },
+    {
+      id: 'pages',
+      header: 'Pages',
+      cardLabel: 'Pages',
+      align: 'center',
+      cell: (doc) => (
+        <span className="text-muted-foreground">
+          {doc.source === 'auto_fetched' && !doc.pageCount ? 'N/A' : (doc.pageCount ?? '—')}
+        </span>
+      ),
+    },
+    {
+      id: 'processing',
+      header: 'Processing',
+      cardLabel: 'Processing',
+      cardBlock: true,
+      cell: (doc) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <DocumentProcessingStatus documentId={doc.id} compact={false} onStatusChange={loadDocuments} />
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cardLabel: null,
+      align: 'right',
+      cell: (doc) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <DocumentActionMenu
+            document={doc}
+            userRole={userRole}
+            onView={() => handleViewDocument(doc)}
+            onRename={() => {
+              setSelectedDocument(doc);
+              setRenameDialogOpen(true);
+            }}
+            onSetAsAct={() => handleSetAsAct(doc)}
+            onSetAsCaseFile={() => handleSetAsCaseFile(doc)}
+            onDelete={() => {
+              setSelectedDocument(doc);
+              setDeleteDialogOpen(true);
+            }}
+            onRetry={() => handleRetryDocument(doc)}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <TooltipProvider>
     <div className="space-y-4" data-testid="document-list">
@@ -542,165 +679,33 @@ export function DocumentList({
         )}
       </div>
 
-      {/* Document table */}
+      {/* Documents — desktop table / narrow cards from one column definition (ResponsiveTable) */}
       {documents.length === 0 ? (
         <DocumentListEmpty />
       ) : (
-        <div className="border rounded-lg overflow-x-auto" data-testid="document-table-container">
-          <Table data-testid="document-table">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all"
-                    data-state={someSelected ? 'indeterminate' : undefined}
-                  />
-                </TableHead>
-                {SORTABLE_COLUMNS.map((col) => (
-                  <TableHead
-                    key={col.key}
-                    className="cursor-pointer hover:bg-muted/50 select-none"
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div className="flex items-center gap-1">
-                      {col.label}
-                      {sort.column === col.key && (
-                        <span className="text-xs">
-                          {sort.order === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                ))}
-                <TableHead>OCR Quality</TableHead>
-                <TableHead>Pages</TableHead>
-                <TableHead>Processing</TableHead>
-                <TableHead className="w-10">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {documents.map((doc) => (
-                <TableRow
-                  key={doc.id}
-                  className={`cursor-pointer hover:bg-muted/50 ${
-                    selectedIds.has(doc.id) ? 'bg-muted/30' : ''
-                  }`}
-                  onClick={() => onDocumentClick?.(doc)}
-                  data-testid={`document-row-${doc.id}`}
-                >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedIds.has(doc.id)}
-                      onCheckedChange={(checked) =>
-                        handleSelectOne(doc.id, checked as boolean)
-                      }
-                      aria-label={`Select ${doc.filename}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex flex-col">
-                      <span className="truncate max-w-xs" title={doc.filename}>
-                        {doc.filename}
-                      </span>
-                      {doc.status === 'pending' && (
-                        <span className="text-xs text-amber-600">
-                          Needs classification
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-1.5">
-                      <Select
-                        value={doc.documentType}
-                        onValueChange={(v) => handleTypeChange(doc.id, v as DocumentType)}
-                      >
-                        <SelectTrigger className="h-auto p-0 border-0 shadow-none focus:ring-0">
-                          <DocumentTypeBadge type={doc.documentType} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DOCUMENT_TYPES.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <SourceBadge source={doc.source} />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`text-sm ${
-                        FAILED_STATUSES.includes(doc.status)
-                          ? 'text-destructive'
-                          : SUCCESS_STATUSES.includes(doc.status)
-                            ? 'text-green-600'
-                            : REVIEW_STATUSES.includes(doc.status)
-                              ? 'text-amber-600'
-                              : 'text-muted-foreground'
-                      }`}
-                    >
-                      {STATUS_LABELS[doc.status]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatFileSize(doc.fileSize)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(doc.uploadedAt)}
-                  </TableCell>
-                  <TableCell>
-                    {/* Auto-fetched docs don't have OCR - show N/A */}
-                    {doc.source === 'auto_fetched' ? (
-                      <span className="text-muted-foreground text-sm">N/A</span>
-                    ) : /* Completed docs without quality data show dash, not "Pending" */
-                    (doc.status === 'completed' || doc.status === 'ocr_complete') && !doc.ocrQualityStatus ? (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    ) : (
-                      <OCRQualityBadge
-                        status={doc.ocrQualityStatus}
-                        confidence={doc.ocrConfidence}
-                        showPercentage={true}
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-center">
-                    {/* Auto-fetched docs may not have page count */}
-                    {doc.source === 'auto_fetched' && !doc.pageCount ? 'N/A' : (doc.pageCount ?? '—')}
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DocumentProcessingStatus
-                      documentId={doc.id}
-                      compact={false}
-                      onStatusChange={loadDocuments}
-                    />
-                  </TableCell>
-                  {/* Action menu (Story 10D.4) */}
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DocumentActionMenu
-                      document={doc}
-                      userRole={userRole}
-                      onView={() => handleViewDocument(doc)}
-                      onRename={() => {
-                        setSelectedDocument(doc);
-                        setRenameDialogOpen(true);
-                      }}
-                      onSetAsAct={() => handleSetAsAct(doc)}
-                      onSetAsCaseFile={() => handleSetAsCaseFile(doc)}
-                      onDelete={() => {
-                        setSelectedDocument(doc);
-                        setDeleteDialogOpen(true);
-                      }}
-                      onRetry={() => handleRetryDocument(doc)}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="lg:rounded-lg lg:border" data-testid="document-table-container">
+          <ResponsiveTable<DocumentListItem>
+            data-testid="document-table"
+            columns={columns}
+            rows={documents}
+            getRowId={(d) => d.id}
+            getRowTestId={(d) => `document-row-${d.id}`}
+            onRowClick={(d) => onDocumentClick?.(d)}
+            rowClassName={(d) => (selectedIds.has(d.id) ? 'bg-muted/30' : undefined)}
+            selection={{
+              isSelected: (d) => selectedIds.has(d.id),
+              onToggle: (d) => handleSelectOne(d.id, !selectedIds.has(d.id)),
+              ariaLabel: (d) => `Select ${d.filename}`,
+              allSelected,
+              someSelected,
+              onToggleAll: handleSelectAll,
+            }}
+            sort={{
+              columnId: sort.column,
+              direction: sort.order,
+              onSortChange: (id) => handleSort(id as DocumentSortColumn),
+            }}
+          />
         </div>
       )}
 

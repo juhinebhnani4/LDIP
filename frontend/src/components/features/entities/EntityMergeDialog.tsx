@@ -94,7 +94,7 @@ export function EntityMergeDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Merge Entities</DialogTitle>
           <DialogDescription>
@@ -123,7 +123,7 @@ export function EntityMergeDialog({
           </Alert>
         )}
 
-        <div className="grid grid-cols-[1fr,auto,1fr] gap-4 items-center py-4">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto,1fr] gap-4 items-center py-4">
           {/* Source Entity (will be deleted) */}
           <EntityCard
             entity={entities?.source ?? sourceEntity}
@@ -138,7 +138,7 @@ export function EntityMergeDialog({
 
           {/* Arrow */}
           <div className="flex flex-col items-center gap-1">
-            <ArrowRight className="h-6 w-6 text-muted-foreground" />
+            <ArrowRight className="h-6 w-6 text-muted-foreground rotate-90 sm:rotate-0" />
             <span className="text-xs text-muted-foreground">merges into</span>
           </div>
 
@@ -248,9 +248,9 @@ function EntityCard({
             )} />
           )}
         </div>
-        <CardTitle className="text-base flex items-center gap-2 mt-2">
-          <Icon className={cn('h-4 w-4', config.color)} />
-          {entity.canonicalName}
+        <CardTitle className="text-base flex items-center gap-2 mt-2 min-w-0">
+          <Icon className={cn('h-4 w-4 flex-shrink-0', config.color)} />
+          <span className="truncate">{entity.canonicalName}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">

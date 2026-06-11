@@ -173,8 +173,8 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote, onViewSource
               </p>
             </div>
           </div>
-          <div className="flex gap-2 mt-4">
-            <Button asChild variant="outline" size="sm" className="flex-1">
+          <div className="flex flex-col gap-2 mt-4 sm:flex-row">
+            <Button asChild variant="outline" size="sm" className="flex-1 min-w-0">
               <Link href={`/matter/${matterId}/entities?entity=${party.entityId}`}>
                 <User className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 View Entity
@@ -183,7 +183,7 @@ function PartyCard({ party, matterId, onVerify, onFlag, onSaveNote, onViewSource
             <Button
               variant="ghost"
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-0"
               onClick={() => onViewSource
                 ? onViewSource(party.sourceDocument, party.sourcePage ?? undefined)
                 : openDocumentByName(matterId, party.sourceDocument, party.sourcePage)
@@ -254,7 +254,7 @@ export function PartiesSection({
       <h2 id="parties-heading" className="text-lg font-semibold mb-4">
         Parties
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {petitioner && renderPartyCard(petitioner)}
         {respondent && renderPartyCard(respondent)}
         {otherParties.map(renderPartyCard)}
@@ -270,7 +270,7 @@ export function PartiesSectionSkeleton({ className }: { className?: string }) {
   return (
     <section className={className}>
       <Skeleton className="h-6 w-20 mb-4" />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">

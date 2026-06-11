@@ -143,7 +143,7 @@ export function SubjectMatterSection({
                 key={`${source.documentName}-${index}`}
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-7 text-xs max-w-full min-w-0 overflow-hidden"
                 onClick={() => onViewSource
                   ? onViewSource(source.documentName, Number(source.pageRange.split('-')[0]) || undefined)
                   : openDocumentByName(matterId, source.documentName, source.pageRange.split('-')[0])
@@ -151,7 +151,7 @@ export function SubjectMatterSection({
                 aria-label={`View source: ${source.documentName}, pages ${source.pageRange}`}
               >
                 <ExternalLink className="h-3 w-3 mr-1" aria-hidden="true" />
-                {source.documentName} (pp. {source.pageRange})
+                <span className="truncate">{source.documentName} (pp. {source.pageRange})</span>
               </Button>
             ))}
           </div>

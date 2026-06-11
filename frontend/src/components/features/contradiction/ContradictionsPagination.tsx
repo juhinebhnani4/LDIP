@@ -98,14 +98,14 @@ export function ContradictionsPagination({
   const endItem = Math.min(currentPage * perPage, totalItems);
 
   return (
-    <div className="flex items-center justify-between py-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
       {/* Item count */}
       <div className="text-sm text-muted-foreground">
         Showing {startItem}-{endItem} of {totalItems}
       </div>
 
       {/* Pagination controls */}
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-center gap-1">
         {/* Previous button */}
         <Button
           variant="outline"

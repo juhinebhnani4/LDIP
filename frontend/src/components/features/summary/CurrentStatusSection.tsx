@@ -129,8 +129,8 @@ export function CurrentStatusSection({
       </div>
 
       {/* Source reference with CitationLink */}
-      <div className="mt-4 pt-4 border-t flex items-center justify-between flex-wrap gap-4">
-        <div className="text-sm text-muted-foreground">
+      <div className="mt-4 pt-4 border-t flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted-foreground min-w-0 break-words">
           Source:{' '}
           {currentStatus.citation ? (
             <CitationLink

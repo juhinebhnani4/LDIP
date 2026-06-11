@@ -77,7 +77,7 @@ function TrackRow({
     >
       {/* Track label */}
       <div
-        className="w-40 shrink-0 px-4 truncate font-medium text-sm border-r bg-muted/30"
+        className="w-24 sm:w-40 shrink-0 px-4 truncate font-medium text-sm border-r bg-muted/30"
         title={track.actorName}
       >
         <span className="text-xs text-muted-foreground block">
@@ -246,7 +246,7 @@ export function TimelineMultiTrack({
   return (
     <div className={cn('flex flex-col', className)}>
       {/* Track count and zoom controls */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Users className="h-4 w-4" />
           <span>
@@ -267,7 +267,7 @@ export function TimelineMultiTrack({
           {/* Year header row */}
           <div className="flex items-center h-8 border-b bg-background sticky top-0 z-10">
             {/* Empty space for track labels */}
-            <div className="w-40 shrink-0 border-r bg-muted/30" />
+            <div className="w-24 sm:w-40 shrink-0 border-r bg-muted/30" />
 
             {/* Year labels */}
             <div className="flex-1 relative px-2">
@@ -284,7 +284,7 @@ export function TimelineMultiTrack({
           </div>
 
           {/* Vertical grid lines */}
-          <div className="absolute top-8 bottom-0 left-40 right-0 pointer-events-none">
+          <div className="absolute top-8 bottom-0 left-24 sm:left-40 right-0 pointer-events-none">
             {scale.yearLabels.map((label) => (
               <div
                 key={`grid-${label.year}`}

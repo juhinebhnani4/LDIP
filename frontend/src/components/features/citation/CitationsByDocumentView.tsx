@@ -217,21 +217,21 @@ export function CitationsByDocumentView({
                     docHasIssues && 'bg-destructive/5'
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     {isExpanded ? (
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                      <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     ) : (
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     )}
-                    <FileText className="h-5 w-5 text-primary" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{name}</span>
+                    <FileText className="h-5 w-5 text-primary flex-shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{name}</span>
                       <span className="text-sm text-muted-foreground">
                         {docCitations.length} citation{docCitations.length !== 1 ? 's' : ''} on {uniquePages.length} page{uniquePages.length !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {docHasIssues && (
                       <Badge variant="destructive" className="gap-1">
                         <AlertTriangle className="h-3 w-3" />
@@ -249,7 +249,7 @@ export function CitationsByDocumentView({
 
               {/* Document Content */}
               <CollapsibleContent>
-                <div className="border-t">
+                <div className="border-t overflow-x-auto">
                   {/* Citations table */}
                   <table className="w-full text-sm">
                     <thead>
@@ -282,9 +282,9 @@ export function CitationsByDocumentView({
                                 {citation.sourcePage}
                               </button>
                             </td>
-                            <td className="px-4 py-2">
-                              <div className="flex flex-col">
-                                <span className="font-medium">
+                            <td className="px-4 py-2 min-w-0">
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium break-words">
                                   {citation.actName} § {citation.sectionNumber}
                                   {citation.subsection && `.${citation.subsection}`}
                                   {citation.clause && `(${citation.clause})`}

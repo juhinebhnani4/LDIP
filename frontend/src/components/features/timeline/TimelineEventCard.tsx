@@ -177,7 +177,7 @@ export function TimelineEventCard({
           </div>
         )}
         {/* Date */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+        <div className="flex items-center flex-wrap gap-2 text-sm text-muted-foreground mb-3 pr-10">
           <span className="font-medium">{formattedDate}</span>
           {event.eventDateText &&
             event.eventDateText !== event.eventDate && (

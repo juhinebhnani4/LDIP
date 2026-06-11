@@ -247,11 +247,10 @@ export function FindingDetailPanel({
 
         {/* Action buttons */}
         {!isResolved && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="flex-1"
               onClick={handleReject}
               disabled={isLoading}
             >
@@ -261,7 +260,6 @@ export function FindingDetailPanel({
             <Button
               variant="outline"
               size="sm"
-              className="flex-1"
               onClick={handleFlag}
               disabled={isLoading}
             >
@@ -271,7 +269,6 @@ export function FindingDetailPanel({
             <Button
               variant="default"
               size="sm"
-              className="flex-1"
               onClick={handleApprove}
               disabled={isLoading}
             >

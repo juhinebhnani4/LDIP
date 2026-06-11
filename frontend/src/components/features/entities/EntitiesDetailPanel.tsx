@@ -245,7 +245,7 @@ export function EntitiesDetailPanel({
   return (
     <Card
       className={cn(
-        'w-[360px] h-full flex flex-col border-l rounded-none shadow-lg',
+        'w-full lg:w-[360px] lg:flex-shrink-0 h-full flex flex-col border-t lg:border-t-0 lg:border-l rounded-none shadow-lg',
         className
       )}
       role="complementary"

@@ -82,27 +82,27 @@ export function StatementSection({
   const formattedDate = formatDate(statement.date);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 min-w-0">
       {/* Label */}
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </div>
 
       {/* Document reference */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-sm min-w-0">
         <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
         {onDocumentClick ? (
           <button
             type="button"
             onClick={handleDocumentClick}
-            className="text-primary hover:underline font-medium truncate max-w-[200px]"
+            className="text-primary hover:underline font-medium truncate min-w-0 flex-1"
             title={statement.documentName}
           >
             {statement.documentName}
           </button>
         ) : (
           <span
-            className="font-medium truncate max-w-[200px]"
+            className="font-medium truncate min-w-0 flex-1"
             title={statement.documentName}
           >
             {statement.documentName}
@@ -116,7 +116,7 @@ export function StatementSection({
       </div>
 
       {/* Excerpt */}
-      <blockquote className="border-l-2 border-muted pl-3 text-sm text-muted-foreground italic">
+      <blockquote className="border-l-2 border-muted pl-3 text-sm text-muted-foreground italic break-words">
         &ldquo;{truncateText(statement.excerpt)}&rdquo;
       </blockquote>
 

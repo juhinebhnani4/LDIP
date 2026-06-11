@@ -29,7 +29,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useIsBelowBreakpoint } from '@/hooks/useBreakpoint';
 import { entityTypeConfig, ENTITY_VIEW_HEIGHT } from '@/lib/utils/entityConstants';
+import { EntitiesGridView } from './EntitiesGridView';
 import type { EntityListItem } from '@/types/entity';
 
 type SortField = 'canonicalName' | 'entityType' | 'mentionCount';
@@ -56,6 +58,14 @@ export function EntitiesListView({
 }: EntitiesListViewProps) {
   const [sortField, setSortField] = useState<SortField>('mentionCount');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // A <table> is the wrong primitive below the lg breakpoint (1024px): on a
+  // phone/tablet it becomes a sideways-scrolling pane. Below lg we render the
+  // existing card grid instead (single column on phone, 2-up on small tablets),
+  // which reflows correctly. The full sortable table is kept at lg+ where there
+  // is horizontal room. Breakpoint decision comes from the foundation hook, not
+  // an ad-hoc media query.
+  const isBelowLg = useIsBelowBreakpoint('lg');
 
   const sortedEntities = useMemo(() => {
     return [...entities].sort((a, b) => {
@@ -117,6 +127,22 @@ export function EntitiesListView({
       <ChevronDown className="h-4 w-4 ml-1" />
     );
   };
+
+  // Below lg, swap the table for the card grid (reflows; avoids horizontal scroll).
+  // The grid view handles its own empty state, so this also covers entities.length === 0.
+  if (isBelowLg) {
+    return (
+      <EntitiesGridView
+        entities={sortedEntities}
+        selectedEntityId={selectedEntityId}
+        onEntitySelect={onEntitySelect}
+        isMultiSelectMode={isMultiSelectMode}
+        selectedForMerge={selectedForMerge}
+        onToggleMergeSelection={onToggleMergeSelection}
+        className={className}
+      />
+    );
+  }
 
   if (entities.length === 0) {
     return (
@@ -210,9 +236,9 @@ export function EntitiesListView({
                     </TableCell>
                   )}
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <Icon className={cn('h-4 w-4', config.color)} />
-                      {entity.canonicalName}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className={cn('h-4 w-4 flex-shrink-0', config.color)} />
+                      <span className="truncate">{entity.canonicalName}</span>
                     </div>
                   </TableCell>
                   <TableCell>

@@ -213,21 +213,21 @@ export function CitationsByActView({
                     actHasIssues && 'bg-destructive/5'
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     {isExpanded ? (
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                      <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     ) : (
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     )}
-                    <Scale className="h-5 w-5 text-primary" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{actName}</span>
+                    <Scale className="h-5 w-5 text-primary flex-shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{actName}</span>
                       <span className="text-sm text-muted-foreground">
                         {actCitations.length} citation{actCitations.length !== 1 ? 's' : ''} in {sectionGroups.size} section{sectionGroups.size !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
                     {actHasIssues && (
                       <Badge variant="destructive" className="gap-1">
                         <AlertTriangle className="h-3 w-3" />
@@ -239,8 +239,8 @@ export function CitationsByActView({
                         <span className="text-green-600">{summaryItem.verifiedCount} verified</span>
                         {summaryItem.pendingCount > 0 && (
                           <>
-                            <span>|</span>
-                            <span>{summaryItem.pendingCount} pending</span>
+                            <span className="hidden sm:inline">|</span>
+                            <span className="hidden sm:inline">{summaryItem.pendingCount} pending</span>
                           </>
                         )}
                       </div>
@@ -301,7 +301,7 @@ export function CitationsByActView({
                                     p.{citation.sourcePage}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1 ml-2">
+                                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                                   <Button
                                     variant="ghost"
                                     size="sm"

@@ -261,7 +261,7 @@ export function ActDiscoveryModal({
               {!isLoading && !error && actReport.length === 0 && <EmptyState />}
 
               {!isLoading && !error && actReport.length > 0 && (
-                <div className="h-[350px] overflow-y-auto pr-2 -mr-2">
+                <div className="max-h-[50vh] overflow-y-auto pr-2 -mr-2">
                   <div className="space-y-4">
                     {/* Available Acts Section (includes auto_fetched) */}
                     {(availableActs.length > 0 || autoFetchedActs.length > 0) && (

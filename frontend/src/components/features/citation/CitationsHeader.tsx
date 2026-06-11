@@ -164,7 +164,7 @@ export function CitationsHeader({
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">Citations</h2>
           {stats && !isLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>{stats.totalCitations} found</span>
               <span className="text-muted-foreground/50">|</span>
               <span className="flex items-center gap-1">
@@ -207,8 +207,8 @@ export function CitationsHeader({
 
       {/* Act Discovery summary */}
       {stats && stats.uniqueActs > 0 && (
-        <div className="flex items-center gap-2 text-sm bg-muted/40 px-3 py-2 rounded-md">
-          <Scale className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2 text-sm bg-muted/40 px-3 py-2 rounded-md">
+          <Scale className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <span>
             <strong>{stats.uniqueActs}</strong> Acts referenced
           </span>
@@ -230,14 +230,14 @@ export function CitationsHeader({
       {/* Bottom row: Search and Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Search input */}
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search Act or Section..."
             value={filters.searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9 w-[220px] h-9"
+            className="pl-9 w-full sm:w-[220px] h-9"
           />
         </div>
 
@@ -298,7 +298,7 @@ export function CitationsHeader({
           value={filters.actName ?? 'all'}
           onValueChange={handleActChange}
         >
-          <SelectTrigger className="w-[200px] h-9 text-sm">
+          <SelectTrigger className="w-full sm:w-[200px] h-9 text-sm min-w-0">
             <SelectValue placeholder="All Acts" />
           </SelectTrigger>
           <SelectContent>

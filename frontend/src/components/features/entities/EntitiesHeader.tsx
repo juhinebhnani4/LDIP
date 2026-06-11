@@ -162,7 +162,7 @@ export function EntitiesHeader({
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">Entities</h2>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <span>
               {stats.filteredTotal !== undefined && stats.filteredTotal !== stats.total
                 ? `${stats.filteredTotal} of ${stats.total}`
@@ -188,7 +188,7 @@ export function EntitiesHeader({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* Multi-select merge controls */}
           {onMultiSelectModeChange && (
             <>

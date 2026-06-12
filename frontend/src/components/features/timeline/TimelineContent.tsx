@@ -520,7 +520,7 @@ export function TimelineContent({ className }: TimelineContentProps) {
       />
 
       {/* Events count message and Load More button */}
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {activeFilterCount > 0 ? (
             <>Showing {displayEvents.length} of {events.length} loaded events</>

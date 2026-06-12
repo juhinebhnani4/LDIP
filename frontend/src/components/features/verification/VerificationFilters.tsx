@@ -77,7 +77,7 @@ export function VerificationFilters({
           onFiltersChange({ findingType: value === 'all' ? null : value })
         }
       >
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-full sm:w-[180px]">
           <SelectValue placeholder="Finding Type" />
         </SelectTrigger>
         <SelectContent>
@@ -100,7 +100,7 @@ export function VerificationFilters({
           })
         }
       >
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-full sm:w-[180px]">
           <SelectValue placeholder="Confidence" />
         </SelectTrigger>
         <SelectContent>
@@ -136,7 +136,7 @@ export function VerificationFilters({
           })
         }
       >
-        <SelectTrigger className="w-[150px]">
+        <SelectTrigger className="w-full sm:w-[150px]">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
@@ -178,7 +178,7 @@ export function VerificationFilters({
           onFiltersChange({ view: value as VerificationView })
         }
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger className="w-full sm:w-[140px]">
           <SelectValue placeholder="View" />
         </SelectTrigger>
         <SelectContent>

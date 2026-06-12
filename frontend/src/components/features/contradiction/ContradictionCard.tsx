@@ -208,14 +208,16 @@ export function ContradictionCard({
                   key={link.statementId}
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs"
+                  className="h-7 text-xs max-w-full min-w-0"
                   onClick={() =>
                     onEvidenceClick?.(link.documentId, link.page, link.bboxIds)
                   }
                 >
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  {link.documentName}
-                  {link.page !== null && ` (p. ${link.page})`}
+                  <ExternalLink className="h-3 w-3 mr-1 shrink-0" />
+                  <span className="truncate">
+                    {link.documentName}
+                    {link.page !== null && ` (p. ${link.page})`}
+                  </span>
                 </Button>
               ))}
             </div>
@@ -259,11 +261,11 @@ export function ContradictionCard({
                   <Link
                     key={event.eventId}
                     href={`/matter/${matterId}/timeline?event=${event.eventId}`}
-                    className="block p-2 rounded bg-muted/50 text-xs hover:bg-muted transition-colors"
+                    className="flex min-w-0 items-center gap-1 p-2 rounded bg-muted/50 text-xs hover:bg-muted transition-colors"
                   >
-                    <span className="font-medium">{event.eventDate}</span>
-                    <span className="text-muted-foreground"> - </span>
-                    <span className="truncate">{event.description.slice(0, 60)}...</span>
+                    <span className="font-medium shrink-0">{event.eventDate}</span>
+                    <span className="text-muted-foreground shrink-0">-</span>
+                    <span className="truncate min-w-0">{event.description.slice(0, 60)}...</span>
                   </Link>
                 ))}
               </div>

@@ -82,9 +82,9 @@ export function CitationsAttentionBanner({
             className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-amber-100/50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
             aria-label={isOpen ? 'Collapse attention banner' : 'Expand attention banner'}
           >
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              <span className="font-semibold text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <span className="font-semibold text-amber-800 dark:text-amber-200 min-w-0">
                 {totalAttentionItems} {totalAttentionItems === 1 ? 'CITATION NEEDS' : 'CITATIONS NEED'} ATTENTION
               </span>
             </div>
@@ -117,13 +117,13 @@ export function CitationsAttentionBanner({
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                 {issueCount > 0 && onReviewIssues && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={onReviewIssues}
-                    className="gap-1.5 border-amber-300 bg-white hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:hover:bg-amber-900/30"
+                    className="w-full sm:w-auto gap-1.5 border-amber-300 bg-white hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:hover:bg-amber-900/30"
                   >
                     <Eye className="h-4 w-4" />
                     Review Issues
@@ -134,7 +134,7 @@ export function CitationsAttentionBanner({
                     variant="default"
                     size="sm"
                     onClick={onUploadMissingActs}
-                    className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                    className="w-full sm:w-auto gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
                   >
                     <Upload className="h-4 w-4" />
                     Upload Missing Acts

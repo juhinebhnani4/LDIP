@@ -71,7 +71,7 @@ export function CitationLink({
               }
             }}
             className={cn(
-              'text-blue-600 hover:text-blue-800 underline underline-offset-2 inline-flex items-center gap-1 cursor-pointer',
+              'text-blue-600 hover:text-blue-800 underline underline-offset-2 inline-flex items-center gap-1 cursor-pointer max-w-full truncate overflow-hidden align-bottom',
               className
             )}
           >

@@ -89,20 +89,20 @@ export function TimelineHeader({
 
   return (
     <div
-      className={`flex items-center justify-between py-4 border-b ${className ?? ''}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-4 border-b ${className ?? ''}`}
       role="banner"
       aria-label="Timeline header"
     >
       {/* Left side: Stats */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 min-w-0">
         <h2 className="text-lg font-semibold">
           {eventCount} {eventCount === 1 ? 'event' : 'events'}
         </h2>
-        <p className="text-sm text-muted-foreground">{dateRange}</p>
+        <p className="text-sm text-muted-foreground truncate">{dateRange}</p>
       </div>
 
       {/* Right side: Add Event button and View mode toggle */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {/* Add Event button */}
         {onAddEvent && (
           <Tooltip>
@@ -124,7 +124,7 @@ export function TimelineHeader({
 
         {/* View mode toggle */}
         <div
-          className="flex items-center gap-1 border rounded-lg p-1"
+          className="flex items-center gap-1 border rounded-lg p-1 flex-shrink-0"
           role="group"
           aria-label="View mode selection"
         >
@@ -133,13 +133,13 @@ export function TimelineHeader({
             <Button
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 px-3"
+              className="h-8 px-2 sm:px-3"
               onClick={() => onViewModeChange('list')}
               aria-pressed={viewMode === 'list'}
               aria-label="List view"
             >
               <List className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              <span className="text-xs">List</span>
+              <span className="text-xs hidden sm:inline">List</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Vertical chronological list</TooltipContent>
@@ -149,13 +149,13 @@ export function TimelineHeader({
             <Button
               variant={viewMode === 'horizontal' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 px-3"
+              className="h-8 px-2 sm:px-3"
               onClick={() => onViewModeChange('horizontal')}
               aria-pressed={viewMode === 'horizontal'}
               aria-label="Horizontal timeline view"
             >
               <LayoutTemplate className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              <span className="text-xs">Horizontal</span>
+              <span className="text-xs hidden sm:inline">Horizontal</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Horizontal axis with zoom</TooltipContent>
@@ -165,13 +165,13 @@ export function TimelineHeader({
             <Button
               variant={viewMode === 'multitrack' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 px-3"
+              className="h-8 px-2 sm:px-3"
               onClick={() => onViewModeChange('multitrack')}
               aria-pressed={viewMode === 'multitrack'}
               aria-label="Multi-track view"
             >
               <Users className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              <span className="text-xs">Multi-Track</span>
+              <span className="text-xs hidden sm:inline">Multi-Track</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Parallel timelines by actor</TooltipContent>
@@ -188,7 +188,7 @@ export function TimelineHeader({
 export function TimelineHeaderSkeleton({ className }: { className?: string }) {
   return (
     <div
-      className={`flex items-center justify-between py-4 border-b ${className ?? ''}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-4 border-b ${className ?? ''}`}
     >
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-24" />

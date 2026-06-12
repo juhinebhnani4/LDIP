@@ -29,6 +29,14 @@ interface QAPanelProps {
   userId?: string;
   /** Callback when a source reference is clicked */
   onSourceClick?: (source: SourceReference) => void;
+  /**
+   * Compact mode for space-constrained surfaces (e.g. the mobile bottom sheet).
+   * When false (default) desktop behaviour is IDENTICAL to today: the panel's
+   * own header row (title + Minimize/Settings) and the Embedding/Rerank model
+   * selector row are both shown. When true, both rows are hidden so the host
+   * surface can supply its own heading and reclaim the vertical space.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -42,7 +50,7 @@ interface QAPanelProps {
  * Story 11.3: Streaming Response with Engine Trace
  * Story 11.4: Suggested Questions and Message Input
  */
-export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanelProps) {
+export function QAPanel({ matterId, userId: userIdProp, onSourceClick, compact = false }: QAPanelProps) {
   // Get user from auth if not provided as prop
   const { user, loading: authLoading } = useUser();
   const userId = userIdProp ?? user?.id;
@@ -386,8 +394,10 @@ export function QAPanel({ matterId, userId: userIdProp, onSourceClick }: QAPanel
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      <QAPanelHeader matterId={matterId} />
-      <ModelSelector />
+      {/* compact: host surface (e.g. mobile sheet) supplies its own heading and
+          hides the desktop model-selector row to reclaim vertical space. */}
+      {!compact && <QAPanelHeader matterId={matterId} />}
+      {!compact && <ModelSelector />}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {renderContent()}

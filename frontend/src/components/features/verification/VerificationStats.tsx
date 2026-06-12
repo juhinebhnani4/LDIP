@@ -81,12 +81,12 @@ export function VerificationStats({
   return (
     <div className="space-y-4 p-4 rounded-lg border bg-card">
       {/* Header with progress */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Verification Center</h2>
           <Progress
             value={completionPercent}
-            className="w-64 h-2 mt-2"
+            className="w-full max-w-xs sm:w-64 h-2 mt-2"
             aria-label={`Verification progress: ${completionPercent}% complete (${completedCount} of ${stats.totalVerifications} verified)`}
           />
           <p className="text-sm text-muted-foreground mt-1">
@@ -94,32 +94,36 @@ export function VerificationStats({
           </p>
         </div>
         {onStartSession && (
-          <Button onClick={onStartSession} disabled={stats.pendingCount === 0}>
+          <Button
+            onClick={onStartSession}
+            disabled={stats.pendingCount === 0}
+            className="w-full sm:w-auto"
+          >
             Start Review Session
           </Button>
         )}
       </div>
 
       {/* Statistics summary */}
-      <div className="flex items-center gap-4 text-sm">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">
           {stats.totalVerifications} total
         </span>
-        <span className="text-muted-foreground">|</span>
+        <span className="hidden sm:inline text-muted-foreground">|</span>
         <span className="text-green-600 dark:text-green-400">
           {completedCount} verified
         </span>
-        <span className="text-muted-foreground">|</span>
+        <span className="hidden sm:inline text-muted-foreground">|</span>
         <span className="text-yellow-600 dark:text-yellow-400">
           {stats.pendingCount} pending
         </span>
-        <span className="text-muted-foreground">|</span>
+        <span className="hidden sm:inline text-muted-foreground">|</span>
         <span className="text-orange-600 dark:text-orange-400">
           {stats.flaggedCount} flagged
         </span>
         {stats.rejectedCount > 0 && (
           <>
-            <span className="text-muted-foreground">|</span>
+            <span className="hidden sm:inline text-muted-foreground">|</span>
             <span className="text-red-600 dark:text-red-400">
               {stats.rejectedCount} rejected
             </span>
@@ -127,7 +131,7 @@ export function VerificationStats({
         )}
         {stats.exportBlocked && (
           <>
-            <span className="text-muted-foreground">|</span>
+            <span className="hidden sm:inline text-muted-foreground">|</span>
             <Badge variant="destructive">
               {stats.blockingCount} blocking export
             </Badge>

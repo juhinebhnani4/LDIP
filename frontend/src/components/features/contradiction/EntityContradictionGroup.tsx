@@ -61,17 +61,17 @@ export function EntityContradictionGroup({
             variant="ghost"
             className="w-full justify-between px-4 py-3 h-auto hover:bg-muted/50"
           >
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <span className="font-medium">{group.entityName}</span>
-              <span className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 min-w-0">
+              <User className="h-5 w-5 text-muted-foreground shrink-0" />
+              <span className="font-medium truncate min-w-0">{group.entityName}</span>
+              <span className="text-sm text-muted-foreground shrink-0">
                 ({group.count} contradiction{group.count !== 1 ? 's' : ''})
               </span>
             </div>
             {isOpen ? (
-              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
             ) : (
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
             )}
           </Button>
         </CollapsibleTrigger>

@@ -64,7 +64,7 @@ export function AnomaliesBanner({
       )}
     >
       <AlertTriangle className="h-4 w-4" />
-      <AlertTitle className="flex items-center gap-2">
+      <AlertTitle className="flex items-center gap-2 pr-8">
         Timeline Anomalies Detected
         <Badge
           variant="secondary"

@@ -44,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ResponsiveTable, type ResponsiveColumn } from '@/components/ui/responsive-table';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -429,6 +430,163 @@ export function CitationsList({
     );
   }
 
+  // Flat (non-grouped) columns — each cell() is the SINGLE source rendered by
+  // both the desktop table and the mobile card (ResponsiveTable). getStatusBadge
+  // / getConfidenceColor are shared module fns, so no table-vs-card duplication.
+  const columns: ResponsiveColumn<CitationListItem>[] = [
+    {
+      id: 'actName',
+      header: 'Act Name',
+      sortable: true,
+      isPrimary: true,
+      cell: (c) => <span className="break-words font-medium">{c.actName}</span>,
+    },
+    {
+      id: 'sectionNumber',
+      header: 'Section',
+      sortable: true,
+      cardLabel: 'Section',
+      cell: (c) => (
+        <span>
+          {c.sectionNumber}
+          {c.subsection && `.${c.subsection}`}
+          {c.clause && `(${c.clause})`}
+        </span>
+      ),
+    },
+    {
+      id: 'citationText',
+      header: 'Citation Text',
+      cardLabel: 'Citation',
+      cardBlock: true,
+      cell: (c) =>
+        c.rawCitationText ? (
+          <span className="line-clamp-2 text-sm" title={c.rawCitationText}>
+            {c.rawCitationText}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">-</span>
+        ),
+    },
+    {
+      id: 'sourceDoc',
+      header: 'Source Doc',
+      cardLabel: 'Source',
+      cell: (c) =>
+        c.documentName ? (
+          <button
+            type="button"
+            className="flex max-w-[180px] items-center gap-1 text-sm text-primary hover:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDocumentClick(c.documentId, c.sourcePage);
+            }}
+          >
+            <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">{c.documentName}</span>
+            <span className="flex-shrink-0 text-muted-foreground">p.{c.sourcePage}</span>
+          </button>
+        ) : (
+          <span className="text-muted-foreground">Page {c.sourcePage}</span>
+        ),
+    },
+    {
+      id: 'verificationStatus',
+      header: 'Status',
+      sortable: true,
+      cardLabel: 'Status',
+      cell: (c) => {
+        const b = getStatusBadge(c.verificationStatus);
+        return (
+          <Badge variant={b.variant} className="gap-1" title={b.tooltip}>
+            {b.icon}
+            {b.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: 'confidence',
+      header: 'Conf.',
+      sortable: true,
+      cardLabel: 'Confidence',
+      cell: (c) => (
+        <span className={cn('font-medium', getConfidenceColor(c.confidence))}>
+          {c.confidence.toFixed(0)}%
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cardLabel: null,
+      cardBlock: true,
+      align: 'right',
+      cell: (c) => {
+        const isIssue = ['mismatch', 'section_not_found'].includes(c.verificationStatus);
+        return (
+          <div className="flex items-center gap-1 lg:justify-end" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" onClick={() => handleViewCitation(c.id)} aria-label="View in split view">
+              <Eye className="h-4 w-4" />
+            </Button>
+            {c.verificationStatus !== 'verified' && onVerifyCitation && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleVerifyCitation(c.id, c.confidence)}
+                disabled={updatingCitations.has(c.id)}
+                className="text-green-600 hover:bg-green-50 hover:text-green-700"
+                aria-label="Mark as verified"
+              >
+                {updatingCitations.has(c.id) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+            {!isIssue && onFlagCitation && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={updatingCitations.has(c.id)}
+                    className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                    aria-label="Flag an issue"
+                  >
+                    <Flag className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleFlagCitation(c.id, 'mismatch')} className="text-destructive">
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Text Mismatch
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleFlagCitation(c.id, 'section_not_found')} className="text-destructive">
+                    <Wrench className="mr-2 h-4 w-4" />
+                    Section Not Found
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {isIssue && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleViewCitation(c.id)}
+                className="text-destructive hover:text-destructive"
+                aria-label="Review and fix issue"
+              >
+                <Wrench className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Citations Table */}
@@ -464,6 +622,8 @@ export function CitationsList({
             </div>
           </div>
         )}
+        {enableGrouping && groupedCitations ? (
+        <div className="overflow-x-auto no-scrollbar">
         <Table>
           <TableHeader>
             <TableRow>
@@ -549,9 +709,7 @@ export function CitationsList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* Grouped view */}
-            {enableGrouping && groupedCitations ? (
-              groupedCitations.map((group) => {
+            {groupedCitations.map((group) => {
                 const isExpanded = expandedGroups.has(group.groupKey);
                 const hasMultiple = group.count > 1;
                 const statusBadge = getStatusBadge(group.aggregateStatus);
@@ -893,203 +1051,39 @@ export function CitationsList({
                     })}
                   </>
                 );
-              })
-            ) : (
-              /* Non-grouped view (original) */
-              sortedCitations.map((citation) => {
-                const statusBadge = getStatusBadge(citation.verificationStatus);
-                const isIssue = ['mismatch', 'section_not_found'].includes(citation.verificationStatus);
-
-                return (
-                  <TableRow key={citation.id} className={isIssue ? 'bg-destructive/5' : ''}>
-                    {/* Checkbox for bulk selection */}
-                    {enableBulkSelection && (
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.has(citation.id)}
-                          onCheckedChange={(checked) => handleSelectOne(citation.id, !!checked)}
-                          aria-label={`Select citation for ${citation.actName} Section ${citation.sectionNumber}`}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell className="font-medium">
-                      {citation.actName}
-                    </TableCell>
-                    <TableCell>
-                      {citation.sectionNumber}
-                      {citation.subsection && `.${citation.subsection}`}
-                      {citation.clause && `(${citation.clause})`}
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      {citation.rawCitationText ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="line-clamp-2 text-sm cursor-default">
-                              {citation.rawCitationText}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-md">
-                            <p className="text-sm whitespace-pre-wrap">{citation.rawCitationText}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {citation.documentName ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 text-sm text-primary hover:underline max-w-[140px]"
-                              onClick={() => handleDocumentClick(citation.documentId, citation.sourcePage)}
-                            >
-                              <FileText className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="truncate">{citation.documentName}</span>
-                              <span className="text-muted-foreground flex-shrink-0">p.{citation.sourcePage}</span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{citation.documentName}</p>
-                            <p className="text-xs opacity-75">Page {citation.sourcePage}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-muted-foreground">Page {citation.sourcePage}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant={statusBadge.variant} className="gap-1 cursor-help">
-                            {statusBadge.icon}
-                            {statusBadge.label}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-sm">{statusBadge.tooltip}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className={`font-medium cursor-help ${getConfidenceColor(citation.confidence)}`}>
-                            {citation.confidence.toFixed(0)}%
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          <p className="font-medium mb-1">Confidence Score</p>
-                          <p className="text-xs opacity-90">
-                            {citation.confidence >= 90
-                              ? 'High confidence: Citation text closely matches the Act section.'
-                              : citation.confidence >= 70
-                              ? 'Medium confidence: Citation text partially matches. Review recommended.'
-                              : 'Low confidence: Significant differences detected. Manual verification needed.'}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {/* View button */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewCitation(citation.id)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>View in split view</TooltipContent>
-                        </Tooltip>
-
-                        {/* Verify button - show for non-verified citations */}
-                        {citation.verificationStatus !== 'verified' && onVerifyCitation && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleVerifyCitation(citation.id, citation.confidence)}
-                                disabled={updatingCitations.has(citation.id)}
-                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              >
-                                {updatingCitations.has(citation.id) ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Mark as verified</TooltipContent>
-                          </Tooltip>
-                        )}
-
-                        {/* Flag Issue dropdown - show for non-issue citations */}
-                        {!isIssue && onFlagCitation && (
-                          <DropdownMenu>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    disabled={updatingCitations.has(citation.id)}
-                                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                  >
-                                    <Flag className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                              </TooltipTrigger>
-                              <TooltipContent>Flag an issue</TooltipContent>
-                            </Tooltip>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleFlagCitation(citation.id, 'mismatch')}
-                                className="text-destructive"
-                              >
-                                <AlertTriangle className="h-4 w-4 mr-2" />
-                                Text Mismatch
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleFlagCitation(citation.id, 'section_not_found')}
-                                className="text-destructive"
-                              >
-                                <Wrench className="h-4 w-4 mr-2" />
-                                Section Not Found
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-
-                        {/* Fix issue button - show for issues */}
-                        {isIssue && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleViewCitation(citation.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Wrench className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Review and fix issue</TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
+              })}
           </TableBody>
         </Table>
+        </div>
+        ) : (
+          <ResponsiveTable<CitationListItem>
+            columns={columns}
+            rows={sortedCitations}
+            getRowId={(c) => c.id}
+            rowClassName={(c) =>
+              ['mismatch', 'section_not_found'].includes(c.verificationStatus)
+                ? 'bg-destructive/5'
+                : undefined
+            }
+            sort={{
+              columnId: sortField,
+              direction: sortDirection,
+              onSortChange: (id) => handleSort(id as SortField),
+            }}
+            selection={
+              enableBulkSelection
+                ? {
+                    isSelected: (c) => selectedIds.has(c.id),
+                    onToggle: (c) => handleSelectOne(c.id, !selectedIds.has(c.id)),
+                    ariaLabel: (c) => `Select citation for ${c.actName} Section ${c.sectionNumber}`,
+                    allSelected,
+                    someSelected,
+                    onToggleAll: () => handleSelectAll(),
+                  }
+                : undefined
+            }
+          />
+        )}
       </div>
 
       {/* Confirmation dialog for low-confidence verifications */}

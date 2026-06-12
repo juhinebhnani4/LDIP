@@ -417,7 +417,7 @@ export function EntitiesContent({
         className="mb-4"
       />
 
-      <div className="flex-1 flex gap-0 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0">
         {/* Main content area */}
         <div className="flex-1 min-w-0">
           {isLoading ? (

@@ -331,6 +331,28 @@ On match, inject the relevant FE-ARCH-NN guard text (one paragraph per debt, mir
 
 ---
 
+### B4.5 — CI visual-regression (Playwright snapshots) — the real wall for "it renders right" (FE-ARCH-02 and all UI)
+
+**Currently lives**: `CLAUDE.md` READ-FIRST rule "Verify UI Changes Visually — Pixels Are the Gate" + `hostile-review` Post-Deploy step 5 + the `visual-verify` skill + MEMORY `feedback-visual-is-the-gate` (all added 2026-06-11). **All four are passive/smart sticky notes** — they depend on Claude (or a human) choosing to open a browser and look.
+
+**The known failure** it was written to prevent: 2026-06-11. An FE-ARCH-02 responsive fix was marked **"LIVE-VERIFIED" off the Playwright accessibility/DOM tree** (which only proves elements exist) and shipped to production rendering broken — full-screen sheet takeover, doubled "Ask jaanch" headers, summary content clipped off the right edge, raw scrollbar troughs. `tsc`/`eslint` were green; the DOM check saw nothing wrong. The only thing that would have caught it is a human/CI looking at the pixels — which, under momentum, got skipped. This is the project's oldest shape ("a green proxy accepted in place of the real signal") at the UI layer.
+
+**Current form**: passive sticky note × the visual gate. Will not fire unless Claude remembers to run `visual-verify`. This whole session is proof that under delivery pressure that choice is unreliable.
+
+**Promotion → real wall**: a CI job that, on every PR touching `frontend/`, runs Playwright against the key routes (dashboard + each matter tab) at the standard widths (375/768/1024/1440), screenshots each, and **diffs pixel-by-pixel against committed baseline images**. Any unexpected diff fails the check; merge is blocked until a human approves the new baseline. This makes "it renders right" something the build refuses to be green without — regardless of whether anyone remembers to look, in both solo and multi-agent/workflow sessions.
+
+**Effort**: real infra, ~1–2 days. The hard parts, in order:
+1. **Auth + seed**: matter pages require a logged-in session with seeded data. Need a test user + a deterministic seeded matter (or storage-state injection) so screenshots are stable. This is the blocker, not the screenshots.
+2. **Deterministic rendering**: run in a pinned Docker image (fonts/sub-pixel/OS differences cause false diffs); freeze dates/animations; mask known-dynamic regions (timestamps, "last opened").
+3. **Baselines**: commit the first known-good image set; a `--update-snapshots` path for intentional changes.
+4. **CI wiring**: a `visual` job alongside `lint`/`test`/`security-tests`, uploading diff artifacts on failure.
+
+**Value**: the single highest-leverage UI guardrail. It is the ONLY item that removes the human-choice-to-look from the loop. Everything added 2026-06-11 (CLAUDE.md rule, hostile-review step 5, `visual-verify`, the memory) is the interim sticky-note layer until this lands.
+
+**Action on landing**: per the audit principle, once this wall is green and trusted, the passive parts of the 2026-06-11 visual rules can be slimmed (keep the `visual-verify` skill as the local pre-flight; the CLAUDE.md rule can shrink to "CI enforces this — run `visual-verify` locally first"). Until then, keep all of them.
+
+---
+
 ### Items NOT in this bucket (named explicitly)
 
 - **A separate `frontend-arch-guard` skill.** Rejected on principle — would be a parallel duplicate path (P2) of the existing `architecture-guard`. The four B4 items above are the principled alternative: extend the one skill, extend the one hook, add targeted lints.
@@ -357,6 +379,7 @@ If you actually want to start retiring sticky notes, the cheapest-first / highes
 10. **B4.1** — extend `architecture-guard/SKILL.md` with FE-ARCH-01..04 checklists (~30 min, smart sticky note)
 11. **B4.4** — markdown lint enforcing `**Detector:**` on every `### (FE-)ARCH-NN` entry in BUGS.md (~30 min, real wall — locks in the detector discipline; retrofit ARCH-001..007 in same PR)
 12. **B4.3** — build `frontend/src/lib/format/` + ESLint rule banning raw `toLocaleDateString` (~half day, real wall, kills FE-ARCH-04 category + the 4 acute plural bugs in FE-015)
+13. **B4.5** — CI Playwright visual-regression snapshots (~1–2 days, the real wall for "it renders right"; the only item that removes human-choice-to-look from the loop; auth+seed is the hard part). Highest-value UI guardrail; everything added 2026-06-11 is the interim sticky-note layer until this lands.
 
 Items 1–5 are roughly **two hours total**. Items 9–11 add **another ~90 min** of smart-sticky-note + markdown-lint work. Items 6, 7, 12 are each **half a day** and each delete a category of bug.
 

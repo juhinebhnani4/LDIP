@@ -82,14 +82,14 @@ export function DocumentsHeader({
   return (
     <div className="space-y-4" data-testid="documents-header">
       {/* Main header with count and add button */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Documents</h2>
           <p className="text-sm text-muted-foreground">
             {totalCount} {totalCount === 1 ? 'document' : 'documents'} in this matter
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           {/* Celery status indicator */}
           <CeleryStatusIndicator showLabel />
           <Button onClick={onAddFiles} data-testid="add-files-button">
@@ -145,8 +145,8 @@ export function DocumentsHeader({
       {/* Stuck/Failed documents warning banner */}
       {stuckCount > 0 && onRetryAllStuck && (
         <Alert className="bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" aria-hidden="true" />
               <AlertDescription className="text-amber-800 dark:text-amber-200">
                 {stuckCount} {stuckCount === 1 ? 'document has' : 'documents have'} failed or appear stuck
@@ -157,7 +157,7 @@ export function DocumentsHeader({
               size="sm"
               onClick={onRetryAllStuck}
               disabled={isRetryingAll}
-              className="border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50"
+              className="shrink-0 border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50"
             >
               {isRetryingAll ? (
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

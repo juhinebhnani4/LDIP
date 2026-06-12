@@ -61,66 +61,67 @@ export function VerificationActions({
   }
 
   return (
-    <div className="flex items-center gap-2 py-3 px-4 bg-muted/50 rounded-lg border">
-      <span className="text-sm font-medium">
+    <div className="flex flex-wrap items-center gap-2 py-3 px-4 bg-muted/50 rounded-lg border">
+      <span className="w-full sm:w-auto text-sm font-medium">
         {selectedCount} {selectedCount === 1 ? 'item' : 'items'} selected
       </span>
 
-      <div className="flex-1" />
+      <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:ml-auto">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 sm:flex-none"
+          onClick={onClearSelection}
+          disabled={isActioning}
+        >
+          Clear Selection
+        </Button>
 
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={onClearSelection}
-        disabled={isActioning}
-      >
-        Clear Selection
-      </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 sm:flex-none text-green-600 border-green-500 hover:bg-green-50 dark:hover:bg-green-950"
+          onClick={onBulkApprove}
+          disabled={isActioning}
+        >
+          {currentAction === 'bulk-approve' ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <Check className="h-4 w-4 mr-2" />
+          )}
+          Approve Selected
+        </Button>
 
-      <Button
-        size="sm"
-        variant="outline"
-        className="text-green-600 border-green-500 hover:bg-green-50 dark:hover:bg-green-950"
-        onClick={onBulkApprove}
-        disabled={isActioning}
-      >
-        {currentAction === 'bulk-approve' ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : (
-          <Check className="h-4 w-4 mr-2" />
-        )}
-        Approve Selected
-      </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 sm:flex-none text-red-600 border-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+          onClick={onBulkReject}
+          disabled={isActioning}
+        >
+          {currentAction === 'bulk-reject' ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <X className="h-4 w-4 mr-2" />
+          )}
+          Reject Selected
+        </Button>
 
-      <Button
-        size="sm"
-        variant="outline"
-        className="text-red-600 border-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-        onClick={onBulkReject}
-        disabled={isActioning}
-      >
-        {currentAction === 'bulk-reject' ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : (
-          <X className="h-4 w-4 mr-2" />
-        )}
-        Reject Selected
-      </Button>
-
-      <Button
-        size="sm"
-        variant="outline"
-        className="text-yellow-600 border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950"
-        onClick={onBulkFlag}
-        disabled={isActioning}
-      >
-        {currentAction === 'bulk-flag' ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : (
-          <Flag className="h-4 w-4 mr-2" />
-        )}
-        Flag Selected
-      </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 sm:flex-none text-yellow-600 border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+          onClick={onBulkFlag}
+          disabled={isActioning}
+        >
+          {currentAction === 'bulk-flag' ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <Flag className="h-4 w-4 mr-2" />
+          )}
+          Flag Selected
+        </Button>
+      </div>
     </div>
   );
 }

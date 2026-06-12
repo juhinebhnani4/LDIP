@@ -25,6 +25,20 @@ Before writing a single line of code or proposing an implementation, Claude must
 
 ---
 
+## MANDATORY: Verify UI Changes Visually — Pixels Are the Gate (READ FIRST)
+
+**Applies to EVERY frontend / UI change. No exceptions.**
+
+A UI change is "verified" ONLY after you have **rendered it and looked at the actual pixels** — at the standard widths **375 / 768 / 1024 / 1440** — on every surface it touches, and described what you saw.
+
+The **accessibility tree / DOM snapshot is NOT visual verification.** It proves an element exists; it says nothing about clipping, horizontal overflow, cramped spacing, overlap, ugly scrollbar troughs, or whether the layout looks intentional. Confirming the DOM (or a Playwright accessibility snapshot) and then calling a UI change "verified" / "LIVE-VERIFIED" is a **forbidden substitution**.
+
+This is the UI twin of the backend gate "the live-DB read is the GATE — logs can't close it." For UI: **pixels are the gate — the DOM can't close it.** (See hostile-review Post-Deploy step 5; run the `visual-verify` skill.)
+
+**Why this rule exists** (2026-06-11): Claude marked an FE-ARCH-02 responsive fix "LIVE-VERIFIED" off the Playwright accessibility tree, merged it, and deployed to production — where it rendered badly (full-screen sheet takeover, doubled "Ask jaanch" headers, summary content clipped off the right edge, raw scrollbar troughs). The DOM check could not see any of it. Only mark verified after eyes on pixels.
+
+---
+
 ## MANDATORY: Explain in Plain English — Define Every Term (READ FIRST)
 
 **This rule applies to EVERY response that contains information — analyses, recommendations, bug explanations, plans, code walkthroughs, status updates. No exceptions.**

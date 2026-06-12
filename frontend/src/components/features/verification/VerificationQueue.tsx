@@ -10,7 +10,6 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -21,7 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, X, Flag, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+import { ResponsiveTable, type ResponsiveColumn } from '@/components/ui/responsive-table';
+import { cn } from '@/lib/utils';
+import { Check, X, Flag, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { VerificationQueueItem } from '@/types';
 import {
@@ -33,28 +34,6 @@ import { usePowerUserMode } from '@/hooks/usePowerUserMode';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'findingType' | 'findingSummary' | 'confidence' | 'sourceDocument' | null;
-
-/**
- * Sort icon component - displays appropriate arrow based on sort state.
- * Defined outside VerificationQueue to avoid recreating during render.
- */
-function SortIcon({
-  column,
-  sortColumn,
-  sortDirection,
-}: {
-  column: SortColumn;
-  sortColumn: SortColumn;
-  sortDirection: SortDirection;
-}) {
-  if (sortColumn !== column) {
-    return <ArrowUpDown className="ml-2 h-4 w-4" />;
-  }
-  if (sortDirection === 'asc') {
-    return <ArrowUp className="ml-2 h-4 w-4" />;
-  }
-  return <ArrowDown className="ml-2 h-4 w-4" />;
-}
 
 interface VerificationQueueProps {
   /** Queue items to display */
@@ -360,6 +339,113 @@ export function VerificationQueue({
     );
   }
 
+  // Status badge — defined ONCE and used by both the desktop table and the mobile
+  // card (via the column below). No table-vs-card duplicate logic.
+  const renderStatus = (item: VerificationQueueItem) => {
+    const status = getDecisionStatusDisplay(item.decision, item.confidence);
+    const StatusIcon =
+      status.level === 'approved'
+        ? CheckCircle2
+        : status.level === 'rejected' || status.level === 'review_required'
+          ? XCircle
+          : AlertCircle;
+    return (
+      <div className="flex items-center gap-2" title={formatConfidenceTooltip(item.confidence)}>
+        <Badge variant="outline" className={status.badgeClass}>
+          <StatusIcon className="mr-1 h-3 w-3" />
+          {status.shortLabel}
+        </Badge>
+      </div>
+    );
+  };
+
+  const columns: ResponsiveColumn<VerificationQueueItem>[] = [
+    {
+      id: 'findingType',
+      header: 'Type',
+      sortable: true,
+      isPrimary: true,
+      cell: (item) => (
+        <span className="flex items-center gap-2">
+          <span>{getFindingTypeIcon(item.findingType)}</span>
+          <span className="font-medium">{formatFindingType(item.findingType)}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'findingSummary',
+      header: 'Description',
+      sortable: true,
+      cardLabel: 'Description',
+      cardBlock: true,
+      cell: (item) => (
+        <span className="block break-words line-clamp-2 lg:max-w-[360px]" title={item.findingSummary}>
+          {item.findingSummary}
+        </span>
+      ),
+    },
+    {
+      id: 'confidence',
+      header: 'Status',
+      sortable: true,
+      cardLabel: 'Status',
+      cell: (item) => renderStatus(item),
+    },
+    {
+      id: 'sourceDocument',
+      header: 'Source',
+      sortable: true,
+      cardLabel: 'Source',
+      cell: (item) => (
+        <span className="break-words text-sm text-muted-foreground">{item.sourceDocument ?? 'N/A'}</span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cardLabel: null,
+      cardBlock: true,
+      align: 'right',
+      cell: (item) => {
+        const isProcessing = processingIds.includes(item.id);
+        return (
+          <div className="flex items-center gap-1 lg:justify-end" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
+              onClick={() => onApprove(item.id)}
+              aria-label="Approve"
+              disabled={isProcessing}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+              onClick={() => onReject(item.id)}
+              aria-label="Reject"
+              disabled={isProcessing}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950"
+              onClick={() => onFlag(item.id)}
+              aria-label="Flag"
+              disabled={isProcessing}
+            >
+              <Flag className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="rounded-md border" ref={tableRef}>
       {/* Story 3.6: Keyboard shortcuts hint */}
@@ -375,188 +461,39 @@ export function VerificationQueue({
           <span><kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">Enter</kbd> Open</span>
         </div>
       )}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">
-              <Checkbox
-                checked={allSelected || (someSelected ? 'indeterminate' : false)}
-                onCheckedChange={(checked) => handleSelectAllToggle(!!checked)}
-                aria-label="Select all"
-              />
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8"
-                onClick={() => handleSort('findingType')}
-              >
-                Type
-                <SortIcon column="findingType" sortColumn={sortColumn} sortDirection={sortDirection} />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8"
-                onClick={() => handleSort('findingSummary')}
-              >
-                Description
-                <SortIcon column="findingSummary" sortColumn={sortColumn} sortDirection={sortDirection} />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8"
-                onClick={() => handleSort('confidence')}
-              >
-                Status
-                <SortIcon column="confidence" sortColumn={sortColumn} sortDirection={sortDirection} />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8"
-                onClick={() => handleSort('sourceDocument')}
-              >
-                Source
-                <SortIcon column="sourceDocument" sortColumn={sortColumn} sortDirection={sortDirection} />
-              </Button>
-            </TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedData.length > 0 ? (
-            sortedData.map((item) => {
-              const isProcessing = processingIds.includes(item.id);
-              const isSelected = selectedIds.includes(item.id);
-              // Code Review Fix: Compare by ID for reliable focus tracking
-              const isFocused = item.id === focusedId;
-
-              return (
-                <TableRow
-                  key={item.id}
-                  data-state={isSelected ? 'selected' : undefined}
-                  className={`
-                    ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
-                    ${isFocused ? 'ring-2 ring-primary ring-inset bg-primary/5' : ''}
-                    ${!isProcessing ? 'cursor-pointer hover:bg-muted/50' : ''}
-                  `.trim()}
-                  onClick={() => {
-                    setFocusedId(item.id);
-                    onItemClick?.(item.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && onItemClick) {
-                      onItemClick(item.id);
-                    }
-                  }}
-                  tabIndex={isFocused ? 0 : -1}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={() => onToggleSelect(item.id)}
-                      aria-label="Select row"
-                      disabled={isProcessing}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-2">
-                      <span>{getFindingTypeIcon(item.findingType)}</span>
-                      <span className="font-medium">
-                        {formatFindingType(item.findingType)}
-                      </span>
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className="max-w-[300px] truncate block"
-                      title={item.findingSummary}
-                    >
-                      {item.findingSummary}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const status = getDecisionStatusDisplay(item.decision, item.confidence);
-                      const StatusIcon =
-                        status.level === 'approved' ? CheckCircle2 :
-                        status.level === 'rejected' || status.level === 'review_required' ? XCircle :
-                        status.level === 'flagged' ? AlertCircle :
-                        status.level === 'review_suggested' ? AlertCircle :
-                        AlertCircle; // pending
-                      return (
-                        <div
-                          className="flex items-center gap-2"
-                          title={formatConfidenceTooltip(item.confidence)}
-                        >
-                          <Badge variant="outline" className={status.badgeClass}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {status.shortLabel}
-                          </Badge>
-                        </div>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">
-                      {item.sourceDocument ?? 'N/A'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                        onClick={() => onApprove(item.id)}
-                        aria-label="Approve"
-                        disabled={isProcessing}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                        onClick={() => onReject(item.id)}
-                        aria-label="Reject"
-                        disabled={isProcessing}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950"
-                        onClick={() => onFlag(item.id)}
-                        aria-label="Flag"
-                        disabled={isProcessing}
-                      >
-                        <Flag className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
-                No verifications pending.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      <ResponsiveTable<VerificationQueueItem>
+        columns={columns}
+        rows={sortedData}
+        getRowId={(item) => item.id}
+        onRowClick={(item) => {
+          setFocusedId(item.id);
+          onItemClick?.(item.id);
+        }}
+        rowClassName={(item) =>
+          cn(
+            processingIds.includes(item.id) && 'pointer-events-none opacity-50',
+            item.id === focusedId && 'bg-primary/5 ring-2 ring-inset ring-primary',
+            selectedIds.includes(item.id) && 'bg-muted/40'
+          )
+        }
+        selection={{
+          isSelected: (item) => selectedIds.includes(item.id),
+          onToggle: (item) => onToggleSelect(item.id),
+          ariaLabel: () => 'Select row',
+          isDisabled: (item) => processingIds.includes(item.id),
+          allSelected,
+          someSelected,
+          onToggleAll: handleSelectAllToggle,
+        }}
+        sort={{
+          columnId: sortColumn ?? '',
+          direction: sortDirection === 'desc' ? 'desc' : 'asc',
+          onSortChange: (id) => handleSort(id as SortColumn),
+        }}
+        emptyState={
+          <div className="py-12 text-center text-muted-foreground">No verifications pending.</div>
+        }
+      />
     </div>
   );
 }

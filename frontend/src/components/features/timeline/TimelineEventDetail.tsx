@@ -246,7 +246,7 @@ export function TimelineEventDetail({
         )}
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t">
+        <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t">
           {/* View in List */}
           {onViewInList && (
             <Button

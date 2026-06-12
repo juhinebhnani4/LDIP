@@ -40,6 +40,7 @@ import {
   getActNamesFromSummary,
 } from '@/hooks/useCitations';
 import { useSplitView } from '@/hooks/useSplitView';
+import { useMediaQuery } from '@/hooks/useBreakpoint';
 import { updateCitationStatus, bulkUpdateCitationStatus } from '@/lib/api/citations';
 import type { VerificationStatus } from '@/types/citation';
 
@@ -74,6 +75,11 @@ export function CitationsContent({
   onViewInDocument,
   className,
 }: CitationsContentProps) {
+  // Desktop flag — the side-by-side resizable PDF split view is a desktop-only
+  // layout (two panels at min 20%+40% are unusable below ~1024px). Below lg we
+  // route every split-view open to the existing full-screen modal instead.
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+
   // View state - default to 'byAct' with localStorage persistence
   const [viewMode, setViewMode] = useState<CitationsViewMode>(getInitialViewMode);
   const [filters, setFilters] = useState<CitationsFilterState>(DEFAULT_FILTERS);
@@ -390,7 +396,7 @@ export function CitationsContent({
 
   // Render citations content based on viewMode
   const renderCitationsContent = () => (
-    <div className="flex gap-4 h-full">
+    <div className="flex flex-col lg:flex-row gap-4 h-full">
       {/* Main content - view based on viewMode */}
       <div className="flex-1 min-w-0 overflow-auto">
         {viewMode === 'list' && (
@@ -437,7 +443,7 @@ export function CitationsContent({
 
       {/* Sidebar - Missing Acts Card */}
       {(showMissingActsCard || missingCount + notOnIndiacodeCount > 0) && (
-        <div className="w-80 flex-shrink-0">
+        <div className="w-full lg:w-80 lg:flex-shrink-0">
           <MissingActsCard
             matterId={matterId}
             acts={acts}
@@ -476,7 +482,7 @@ export function CitationsContent({
 
       {/* Main content area - with split-view when open */}
       <div className="flex-1 min-h-0">
-        {isSplitViewOpen && !isFullScreen && (splitViewData || splitViewLoading || splitViewError) ? (
+        {isDesktop && isSplitViewOpen && !isFullScreen && (splitViewData || splitViewLoading || splitViewError) ? (
           // Split layout: citations content + split-view panels side by side
           <PanelGroup direction="horizontal" className="h-full">
             {/* Citations content panel (resizable) */}
@@ -549,7 +555,7 @@ export function CitationsContent({
 
       {/* Full-screen modal */}
       <SplitViewModal
-        isOpen={isSplitViewOpen && isFullScreen}
+        isOpen={isSplitViewOpen && (isFullScreen || !isDesktop)}
         data={splitViewData}
         navigationInfo={navigationInfo}
         isLoading={splitViewLoading}
@@ -565,8 +571,8 @@ export function CitationsContent({
 
       {/* Floating bulk action bar */}
       {selectedCitations.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="flex items-center gap-3 bg-background border rounded-lg shadow-lg px-4 py-3">
+        <div className="fixed bottom-4 inset-x-4 sm:left-1/2 sm:inset-x-auto sm:-translate-x-1/2 z-50 flex justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-2 bg-background border rounded-lg shadow-lg px-4 py-3 max-w-[calc(100vw-2rem)]">
             <span className="text-sm font-medium">
               {selectedCitations.size} selected
             </span>
